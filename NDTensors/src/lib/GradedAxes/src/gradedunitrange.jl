@@ -30,6 +30,9 @@ function gradedrange(nondual_sectors::Vector, a::BlockedUnitRange, isdual=false)
   return GradedUnitRange(a, nondual_sectors, isdual)
 end
 
+# quantum dimension of the GradedUnitRange
+dimension(s::GradedUnitRange) = dimension.(sectors(s)) ⋅ blocklengths(s)
+
 # BlockArrays block axis interface
 # Used in printing
 function Base.getindex(a::GradedUnitRange, I::BlockRange{1,Tuple{Base.OneTo{Int}}})

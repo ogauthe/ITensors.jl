@@ -1,0 +1,14 @@
+using Test:@test
+using HalfIntegers:half
+using RationalRoots
+using NDTensors.Sectors:SU2
+using NDTensors.NonAbelian:clebschgordantensor
+
+
+s1, s2, s3 = SU2(half(1)), SU2(half(1)), SU2(0)
+t = clebschgordantensor(s1, s2, s3)
+@test size(t) == (2,2,1)
+@test t[1, 1] == 0
+@test t[1, 2] == -RationalRoot{Int}(sqrt(2)/2)
+@test t[2, 1] == RationalRoot{Int}(sqrt(2)/2)
+@test t[2, 2] == 0
