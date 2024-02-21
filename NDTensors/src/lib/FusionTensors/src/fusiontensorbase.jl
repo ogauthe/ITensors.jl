@@ -73,12 +73,25 @@ function Base.conj(t::FusionTensor)
 end
 
 function Base.copy(ft::FusionTensor)
-  # only copy matrix_blocks.
-  # TBD Copy axes?
   new_blocks = copy(ft.matrix_blocks)
   return FusionTensor(ft.codomain_axes, ft.domain_axes, new_blocks)
 end
 
-Base.ndims(t::FusionTensor) = t.ndims
-Base.size(t::FusionTensor) = length.([t.codomain_axes, t.domain_axes])
-Base.size(t::FusionTensor, i::Integer) = length([t.codomain_axes, t.domain_axes][i])
+function Base.deecopy(ft::FusionTensor)
+  # only copy matrix_blocks.
+  # TBD Copy axes?
+  new_blocks = deepcopy(ft.matrix_blocks)
+  return FusionTensor(ft.codomain_axes, ft.domain_axes, new_blocks)
+end
+
+Base.ndims(t::FusionTensor) = t.ndims  # clash with AbstractMatrix
+Base.size(t::FusionTensor) = size(t.matrix_blocks)  # strange object
+# length = prod(size(t)) has little meaning
+# axes(a) is just wrong => overload it?
+# eachindex(a) is wrong => It HAS to be impossible to write/access off-diagonal blocks
+# stride(a)  meaningless - unsupported by BlockSparseArray anyway
+# fill! => implemented by default? Implement it for diagonal blocks?
+
+Base.getindex(t::FusionTensor, i::Int) = t.matrix_blocks[i]  # strange object
+Base.getindex(t::FusionTensor, I::Vararg{Int,2}) = t.matrix_blocks[I]  # strange object
+Base.IndexStyle(::FusionTensor) = IndexCartesian()

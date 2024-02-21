@@ -6,21 +6,15 @@ using BlockArrays
 using NDTensors.BlockSparseArrays: BlockSparseArray
 using ITensors: @debug_check
 
-# problem: AbstractArray requires to implement getindex. No way this can be defined.
-# so cannot declare FusionTensor as subtype of AbstractArray
-# OR getindex returns a Block. I'm fine with it but this differs from BlockSparseArray
-# Last possibility: cast to dense to get the value. Bad idea.
-
-# showcase for non-abelian implementation, will be replaced by an ITensor container
-struct FusionTensor{T<:number,C,D,E}
+struct FusionTensor{T<:number,C,D,E} <: AbstractMatrix{T}
   codomain_axes::C  # tuple / Vector of GradedAxes
   domain_axes::D    # tuple / Vector of GradedAxes
 
   matrix_blocks::E  # DiagonalBlockMatrix
 
-  ndims::Integer
+  ndims::Integer  # may be different from 2!
   #nblocks::Integer
-end
+end where {T<:Number}
 
 function check_consistency(t::FusionTensor)
   if length(t.codomain_axes) != t.n_codomain_legs
@@ -79,6 +73,7 @@ function FusionTensor(
 end
 
 matrix_size(t::FusionTensor) = size(t.matrix_blocks)
+tensor_size(t::FusionTensor) = size(t.matrix_blocks)
 n_codomain_legs(t::FusionTensor) = length(t.codomain_axes)
 n_domain_legs(t::FusionTensor) = length(t.domain_axes)
 
