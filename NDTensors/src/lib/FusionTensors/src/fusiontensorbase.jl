@@ -85,7 +85,8 @@ Base.show(io::IO, ft::FusionTensor) = print(io, "$(ndims(ft))-dim FusionTensor")
 function Base.show(io::IO, ::MIME"text/plain", ft::FusionTensor)
   println(io, "$(ndims(ft))-dim FusionTensor with axes")
   for ax in axes(ft)
-    println(io, ax)
+    display(io, ax)
+    println()
   end
   return nothing
 end
