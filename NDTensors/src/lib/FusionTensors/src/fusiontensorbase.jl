@@ -61,6 +61,8 @@ function Base.adjoint(ft::FusionTensor)
   return FusionTensor(axes(ftdag), n_domain_legs(ftdag), conj(matrix(ftdag)))
 end
 
+# Base.axes is defined in fusiontensor.jl as a getter
+
 # complex conjugation, no dual
 function Base.conj(ft::FusionTensor)
   return FusionTensor(codomain_axes(ft), domain_axes(ft), conj(matrix(ft)))

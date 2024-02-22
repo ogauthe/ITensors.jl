@@ -16,12 +16,12 @@ end
 
 # getters
 matrix(ft::FusionTensor) = ft.matrix
-axes(ft::FusionTensor) = ft.axes
+Base.axes(ft::FusionTensor) = ft.axes
 n_codomain_legs(ft::FusionTensor) = ft.n_codomain_legs
 
 # misc
 codomain_axes(ft::FusionTensor) = axes(ft)[begin:n_codomain_legs(ft)]
-domain_axes(ft::FusionTensor) = axes(ft)[n_codomain_legs(ft):end]
+domain_axes(ft::FusionTensor) = axes(ft)[(n_codomain_legs(ft) + 1):end]
 n_domain_legs(ft::FusionTensor) = ndims(ft) - n_codomain_legs(ft)
 matrix_size(ft::FusionTensor) = size(matrix(ft))
 row_axis(ft::FusionTensor) = axes(matrix(ft))[1]
@@ -42,25 +42,26 @@ end
 
 # sanity check
 function sanity_check(ft::FusionTensor)
-  nca = length(codomain_axes)
+  nca = length(codomain_axes(ft))
   if !(0 < nca < ndims(ft))
     throw(DomainError(nca, "invalid codomain axes length"))
   end
-  nda = length(domain_axes)
+  nda = length(domain_axes(ft))
   if !(0 < nda < ndims(ft))
     throw(DomainError(nda, "invalid domain axes length"))
   end
   if nca + nda != ndims(ft)
     throw(DomainError(nca + nda, "invalid ndims"))
   end
-  if ndims(matrix(ft)) != 2
-    throw(DomainError(ndims(matrix(ft)), "invalid matrix ndims"))
+  m = matrix(ft)
+  if ndims(m) != 2
+    throw(DomainError(ndims(m), "invalid matrix ndims"))
   end
-  if size(matrix, 1) != prod(length.(codomain_axes(ft)))
-    throw(DomainError(size(matrix, 1), "invalid matrix row number"))
+  if size(m, 1) != prod(length.(codomain_axes(ft)))
+    throw(DomainError(size(m, 1), "invalid matrix row number"))
   end
-  if size(matrix, 2) != prod(length.(domain_axes(ft)))
-    throw(DomainError(size(matrix, 2), "invalid matrix column number"))
+  if size(m, 2) != prod(length.(domain_axes(ft)))
+    throw(DomainError(size(m, 2), "invalid matrix column number"))
   end
   return nothing
 end
