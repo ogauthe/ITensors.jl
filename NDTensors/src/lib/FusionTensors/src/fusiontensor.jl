@@ -1,6 +1,5 @@
 # This file defines struct FusionTensor and constructors
 
-using ITensors: @debug_check
 using NDTensors.BlockSparseArrays: BlockSparseArray
 
 struct FusionTensor{
@@ -30,10 +29,12 @@ column_axis(ft::FusionTensor) = axes(matrix(ft))[2]
 
 # constructors
 function FusionTensor(codomain_axes, domain_axes, matrix)
-  @debug_check length(codomain_axes) > 0
-  @debug_check length(domain_axes) > 0
-  @debug_check prod(length.(codomain_axes)) == size(matrix, 1)
-  @debug_check prod(length.(domain_axes)) == size(matrix, 2)
+  # TBD cannot disable assert globally with julia 1.10
+  # remove these? Add explicit input validation with if wrong throw() end?
+  @assert length(codomain_axes) > 0
+  @assert length(domain_axes) > 0
+  @assert prod(length.(codomain_axes)) == size(matrix, 1)
+  @assert prod(length.(domain_axes)) == size(matrix, 2)
   axes = (codomain_axes..., domain_axes...)
   n_row_legs = length(axes)
   return FusionTensor(axes, n_row_legs, matrix)

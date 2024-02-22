@@ -1,7 +1,5 @@
 # This files overloads Base functions for FusionTensor
 
-using Printf
-
 using NDTensors.FusionTensors: FusionTensor, domain_axes, codomain_axes
 
 function Base.:*(x::Number, ft::FusionTensor)
@@ -74,12 +72,12 @@ function Base.copy(ft::FusionTensor)
   return FusionTensor(new_axes, n_row_legs(ft), new_matrix)
 end
 
-function Base.deecopy(ft::FusionTensor)
+function Base.deepcopy(ft::FusionTensor)
   new_matrix = deepcopy(matrix(ft))
   new_axes = deepcopy(axes(ft))
   return FusionTensor(new_axes, n_row_legs(ft), new_matrix)
 end
 
 Base.ndims(::FusionTensor{T,N}) where {T,N} = N
-Base.show(io::IO, ft::FusionTensor) = @printf(io, "%d-dim FusionTensor", ndims(ft))
+Base.show(::IO, ft::FusionTensor) = println("$(ndims(ft))-dim FusionTensor")
 Base.size(ft::FusionTensor) = length.(axes(ft))
