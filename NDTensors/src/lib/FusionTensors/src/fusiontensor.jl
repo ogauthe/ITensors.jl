@@ -36,7 +36,7 @@ function FusionTensor(codomain_axes, domain_axes, matrix)
   @assert prod(length.(codomain_axes)) == size(matrix, 1)
   @assert prod(length.(domain_axes)) == size(matrix, 2)
   axes = (codomain_axes..., domain_axes...)
-  n_row_legs = length(axes)
+  n_row_legs = length(codomain_axes)
   return FusionTensor(axes, n_row_legs, matrix)
 end
 
