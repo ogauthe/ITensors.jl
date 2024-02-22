@@ -1,8 +1,8 @@
 # This files overloads Base functions for FusionTensor
 
 using Printf
+
 using NDTensors.FusionTensors: FusionTensor, domain_axes, codomain_axes
-using ITensors: @debug_check
 
 function Base.:*(x::Number, ft::FusionTensor)
   return FusionTensor(axes(ft), n_row_legs(ft), x * matrix(ft))
@@ -65,7 +65,7 @@ end
 
 # complex conjugation, no dual
 function Base.conj(ft::FusionTensor)
-  return FusionTensor(codomain_axes, t.domain_axes, conj(matrix(ft)))
+  return FusionTensor(codomain_axes(ft), domain_axes(ft), conj(matrix(ft)))
 end
 
 function Base.copy(ft::FusionTensor)

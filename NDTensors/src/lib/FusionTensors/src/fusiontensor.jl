@@ -1,66 +1,19 @@
 # This file defines struct FusionTensor and constructors
 
-using NDTensors.Sectors: AbstractCategory
-using NDTensors.GradedAxes
-using BlockArrays
-using NDTensors.BlockSparseArrays: BlockSparseArray
 using ITensors: @debug_check
+using NDTensors.BlockSparseArrays: BlockSparseArray
 
 struct FusionTensor{
   T<:Number,N,Axes<:Tuple{N,AbstractUnitRange{Int}},Arr<:BlockSparseArray{T,2}
 } <: AbstractArray{T,N}
+  # TBD more type stable with only N fixed or with NRL and NCL as type parameters?
+  # can also define N_ROW_LEG as type parameter
+  # with N fixed and n_row_legs dynamic, permutedims, dagger and co preserve type
+  # but tensor contraction output type is not knwon at compile time
   axes::Axes
-  n_row_legs::Int  # TBD more type stable with only N fixed or with NRL and NCL?
+  n_row_legs::Int
   matrix::Arr
 end
-
-"""
-function check_consistency(ft::FusionTensor)
-  if length(t.codomain_axes) != t.n_codomain_legs
-    return false
-  end
-  if length(t.domain_axes) != t.n_domain_legs
-    return false
-  end
-  if t.n_codomain_legs < 1
-    return false
-  end
-  if t.n_domain_legs < 1
-    return false
-  end
-  if t.ndims != t.n_codomain_legs + t.n_domain_legs
-    return false
-  end
-  if length(t.matrix) != t.nblocks
-    return false
-  end
-  if blocklength(matrix_row_axis) != t.nblocks
-    return false
-  end
-  if blocklength(matrix_column_axis) != t.nblocks
-    return false
-  end
-  for i in 1:(t.nblocks)
-    if size(matrix[i], 1) != blocklengths(t.matrix_row_axis)[i]
-      return false
-    end
-    if size(matrix[i], 2) != blocklengths(t.matrix_column_axis)[i]
-      return false
-    end
-  end
-
-  fused_codomain = fuse(t.codomain_axes)  # this is slow
-  fused_domain = fuse(t.domain_axes)  # this is slow
-  # TODO define "included in"
-  if !(t.matrix_row_axis < fused_codomain)
-    return false
-  end
-  if !(t.matrix_column_axis < fused_domain)
-    return false
-  end
-  return true
-end
-"""
 
 # getters
 matrix(ft::FusionTensor) = ft.matrix
@@ -77,6 +30,10 @@ column_axis(ft::FusionTensor) = axes(matrix(ft))[2]
 
 # constructors
 function FusionTensor(codomain_axes, domain_axes, matrix)
+  @debug_check length(codomain_axes) > 0
+  @debug_check length(domain_axes) > 0
+  @debug_check prod(length.(codomain_axes)) == size(matrix, 1)
+  @debug_check prod(length.(domain_axes)) == size(matrix, 2)
   axes = (codomain_axes..., domain_axes...)
   n_row_legs = length(axes)
   return FusionTensor(axes, n_row_legs, matrix)
