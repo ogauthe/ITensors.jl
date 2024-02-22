@@ -1,4 +1,7 @@
+
 [deps]
+BlockArrays = "8e7c35d0-a365-5155-bbbb-fb81a777f24e"
 HalfIntegers = "f0d1745a-41c9-11e9-1dd9-e5d34d218721"
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 RationalRoots = "308eb6b3-cc68-5ff3-9e97-c3c4da4fa681"
 WignerSymbols = "9f57e263-0b3d-5e2e-b1be-24f2bb48858b"
