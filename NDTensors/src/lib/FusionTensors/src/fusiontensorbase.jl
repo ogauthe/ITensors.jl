@@ -70,7 +70,7 @@ end
 
 function Base.copy(ft::FusionTensor)
   new_matrix = copy(matrix(ft))
-  new_axes = copy(axes(ft))
+  new_axes = copy.(axes(ft))
   return FusionTensor(new_axes, n_codomain_legs(ft), new_matrix)
 end
 
@@ -78,6 +78,10 @@ function Base.deepcopy(ft::FusionTensor)
   new_matrix = deepcopy(matrix(ft))
   new_axes = deepcopy(axes(ft))
   return FusionTensor(new_axes, n_codomain_legs(ft), new_matrix)
+end
+
+function Base.eachindex(::FusionTensor)
+  throw(DomainError("eachindex", "eachindex not defined for FusionTensor"))
 end
 
 Base.ndims(::FusionTensor{T,N}) where {T,N} = N
