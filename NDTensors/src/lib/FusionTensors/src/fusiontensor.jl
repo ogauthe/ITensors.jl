@@ -3,7 +3,7 @@
 using NDTensors.BlockSparseArrays: BlockSparseArray
 
 struct FusionTensor{
-  T<:Number,N,G<:AbstractUnitRange{Int},Axes<:NTuple{N,G},Arr<:BlockSparseArray{T,2}
+  T<:Number,N,G<:AbstractUnitRange,Axes<:NTuple{N,G},Arr<:BlockSparseArray{T,2}
 } <: AbstractArray{T,N}
   # TBD more type stable with only N fixed or with NRL and NCL as type parameters?
   # can also define N_ROW_LEG as type parameter

@@ -83,10 +83,10 @@ Base.ndims(::FusionTensor{T,N}) where {T,N} = N
 Base.show(io::IO, ft::FusionTensor) = print(io, "$(ndims(ft))-dim FusionTensor")
 
 function Base.show(io::IO, ::MIME"text/plain", ft::FusionTensor)
-  println(io, "$(ndims(ft))-dim FusionTensor with axes")
+  println(io, "$(ndims(ft))-dim FusionTensor with axes:")
   for ax in axes(ft)
-    display(io, ax)
-    println()
+    display(ax)
+    println(io)
   end
   return nothing
 end
