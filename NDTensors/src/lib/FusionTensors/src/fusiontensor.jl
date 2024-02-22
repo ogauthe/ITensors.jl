@@ -3,7 +3,7 @@
 using NDTensors.BlockSparseArrays: BlockSparseArray
 
 struct FusionTensor{
-  T<:Number,N,Axes<:Tuple{N,AbstractUnitRange{Int}},Arr<:BlockSparseArray{T,2}
+  T<:Number,N,Axes<:NTuple{N,AbstractUnitRange{Int}},Arr<:BlockSparseArray{T,2}
 } <: AbstractArray{T,N}
   # TBD more type stable with only N fixed or with NRL and NCL as type parameters?
   # can also define N_ROW_LEG as type parameter
@@ -21,7 +21,7 @@ n_row_legs(ft::FusionTensor) = ft.n_row_legs
 
 # misc
 domain_axes(ft::FusionTensor) = axes(ft)[begin:n_row_legs(ft)]
-codomain_axes(ft::FusionTensor) = axes(ft)[n_row_legs(t):end]
+codomain_axes(ft::FusionTensor) = axes(ft)[n_row_legs(ft):end]
 n_column_legs(ft::FusionTensor) = ndims(ft) - n_row_legs(ft)
 matrix_size(ft::FusionTensor) = size(matrix(ft))
 row_axis(ft::FusionTensor) = axes(matrix(ft))[1]
@@ -38,6 +38,31 @@ function FusionTensor(codomain_axes, domain_axes, matrix)
   axes = (codomain_axes..., domain_axes...)
   n_row_legs = length(axes)
   return FusionTensor(axes, n_row_legs, matrix)
+end
+
+# sanity check
+function sanity_check(ft::FusionTensor)
+  nca = length(codomain_axes)
+  if !(0 < nca < ndims(ft))
+    throw(DomainError(nca, "invalid codomain axes length"))
+  end
+  nda = length(domain_axes)
+  if !(0 < nda < ndims(ft))
+    throw(DomainError(nda, "invalid domain axes length"))
+  end
+  if nca + nda != ndims(ft)
+    throw(DomainError(nca + nda, "invalid ndims"))
+  end
+  if ndims(matrix(ft)) != 2
+    throw(DomainError(ndims(matrix(ft)), "invalid matrix ndims"))
+  end
+  if size(matrix, 1) != prod(length.(codomain_axes(ft)))
+    throw(DomainError(size(matrix, 1), "invalid matrix row number"))
+  end
+  if size(matrix, 2) != prod(length.(domain_axes(ft)))
+    throw(DomainError(size(matrix, 2), "invalid matrix column number"))
+  end
+  return nothing
 end
 
 # swap row and column axes, transpose matrix blocks, dual any axis. No basis change.

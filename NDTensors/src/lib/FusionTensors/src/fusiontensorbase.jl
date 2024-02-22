@@ -79,5 +79,15 @@ function Base.deepcopy(ft::FusionTensor)
 end
 
 Base.ndims(::FusionTensor{T,N}) where {T,N} = N
-Base.show(::IO, ft::FusionTensor) = println("$(ndims(ft))-dim FusionTensor")
+
+Base.show(io::IO, ft::FusionTensor) = print(io, "$(ndims(ft))-dim FusionTensor")
+
+function Base.show(io::IO, ::MIME"text/plain", ft::FusionTensor)
+  println(io, "$(ndims(ft))-dim FusionTensor with axes")
+  for ax in axes(ft)
+    println(io, ax)
+  end
+  return nothing
+end
+
 Base.size(ft::FusionTensor) = length.(axes(ft))
