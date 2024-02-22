@@ -4,10 +4,10 @@ using LinearAlgebra
 using NDTensors.FusionTensors: FusionTensor
 
 # simpler to define as Frobenius norm(block) than Tr(t^dagger * t)
-function LinearAlgebra.norm(t::FusionTensor)
+function LinearAlgebra.norm(ft::FusionTensor)
   n2 = 0.0
-  for i in 1:(t.nblocks)
-    n2 += dimension(sector(t.matrix_row_axis, Block(i))) * norm(t.blocks[i])^2
+  for i in blocks(ft)
+    n2 += dimension(sector(row_axis(ft)[i], Block(i))) * norm(matrix(ft).blocks[i])^2
   end
   return sqrt(n2)
 end

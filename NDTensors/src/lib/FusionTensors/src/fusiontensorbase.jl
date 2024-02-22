@@ -13,7 +13,7 @@ function Base.:*(ft::FusionTensor, x::Number)
 end
 
 # tensor contraction is a block matrix product.
-function Base.:*(lefft::FusionTensor, righft::FusionTensor)
+function Base.:*(left::FusionTensor, right::FusionTensor)
 
   # check consistency
   if domain_axes(left) != dual.(codomain_axes(right))  # TODO check dual behavior
@@ -27,7 +27,7 @@ end
 Base.:+(ft::FusionTensor) = ft
 
 # tensor addition is a block matrix add.
-function Base.:+(lefft::FusionTensor, righft::FusionTensor)
+function Base.:+(left::FusionTensor, right::FusionTensor)
   # check consistency
   if codomain_axes(left) != codomain_axes(right) || domain_axes(left) != domain_axes(right)
     throw(DomainError("Incompatible tensor axes"))
@@ -42,7 +42,7 @@ function Base.:-(ft::FusionTensor)
   return FusionTensor(axes(ft), n_row_legs(ft), new_matrix)
 end
 
-function Base.:-(lefft::FusionTensor, righft::FusionTensor)
+function Base.:-(left::FusionTensor, right::FusionTensor)
   # check consistency
   if codomain_axes(left) != codomain_axes(right) || domain_axes(left) != domain_axes(right)
     throw(DomainError("Incompatible tensor axes"))
@@ -59,17 +59,13 @@ end
 
 # adjoint = dagger * conjugate
 function Base.adjoint(ft::FusionTensor)
-  tdag = dagger(ft)
-  return FusionTensor(axes(tdag), n_domain_legs(tdag), conj(matrix(tdag)))
+  ftdag = dagger(ft)
+  return FusionTensor(axes(ftdag), n_domain_legs(ftdag), conj(matrix(ftdag)))
 end
 
 # complex conjugation, no dual
 function Base.conj(ft::FusionTensor)
-  return FusionTensor(
-    codomain_axes,
-    t.domain_axes,
-    conj(t.matrix),  # TBD impose sorting?
-  )
+  return FusionTensor(codomain_axes, t.domain_axes, conj(matrix(ft)))
 end
 
 function Base.copy(ft::FusionTensor)
@@ -84,6 +80,6 @@ function Base.deecopy(ft::FusionTensor)
   return FusionTensor(new_axes, n_row_legs(ft), new_matrix)
 end
 
-Base.ndims(ft::FusionTensor) = N
+Base.ndims(::FusionTensor{T,N}) where {T,N} = N
 Base.show(io::IO, ft::FusionTensor) = @printf(io, "%d-dim FusionTensor", ndims(ft))
 Base.size(ft::FusionTensor) = length.(axes(ft))
