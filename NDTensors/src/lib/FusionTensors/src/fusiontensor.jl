@@ -20,8 +20,8 @@ axes(ft::FusionTensor) = ft.axes
 n_row_legs(ft::FusionTensor) = ft.n_row_legs
 
 # misc
-domain_axes(ft::FusionTensor) = axes(ft)[begin:n_row_legs(ft)]
 codomain_axes(ft::FusionTensor) = axes(ft)[n_row_legs(ft):end]
+domain_axes(ft::FusionTensor) = axes(ft)[begin:n_row_legs(ft)]
 n_column_legs(ft::FusionTensor) = ndims(ft) - n_row_legs(ft)
 matrix_size(ft::FusionTensor) = size(matrix(ft))
 row_axis(ft::FusionTensor) = axes(matrix(ft))[1]
