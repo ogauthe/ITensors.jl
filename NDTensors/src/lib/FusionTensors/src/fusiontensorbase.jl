@@ -1,97 +1,89 @@
 # This files overloads Base functions for FusionTensor
 
-using NDTensors.FusionTensors: FusionTensor
+using Printf
+using NDTensors.FusionTensors: FusionTensor, domain_axes, codomain_axes
 using ITensors: @debug_check
 
 function Base.:*(x::Number, ft::FusionTensor)
-  return FusionTensor(ft.codomain_axes, ft.domain_axes, x * ft.matrix_blocks)
+  return FusionTensor(axes(ft), n_row_legs(ft), x * matrix(ft))
 end
 
 function Base.:*(ft::FusionTensor, x::Number)
-  return FusionTensor(ft.codomain_axes, ft.domain_axes, x * ft.matrix_blocks)
+  return FusionTensor(axes(ft), n_row_legs(ft), x * matrix(ft))
 end
 
 # tensor contraction is a block matrix product.
-function Base.:*(left::FusionTensor, right::FusionTensor)
+function Base.:*(lefft::FusionTensor, righft::FusionTensor)
 
   # check consistency
-  if left.domain_axes != right.codomain_axes
+  if domain_axes(left) != dual.(codomain_axes(right))  # TODO check dual behavior
     throw(DomainError("Incompatible tensor axes"))
   end
+  new_matrix = matrix(left) * matrix(right)
 
-  new_blocks = left.matrix_blocks * right.matrix_blocks
-
-  return FusionTensor(left.codomain_axes, right.domain_axes, new_blocks)
+  return FusionTensor(codomain_axes(left), domain_axes(right), new_matrix)
 end
 
 Base.:+(ft::FusionTensor) = ft
 
 # tensor addition is a block matrix add.
-function Base.:+(left::FusionTensor, right::FusionTensor)
+function Base.:+(lefft::FusionTensor, righft::FusionTensor)
   # check consistency
-  if left.codomain_axes != right.codomain_axes || left.domain_axes != right.domain_axes
+  if codomain_axes(left) != codomain_axes(right) || domain_axes(left) != domain_axes(right)
     throw(DomainError("Incompatible tensor axes"))
   end
+  new_matrix = matrix(left) + matrix(right)
 
-  new_blocks = left.matrix_blocks + right.matrix_blocks
-
-  return FusionTensor(left.codomain_axes, left.domain_axes, new_blocks)
+  return FusionTensor(axes(left), n_row_legs(left), new_matrix)
 end
 
 function Base.:-(ft::FusionTensor)
-  new_blocks = -ft.matrix_blocks
-  return FusionTensor(ft.codomain_axes, ft.domain_axes, new_blocks)
+  new_matrix = -matrix(ft)
+  return FusionTensor(axes(ft), n_row_legs(ft), new_matrix)
 end
-function Base.:-(left::FusionTensor, right::FusionTensor)
+
+function Base.:-(lefft::FusionTensor, righft::FusionTensor)
   # check consistency
-  if left.codomain_axes != right.codomain_axes || left.domain_axes != right.domain_axes
+  if codomain_axes(left) != codomain_axes(right) || domain_axes(left) != domain_axes(right)
     throw(DomainError("Incompatible tensor axes"))
   end
 
-  new_blocks = left.matrix_blocks - right.matrix_blocks
+  new_matrix = left.matrix - right.matrix
 
-  return FusionTensor(left.codomain_axes, left.domain_axes, new_blocks)
+  return FusionTensor(axes(left), n_row_legs(left), new_matrix)
 end
 
 function Base.:/(ft::FusionTensor, x::Number)
-  return FusionTensor(ft.codomain_axes, ft.domain_axes, ft.matrix_blocks / x)
+  return FusionTensor(axes(ft), n_row_legs(ft), matrix(ft) / x)
 end
 
 # adjoint = dagger * conjugate
-function Base.adjoint(t::FusionTensor)
-  tdag = dagger(t)
-  return FusionTensor(tdag.codomain_axes, tdag.domain_axes, conj.(tdag.blocks))
+function Base.adjoint(ft::FusionTensor)
+  tdag = dagger(ft)
+  return FusionTensor(axes(tdag), n_domain_legs(tdag), conj(matrix(tdag)))
 end
 
-# TBD conjugate imposes dual?
-function Base.conj(t::FusionTensor)
+# complex conjugation, no dual
+function Base.conj(ft::FusionTensor)
   return FusionTensor(
-    dual.(t.codomain_axes),
-    dual.(t.domain_axes),
-    conj(t.matrix_blocks),  # TBD impose sorting?
+    codomain_axes,
+    t.domain_axes,
+    conj(t.matrix),  # TBD impose sorting?
   )
 end
 
 function Base.copy(ft::FusionTensor)
-  new_blocks = copy(ft.matrix_blocks)
-  return FusionTensor(ft.codomain_axes, ft.domain_axes, new_blocks)
+  new_matrix = copy(matrix(ft))
+  new_axes = copy(axes(ft))
+  return FusionTensor(new_axes, n_row_legs(ft), new_matrix)
 end
 
 function Base.deecopy(ft::FusionTensor)
-  # only copy matrix_blocks.
-  # TBD Copy axes?
-  new_blocks = deepcopy(ft.matrix_blocks)
-  return FusionTensor(ft.codomain_axes, ft.domain_axes, new_blocks)
+  new_matrix = deepcopy(matrix(ft))
+  new_axes = deepcopy(axes(ft))
+  return FusionTensor(new_axes, n_row_legs(ft), new_matrix)
 end
 
-Base.ndims(t::FusionTensor) = t.ndims  # clash with AbstractMatrix
-Base.size(t::FusionTensor) = size(t.matrix_blocks)  # strange object
-# length = prod(size(t)) has little meaning
-# axes(a) is just wrong => overload it?
-# eachindex(a) is wrong => It HAS to be impossible to write/access off-diagonal blocks
-# stride(a)  meaningless - unsupported by BlockSparseArray anyway
-# fill! => implemented by default? Implement it for diagonal blocks?
-
-Base.getindex(t::FusionTensor, i::Int) = t.matrix_blocks[i]  # strange object
-Base.getindex(t::FusionTensor, I::Vararg{Int,2}) = t.matrix_blocks[I]  # strange object
-Base.IndexStyle(::FusionTensor) = IndexCartesian()
+Base.ndims(ft::FusionTensor) = N
+Base.show(io::IO, ft::FusionTensor) = @printf(io, "%d-dim FusionTensor", ndims(ft))
+Base.size(ft::FusionTensor) = length.(axes(ft))

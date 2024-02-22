@@ -6,17 +6,16 @@ using BlockArrays
 using NDTensors.BlockSparseArrays: BlockSparseArray
 using ITensors: @debug_check
 
-struct FusionTensor{T<:number,C,D,E} <: AbstractMatrix{T}
-  codomain_axes::C  # tuple / Vector of GradedAxes
-  domain_axes::D    # tuple / Vector of GradedAxes
+struct FusionTensor{
+  T<:Number,N,Axes<:Tuple{N,AbstractUnitRange{Int}},Arr<:BlockSparseArray{T,2}
+} <: AbstractArray{T,N}
+  axes::Axes
+  n_row_legs::Int  # TBD more type stable with only N fixed or with NRL and NCL?
+  matrix::Arr
+end
 
-  matrix_blocks::E  # DiagonalBlockMatrix
-
-  ndims::Integer  # may be different from 2!
-  #nblocks::Integer
-end where {T<:Number}
-
-function check_consistency(t::FusionTensor)
+"""
+function check_consistency(ft::FusionTensor)
   if length(t.codomain_axes) != t.n_codomain_legs
     return false
   end
@@ -32,7 +31,7 @@ function check_consistency(t::FusionTensor)
   if t.ndims != t.n_codomain_legs + t.n_domain_legs
     return false
   end
-  if length(t.matrix_blocks) != t.nblocks
+  if length(t.matrix) != t.nblocks
     return false
   end
   if blocklength(matrix_row_axis) != t.nblocks
@@ -42,10 +41,10 @@ function check_consistency(t::FusionTensor)
     return false
   end
   for i in 1:(t.nblocks)
-    if size(matrix_blocks[i], 1) != blocklengths(t.matrix_row_axis)[i]
+    if size(matrix[i], 1) != blocklengths(t.matrix_row_axis)[i]
       return false
     end
-    if size(matrix_blocks[i], 2) != blocklengths(t.matrix_column_axis)[i]
+    if size(matrix[i], 2) != blocklengths(t.matrix_column_axis)[i]
       return false
     end
   end
@@ -61,82 +60,29 @@ function check_consistency(t::FusionTensor)
   end
   return true
 end
+"""
 
-function FusionTensor(
-  codomain_axes::Vector{GradedAxes.GradedUnitRange},
-  domain_axes::Vector{GradedAxes.GradedUnitRange},
-  matrix_blocks::BlockSparseArray,
-)
-  return FusionTensor(
-    codomain_axes, domain_axes, matrix_blocks, length(codomain_axes) + length(domain_axes)
-  )
+# getters
+matrix(ft::FusionTensor) = ft.matrix
+axes(ft::FusionTensor) = ft.axes
+n_row_legs(ft::FusionTensor) = ft.n_row_legs
+
+# misc
+domain_axes(ft::FusionTensor) = axes(ft)[begin:n_row_legs(ft)]
+codomain_axes(ft::FusionTensor) = axes(ft)[n_row_legs(t):end]
+n_column_legs(ft::FusionTensor) = ndims(ft) - n_row_legs(ft)
+matrix_size(ft::FusionTensor) = size(matrix(ft))
+
+# constructors
+function FusionTensor(codomain_axes, domain_axes, matrix)
+  axes = (codomain_axes..., domain_axes...)
+  n_row_legs = length(axes)
+  return FusionTensor(axes, n_row_legs, matrix)
 end
-
-matrix_size(t::FusionTensor) = size(t.matrix_blocks)
-tensor_size(t::FusionTensor) = size(t.matrix_blocks)
-n_codomain_legs(t::FusionTensor) = length(t.codomain_axes)
-n_domain_legs(t::FusionTensor) = length(t.domain_axes)
 
 # swap row and column axes, transpose matrix blocks, dual any axis. No basis change.
-function dagger(t::FusionTensor)
+function dagger(ft::FusionTensor)
   return FusionTensor(
-    dual.(t.domain_axes),
-    dual.(t.codomain_axes),
-    transpose(t.matrix_blocks),  # TBD impose sorting? Currently crash BlockSparseArray
+    dual.(domain_axes(ft)), dual.(codomain_axes(ft)), transpose(matrix(ft))
   )
-end
-
-# tensor contraction is a block matrix product.
-function Base.:*(left::FusionTensor, right::FusionTensor)
-
-  # check consistency
-  if left.domain_axes != right.codomain_axes
-    throw(DomainError("Incompatible tensor axes"))
-  end
-
-  new_blocks = left.matrix_blocks * right.matrix_blocks
-
-  return FusionTensor(left.codomain_axes, right.domain_axes, new_blocks)
-end
-
-Base.:+(ft::FusionTensor) = ft
-
-function Base.:-(ft::FusionTensor)
-  new_blocks = -ft.matrix_blocks
-  return FusionTensor(ft.codomain_axes, ft.domain_axes, new_blocks)
-end
-
-# tensor addition is a block matrix add.
-function Base.:+(left::FusionTensor, right::FusionTensor)
-  # check consistency
-  if left.codomain_axes != right.codomain_axes || left.domain_axes != right.domain_axes
-    throw(DomainError("Incompatible tensor axes"))
-  end
-
-  new_blocks = left.matrix_blocks + right.matrix_blocks
-
-  return FusionTensor(left.codomain_axes, left.domain_axes, new_blocks)
-end
-
-function Base.:-(left::FusionTensor, right::FusionTensor)
-  # check consistency
-  if left.codomain_axes != right.codomain_axes || left.domain_axes != right.domain_axes
-    throw(DomainError("Incompatible tensor axes"))
-  end
-
-  new_blocks = left.matrix_blocks - right.matrix_blocks
-
-  return FusionTensor(left.codomain_axes, left.domain_axes, new_blocks)
-end
-
-function Base.:*(x::Number, ft::FusionTensor)
-  return FusionTensor(ft.codomain_axes, ft.domain_axes, x * ft.matrix_blocks)
-end
-
-function Base.:*(ft::FusionTensor, x::Number)
-  return FusionTensor(ft.codomain_axes, ft.domain_axes, x * ft.matrix_blocks)
-end
-
-function Base.:/(ft::FusionTensor, x::Number)
-  return FusionTensor(ft.codomain_axes, ft.domain_axes, ft.matrix_blocks / x)
 end
