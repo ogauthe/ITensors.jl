@@ -7,22 +7,22 @@ struct FusionTensor{
 } <: AbstractArray{T,N}
   # TBD more type stable with only N fixed or with NRL and NCL as type parameters?
   # can also define N_ROW_LEG as type parameter
-  # with N fixed and n_row_legs dynamic, permutedims, dagger and co preserve type
+  # with N fixed and n_codomain_legs dynamic, permutedims, dagger and co preserve type
   # but tensor contraction output type is not knwon at compile time
   axes::Axes
-  n_row_legs::Int
+  n_codomain_legs::Int
   matrix::Arr
 end
 
 # getters
 matrix(ft::FusionTensor) = ft.matrix
 axes(ft::FusionTensor) = ft.axes
-n_row_legs(ft::FusionTensor) = ft.n_row_legs
+n_codomain_legs(ft::FusionTensor) = ft.n_codomain_legs
 
 # misc
-codomain_axes(ft::FusionTensor) = axes(ft)[n_row_legs(ft):end]
-domain_axes(ft::FusionTensor) = axes(ft)[begin:n_row_legs(ft)]
-n_column_legs(ft::FusionTensor) = ndims(ft) - n_row_legs(ft)
+codomain_axes(ft::FusionTensor) = axes(ft)[begin:n_codomain_legs(ft)]
+domain_axes(ft::FusionTensor) = axes(ft)[n_codomain_legs(ft):end]
+n_domain_legs(ft::FusionTensor) = ndims(ft) - n_codomain_legs(ft)
 matrix_size(ft::FusionTensor) = size(matrix(ft))
 row_axis(ft::FusionTensor) = axes(matrix(ft))[1]
 column_axis(ft::FusionTensor) = axes(matrix(ft))[2]
@@ -36,8 +36,8 @@ function FusionTensor(codomain_axes, domain_axes, matrix)
   @assert prod(length.(codomain_axes)) == size(matrix, 1)
   @assert prod(length.(domain_axes)) == size(matrix, 2)
   axes = (codomain_axes..., domain_axes...)
-  n_row_legs = length(codomain_axes)
-  return FusionTensor(axes, n_row_legs, matrix)
+  n_codomain_legs = length(codomain_axes)
+  return FusionTensor(axes, n_codomain_legs, matrix)
 end
 
 # sanity check
