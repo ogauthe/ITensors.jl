@@ -54,22 +54,24 @@ ft3 = deepcopy(ft1)
 @test n_codomain_legs(ft3) == 1
 
 # more than 2 axes
-g3 = GradedAxes.gradedrange([U1(-1), U1(0), U1(1)], [1, 1, 1])
-g4 = GradedAxes.fuse(g2, g3)
-m2 = BlockSparseArray{Float64}(g1, g4)
-ft4 = FusionTensor((g1,), (g2, g3), m2)  # constructor from split axes
+g3 = GradedAxes.gradedrange([U1(-1), U1(0), U1(1)], [1, 2, 1])
+g4 = GradedAxes.gradedrange([U1(-1), U1(0), U1(1)], [1, 1, 1])
+gr = GradedAxes.fuse(g1, g2)
+gc = GradedAxes.fuse(g3, g4)
+m2 = BlockSparseArray{Float64}(gr, gc)
+ft4 = FusionTensor((g1, g2), (g3, g4), m2)  # constructor from split axes
 
 @test matrix(ft4) === m2
-@test axes(ft4) == (g1, g2, g3)
-@test n_codomain_legs(ft2) == 1
+@test axes(ft4) == (g1, g2, g3, g4)
+@test n_codomain_legs(ft4) == 2
 
-@test codomain_axes(ft4) == (g1,)
-@test domain_axes(ft4) == (g2, g3)
+@test codomain_axes(ft4) == (g1, g2)
+@test domain_axes(ft4) == (g3, g4)
 @test n_domain_legs(ft4) == 2
-@test matrix_size(ft4) == (6, 15)
-@test row_axis(ft4) == g1
-@test column_axis(ft4) == g4
+@test matrix_size(ft4) == (30, 12)
+@test row_axis(ft4) == gr
+@test column_axis(ft4) == gc
 @test isnothing(sanity_check(ft4))
 
-@test ndims(ft4) == 3
-@test size(ft4) == (6, 5, 3)
+@test ndims(ft4) == 4
+@test size(ft4) == (6, 5, 4, 3)
