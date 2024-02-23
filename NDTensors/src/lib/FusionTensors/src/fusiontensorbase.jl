@@ -86,6 +86,8 @@ end
 
 Base.ndims(::FusionTensor{T,N}) where {T,N} = N
 
+# Base.permutedims is defined in a separate file
+
 Base.show(io::IO, ft::FusionTensor) = print(io, "$(ndims(ft))-dim FusionTensor")
 
 function Base.show(io::IO, ::MIME"text/plain", ft::FusionTensor)

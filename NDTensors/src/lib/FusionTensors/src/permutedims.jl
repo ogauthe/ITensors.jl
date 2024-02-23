@@ -4,15 +4,14 @@ using LinearAlgebra
 using ITensors: @debug_check
 using NDTensors.FusionTensor: FusionTensor
 
-# stupid permutedims: cast to dense, permute, cast to symmetric
-function permutedims(  # args != Base.permutedims. Change name?
-  ft::FusionTensor,
-  permutation::Vector{Int},
-  n_codomain_out::Vector{Int},
-)
-  arr = ft.toarray()
+function Base.permutedims(ft::FusionTensor, permutation::Vector{Int}, n_codomain_out::Int)
+  axes_out = axes(ft)[permutation]
+
+  # stupid permutedims: cast to dense, permute, cast to symmetric
+  arr = Array(ft)
   permuted_arr = permutedims(arr, permutation)
-  return ftp = FusionTensor(permuted_arr)
+  out = FusionTensor(permuted_arr, axes_out, n_codomain_out)
+  return out
 end
 
 """
