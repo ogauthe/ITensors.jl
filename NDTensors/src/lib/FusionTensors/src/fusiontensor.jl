@@ -27,17 +27,16 @@ matrix_size(ft::FusionTensor) = size(matrix(ft))
 row_axis(ft::FusionTensor) = axes(matrix(ft))[1]
 column_axis(ft::FusionTensor) = axes(matrix(ft))[2]
 
-# constructors
-function FusionTensor(codomain_axes, domain_axes, matrix)
+# alternative constructor from split codomain and domain
+# works for both cast from dense or direct constructor from BlockSparseArray
+function FusionTensor(codomain_axes, domain_axes, arr)
   # TBD cannot disable assert globally with julia 1.10
   # remove these? Add explicit input validation with if wrong throw() end?
   @assert length(codomain_axes) > 0
   @assert length(domain_axes) > 0
-  @assert prod(length.(codomain_axes)) == size(matrix, 1)
-  @assert prod(length.(domain_axes)) == size(matrix, 2)
   axes = (codomain_axes..., domain_axes...)
   n_codomain_axes = length(codomain_axes)
-  return FusionTensor(axes, n_codomain_axes, matrix)
+  return FusionTensor(axes, n_codomain_axes, arr)
 end
 
 # sanity check
