@@ -1,17 +1,46 @@
-using NDTensors.Sectors: AbstractCategory
-using NDTensors.GradedAxes
-using LinearAlgebra
-using ITensors: @debug_check
-using NDTensors.FusionTensor: FusionTensor
+using NDTensors.FusionTensors: FusionTensor
 
 function Base.permutedims(ft::FusionTensor, permutation::Vector{Int}, n_codomain_out::Int)
-  axes_out = axes(ft)[permutation]
 
-  # stupid permutedims: cast to dense, permute, cast to symmetric
+  # early return for identity operation. Do not copy.
+  trivial = collect(1:ndims(ft))
+  if permutation == trivial && n_codomain_axes(ft) == n_codomain_out
+    return ft
+  end
+
+  # input validation
+  if sort(permutation) != trivial
+    throw(DomainError("Invalid permutation"))
+  end
+  if !(1 <= n_codomain_out < ndims(ft))
+    throw(DomainError("Invalid n_codomain_out"))
+  end
+
+  structural_data = _compute_structural_data(
+    axes(ft), n_codomain_legs(ft), permutation, n_codomain_out
+  )
+  permuted_matrix = _permute_data(ft, structural_data)
+
+  axes_out = axes(ft)[permutation]
+  out = FusionTensor(permuted_matrix, axes_out, n_codomain_out)
+  return out
+end
+
+function _compute_structural_data(axes, n_codomain_in, permutation, n_codomain_out)
+  # stupid permute
+  structural_data = (axes, n_codomain_in, permutation, n_codomain_out)
+  return structural_data
+end
+
+function _permute_data(ft::FusionTensor, structural_data)
+  # stupid permute: cast to dense, permutedims, cast to FusionTensor
+  (axes, _, permutation, n_codomain_out) = structural_data
   arr = Array(ft)
   permuted_arr = permutedims(arr, permutation)
-  out = FusionTensor(permuted_arr, axes_out, n_codomain_out)
-  return out
+  axes_out = axes(ft)[permutation]
+  ftp = FusionTensor(axes_out, n_codomain_out, permuted_arr)
+  permuted_matrix = matrix(ftp)
+  return permuted_matrix
 end
 
 """
