@@ -3,11 +3,11 @@
 using NDTensors.FusionTensors: FusionTensor, domain_axes, codomain_axes
 
 function Base.:*(x::Number, ft::FusionTensor)
-  return FusionTensor(axes(ft), n_codomain_legs(ft), x * matrix(ft))
+  return FusionTensor(axes(ft), n_codomain_axes(ft), x * matrix(ft))
 end
 
 function Base.:*(ft::FusionTensor, x::Number)
-  return FusionTensor(axes(ft), n_codomain_legs(ft), x * matrix(ft))
+  return FusionTensor(axes(ft), n_codomain_axes(ft), x * matrix(ft))
 end
 
 # tensor contraction is a block matrix product.
@@ -32,12 +32,12 @@ function Base.:+(left::FusionTensor, right::FusionTensor)
   end
   new_matrix = matrix(left) + matrix(right)
 
-  return FusionTensor(axes(left), n_codomain_legs(left), new_matrix)
+  return FusionTensor(axes(left), n_codomain_axes(left), new_matrix)
 end
 
 function Base.:-(ft::FusionTensor)
   new_matrix = -matrix(ft)
-  return FusionTensor(axes(ft), n_codomain_legs(ft), new_matrix)
+  return FusionTensor(axes(ft), n_codomain_axes(ft), new_matrix)
 end
 
 function Base.:-(left::FusionTensor, right::FusionTensor)
@@ -48,17 +48,17 @@ function Base.:-(left::FusionTensor, right::FusionTensor)
 
   new_matrix = left.matrix - right.matrix
 
-  return FusionTensor(axes(left), n_codomain_legs(left), new_matrix)
+  return FusionTensor(axes(left), n_codomain_axes(left), new_matrix)
 end
 
 function Base.:/(ft::FusionTensor, x::Number)
-  return FusionTensor(axes(ft), n_codomain_legs(ft), matrix(ft) / x)
+  return FusionTensor(axes(ft), n_codomain_axes(ft), matrix(ft) / x)
 end
 
 # adjoint = dagger * conjugate
 function Base.adjoint(ft::FusionTensor)
   ftdag = dagger(ft)
-  return FusionTensor(axes(ftdag), n_domain_legs(ftdag), conj(matrix(ftdag)))
+  return FusionTensor(axes(ftdag), n_domain_axes(ftdag), conj(matrix(ftdag)))
 end
 
 # Base.axes is defined in fusiontensor.jl as a getter
@@ -71,13 +71,13 @@ end
 function Base.copy(ft::FusionTensor)
   new_matrix = copy(matrix(ft))
   new_axes = copy.(axes(ft))
-  return FusionTensor(new_axes, n_codomain_legs(ft), new_matrix)
+  return FusionTensor(new_axes, n_codomain_axes(ft), new_matrix)
 end
 
 function Base.deepcopy(ft::FusionTensor)
   new_matrix = deepcopy(matrix(ft))
   new_axes = deepcopy(axes(ft))
-  return FusionTensor(new_axes, n_codomain_legs(ft), new_matrix)
+  return FusionTensor(new_axes, n_codomain_axes(ft), new_matrix)
 end
 
 function Base.eachindex(::FusionTensor)
