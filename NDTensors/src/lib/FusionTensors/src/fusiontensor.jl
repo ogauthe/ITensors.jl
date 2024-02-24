@@ -9,15 +9,15 @@ struct FusionTensor{
   # can also define N_ROW_LEG as type parameter
   # with N fixed and n_codomain_axes dynamic, permutedims, dagger and co preserve type
   # but tensor contraction output type is not knwon at compile time
-  axes::Axes
-  n_codomain_axes::Int
-  matrix::Arr
+  _axes::Axes
+  _n_codomain_axes::Int
+  _matrix::Arr
 end
 
 # getters
-matrix(ft::FusionTensor) = ft.matrix
-Base.axes(ft::FusionTensor) = ft.axes
-n_codomain_axes(ft::FusionTensor) = ft.n_codomain_axes
+matrix(ft::FusionTensor) = ft._matrix
+Base.axes(ft::FusionTensor) = ft._axes
+n_codomain_axes(ft::FusionTensor) = ft._n_codomain_axes
 
 # misc
 codomain_axes(ft::FusionTensor) = axes(ft)[begin:n_codomain_axes(ft)]
