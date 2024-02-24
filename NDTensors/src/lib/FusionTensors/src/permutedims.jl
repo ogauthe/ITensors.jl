@@ -1,5 +1,12 @@
 using NDTensors.FusionTensors: FusionTensor
 
+function Base.permutedims(
+  ft::FusionTensor, permutation::NTuple{N,Int}, n_codomain_out::Int
+) where {N}
+  p = collect(permutation)  # need explicit cast to Vector
+  return permutedims(ft, p, n_codomain_out)
+end
+
 function Base.permutedims(ft::FusionTensor, permutation::Vector{Int}, n_codomain_out::Int)
 
   # early return for identity operation. Do not copy.
@@ -17,24 +24,25 @@ function Base.permutedims(ft::FusionTensor, permutation::Vector{Int}, n_codomain
   end
 
   structural_data = _compute_structural_data(
-    axes(ft), n_codomain_legs(ft), permutation, n_codomain_out
+    axes(ft), n_codomain_axes(ft), permutation, n_codomain_out
   )
   permuted_matrix = _permute_data(ft, structural_data)
 
   axes_out = axes(ft)[permutation]
-  out = FusionTensor(permuted_matrix, axes_out, n_codomain_out)
+
+  out = FusionTensor(axes_out, n_codomain_out, permuted_matrix)
   return out
 end
 
-function _compute_structural_data(axes, n_codomain_in, permutation, n_codomain_out)
+function _compute_structural_data(axes_in, n_codomain_in, permutation, n_codomain_out)
   # stupid permute
-  structural_data = (axes, n_codomain_in, permutation, n_codomain_out)
+  structural_data = (permutation, n_codomain_out)
   return structural_data
 end
 
 function _permute_data(ft::FusionTensor, structural_data)
   # stupid permute: cast to dense, permutedims, cast to FusionTensor
-  (axes, _, permutation, n_codomain_out) = structural_data
+  (permutation, n_codomain_out) = structural_data
   arr = Array(ft)
   permuted_arr = permutedims(arr, permutation)
   axes_out = axes(ft)[permutation]
@@ -95,7 +103,7 @@ function permutedims(  # args != Base.permutedims. Change name?
 
   # TODO cache me
   structural_data = compute_structural_data(
-    t.axes, permutation, t.n_codomain_legs, n_codomain_out
+    t.axes, permutation, t.n_codomain_axes, n_codomain_out
   )
 
   out_row_axis, out_col_axis, out_blocks = transpose_data(

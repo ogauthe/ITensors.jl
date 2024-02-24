@@ -75,3 +75,12 @@ ft4 = FusionTensor((g1, g2), (g3, g4), m2)  # constructor from split axes
 
 @test ndims(ft4) == 4
 @test size(ft4) == (6, 5, 4, 3)
+
+# test permutedims
+ft5 = permutedims(ft4, (1, 2, 3, 4), 2)   # trivial
+@test ft5 === ft4
+
+ft5 = permutedims(ft4, (4, 1, 2, 3), 1)
+@test axes(ft5) == (g4, g1, g2, g3)
+@test n_codomain_axes(ft5) == 1
+@test isnothing(sanity_check(ft5))
