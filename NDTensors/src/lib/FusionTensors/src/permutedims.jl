@@ -1,4 +1,7 @@
+using BlockArrays: blocks
+
 using NDTensors.FusionTensors: FusionTensor
+using NDTensors.TensorAlgebra: BlockedPermutation, blockedperm
 
 # FIXME does not compile
 # LoadError: TypeError: in Type{...} expression, expected UnionAll, got a value of type typeof(permutedims)
@@ -15,31 +18,31 @@ function Base.permutedims(
   new_codomain_axes::NTuple{J,Int},
   new_domain_axes::NTuple{L,Int},
 ) where {M,K,T,N,J,L}
+  perm = blockedperm(new_codomain_axes, new_domain_axes)
+  return permutedims(ft, perm)
+end
 
+function Base.permutedims(
+  ft::FusionTensor{M,K,T,N}, perm::BlockedPermutation{2,N,B}
+) where {M,K,T,N,J,L,B<:Tuple{NTuple{J,Int},NTuple{L,Int}}}
+  flat = Tuple(perm)
   # early return for identity operation. Do not copy.
-  # TODO compile separetly in case M==J?
-  if new_codomain_axes == ntuple(i -> i, M) && new_domain_axes == ntuple(i -> i + M, K)
+  # TODO compile separetly, only for case M==J?
+  if M == J && flat == ntuple(i -> i, N)
     return ft
   end
 
-  # input validation
-  if sort(collect((new_codomain_axes..., new_domain_axes...))) != collect(1:N)
-    throw(DomainError("Invalid permutation"))
-  end
-
-  structural_data = _compute_structural_data(axes(ft), new_codomain_axes, new_domain_axes)
+  structural_data = _compute_structural_data(axes(ft), perm)
   permuted_matrix = _permute_data(ft, structural_data)
 
-  codomain_axes_out = ntuple(i -> axes(ft)[new_codomain_axes[i]], length(new_codomain_axes))
-  domain_axes_out = ntuple(i -> axes(ft)[new_domain_axes[i]], length(new_domain_axes))
-
-  out = FusionTensor(codomain_axes_out, domain_axes_out, permuted_matrix)
+  axes_out = ntuple(i -> axes(ft)[flat[i]], N)
+  out = FusionTensor{J}(axes_out, permuted_matrix)
   return out
 end
 
-function _compute_structural_data(axes_in, new_codomain_axes, new_domain_axes)
+function _compute_structural_data(axes_in, perm)
   # stupid permute
-  structural_data = (new_codomain_axes, new_domain_axes)
+  structural_data = blocks(perm)
   return structural_data
 end
 
