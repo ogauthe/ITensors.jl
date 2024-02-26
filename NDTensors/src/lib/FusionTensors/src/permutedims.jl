@@ -1,52 +1,57 @@
 using NDTensors.FusionTensors: FusionTensor
 
-function Base.permutedims(
-  ft::FusionTensor, permutation::NTuple{N,Int}, n_codomain_out::Int
-) where {N}
-  p = collect(permutation)  # need explicit cast to Vector
-  return permutedims(ft, p, n_codomain_out)
-end
+# FIXME
+# LoadError: TypeError: in Type{...} expression, expected UnionAll, got a value of type typeof(permutedims)
+"""function Base.permutedims{J}(
+  ft::FusionTensor{M,K,T,N}, permutation::NTuple{N,Int}
+) where {M,K,T,N,J}
+  new_codomain_axes = permutation[begin:J]
+  new_domain_axes = permutation[(J + 1):end]
+  return permutedims(ft, new_codomain_axes, new_domain_axes)
+end"""
 
-function Base.permutedims(ft::FusionTensor, permutation::Vector{Int}, n_codomain_out::Int)
+function Base.permutedims(
+  ft::FusionTensor{M,K,T,N},
+  new_codomain_axes::NTuple{J,Int},
+  new_domain_axes::NTuple{L,Int},
+) where {M,K,T,N,J,L}
 
   # early return for identity operation. Do not copy.
-  trivial = collect(1:ndims(ft))
-  if permutation == trivial && n_codomain_axes(ft) == n_codomain_out
+  # TODO compile separetly in case M==J?
+  if new_codomain_axes == ntuple(i -> i, M) && new_domain_axes == ntuple(i -> i + M, K)
     return ft
   end
 
   # input validation
-  if sort(permutation) != trivial
+  if sort(collect((new_codomain_axes..., new_domain_axes...))) != collect(1:N)
     throw(DomainError("Invalid permutation"))
   end
-  if !(1 <= n_codomain_out < ndims(ft))
-    throw(DomainError("Invalid n_codomain_out"))
-  end
 
-  structural_data = _compute_structural_data(
-    axes(ft), n_codomain_axes(ft), permutation, n_codomain_out
-  )
+  structural_data = _compute_structural_data(axes(ft), new_codomain_axes, new_domain_axes)
   permuted_matrix = _permute_data(ft, structural_data)
 
-  axes_out = axes(ft)[permutation]
+  codomain_axes_out = ntuple(i -> axes(ft)[new_codomain_axes[i]], length(new_codomain_axes))
+  domain_axes_out = ntuple(i -> axes(ft)[new_domain_axes[i]], length(new_domain_axes))
 
-  out = FusionTensor(axes_out, n_codomain_out, permuted_matrix)
+  out = FusionTensor(codomain_axes_out, domain_axes_out, permuted_matrix)
   return out
 end
 
-function _compute_structural_data(axes_in, n_codomain_in, permutation, n_codomain_out)
+function _compute_structural_data(axes_in, new_codomain_axes, new_domain_axes)
   # stupid permute
-  structural_data = (permutation, n_codomain_out)
+  structural_data = (new_codomain_axes, new_domain_axes)
   return structural_data
 end
 
 function _permute_data(ft::FusionTensor, structural_data)
   # stupid permute: cast to dense, permutedims, cast to FusionTensor
-  (permutation, n_codomain_out) = structural_data
+  (new_codomain_axes, new_domain_axes) = structural_data
   arr = Array(ft)
-  permuted_arr = permutedims(arr, permutation)
-  axes_out = axes(ft)[permutation]
-  ftp = FusionTensor(axes_out, n_codomain_out, permuted_arr)
+  perm = (new_codomain_axes..., new_domain_axes...)
+  permuted_arr = permutedims(arr, perm)
+  codomain_axes_out = ntuple(i -> axes(ft)[new_codomain_axes[i]], length(new_codomain_axes))
+  domain_axes_out = ntuple(i -> axes(ft)[new_domain_axes[i]], length(new_domain_axes))
+  ftp = FusionTensor(codomain_axes_out, domain_axes_out, permuted_arr)
   permuted_matrix = matrix(ftp)
   return permuted_matrix
 end

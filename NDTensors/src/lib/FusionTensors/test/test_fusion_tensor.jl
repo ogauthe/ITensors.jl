@@ -19,7 +19,7 @@ g1 = GradedAxes.gradedrange([U1(0), U1(1), U1(2)], [1, 2, 3])
 g2 = GradedAxes.gradedrange([U1(0), U1(1), U1(3)], [2, 2, 1])
 m = BlockSparseArray{Float64}(g1, g2)
 
-ft1 = FusionTensor((g1, g2), 1, m)  # default constructor
+ft1 = FusionTensor((g1,), (g2,), m)  # constructor from split axes
 
 # getters
 @test matrix(ft1) === m
@@ -59,7 +59,7 @@ g4 = GradedAxes.gradedrange([U1(-1), U1(0), U1(1)], [1, 1, 1])
 gr = GradedAxes.fuse(g1, g2)
 gc = GradedAxes.fuse(g3, g4)
 m2 = BlockSparseArray{Float64}(gr, gc)
-ft4 = FusionTensor((g1, g2), (g3, g4), m2)  # constructor from split axes
+ft4 = FusionTensor((g1, g2), (g3, g4), m2)  # constructor from concatenated axes
 
 @test matrix(ft4) === m2
 @test axes(ft4) == (g1, g2, g3, g4)
@@ -77,10 +77,10 @@ ft4 = FusionTensor((g1, g2), (g3, g4), m2)  # constructor from split axes
 @test size(ft4) == (6, 5, 4, 3)
 
 # test permutedims
-ft5 = permutedims(ft4, (1, 2, 3, 4), 2)   # trivial
-@test ft5 === ft4
+ft5 = permutedims(ft4, (1, 2), (3, 4))   # trivial
+@test ft5 === ft4  # same object
 
-ft5 = permutedims(ft4, (4, 1, 2, 3), 1)
+ft5 = permutedims(ft4, (4,), (1, 2, 3))
 @test axes(ft5) == (g4, g1, g2, g3)
 @test n_codomain_axes(ft5) == 1
 @test isnothing(sanity_check(ft5))

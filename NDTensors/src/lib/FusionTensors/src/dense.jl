@@ -6,24 +6,25 @@ using NDTensors.GradedAxes: fuse
 
 # constructor from dense array
 function FusionTensor(
-  axes_in::NTuple{N}, n_codomain_legs::Int, arr::DenseArray{T,N}, tol_check::Real=0.0
-) where {T<:Number,N}
+  codomain_legs, domain_legs, arr::DA, tol_check::Real=0.0
+) where {T<:Number,DA<:DenseArray{T}}
 
   # input validation
   # ndims(arr) = length(axes_in) is enforced at compile time
-  if length.(axes_in) != size(arr)
-    throw(DomainError("Axis is incompatible with dense array"))
+  if (length.(codomain_legs)..., length.(domain_legs)...) != size(arr)
+    throw(DomainError("Axes are incompatible with dense array"))
   end
 
   # initialize matrix
-  matrix_row_axis = reduce(fuse, axes_in[begin:n_codomain_legs])
-  matrix_col_axis = reduce(fuse, axes_in[(n_codomain_legs + 1):end])
+  matrix_row_axis = reduce(fuse, codomain_legs)
+  matrix_col_axis = reduce(fuse, domain_legs)
   matrix = BlockSparseArray{T}(matrix_row_axis, matrix_col_axis)
 
   # fill matrix
   # dummy: TODO
 
-  out = FusionTensor(axes_in, n_codomain_legs, matrix)
+  out = FusionTensor(codomain_legs, domain_legs, matrix)
+
   # check that norm is the same in input and output
   if tol_check > 0
     dense_norm = norm(dense)

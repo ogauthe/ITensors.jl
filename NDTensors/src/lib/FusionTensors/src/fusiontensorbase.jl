@@ -2,16 +2,16 @@
 
 using NDTensors.FusionTensors: FusionTensor, domain_axes, codomain_axes
 
-function Base.:*(x::Number, ft::FusionTensor)
-  return FusionTensor(axes(ft), n_codomain_axes(ft), x * matrix(ft))
+function Base.:*(x::Number, ft::FusionTensor{M}) where {M}
+  return FusionTensor{M}(axes(ft), x * matrix(ft))
 end
 
-function Base.:*(ft::FusionTensor, x::Number)
-  return FusionTensor(axes(ft), n_codomain_axes(ft), x * matrix(ft))
+function Base.:*(ft::FusionTensor{M}, x::Number) where {M}
+  return FusionTensor{M}(axes(ft), x * matrix(ft))
 end
 
 # tensor contraction is a block matrix product.
-function Base.:*(left::FusionTensor, right::FusionTensor)
+function Base.:*(left::FusionTensor{M,K}, right::FusionTensor{K}) where {M,K}
 
   # check consistency
   if domain_axes(left) != dual.(codomain_axes(right))  # TODO check dual behavior
@@ -25,22 +25,22 @@ end
 Base.:+(ft::FusionTensor) = ft
 
 # tensor addition is a block matrix add.
-function Base.:+(left::FusionTensor, right::FusionTensor)
+function Base.:+(left::FusionTensor{M}, right::FusionTensor{M}) where {M}
   # check consistency
   if codomain_axes(left) != codomain_axes(right) || domain_axes(left) != domain_axes(right)
     throw(DomainError("Incompatible tensor axes"))
   end
   new_matrix = matrix(left) + matrix(right)
 
-  return FusionTensor(axes(left), n_codomain_axes(left), new_matrix)
+  return FusionTensor{M}(axes(left), new_matrix)
 end
 
-function Base.:-(ft::FusionTensor)
+function Base.:-(ft::FusionTensor{M}) where {M}
   new_matrix = -matrix(ft)
-  return FusionTensor(axes(ft), n_codomain_axes(ft), new_matrix)
+  return FusionTensor{M}(axes(ft), new_matrix)
 end
 
-function Base.:-(left::FusionTensor, right::FusionTensor)
+function Base.:-(left::FusionTensor{M}, right::FusionTensor{M}) where {M}
   # check consistency
   if codomain_axes(left) != codomain_axes(right) || domain_axes(left) != domain_axes(right)
     throw(DomainError("Incompatible tensor axes"))
@@ -48,11 +48,11 @@ function Base.:-(left::FusionTensor, right::FusionTensor)
 
   new_matrix = left.matrix - right.matrix
 
-  return FusionTensor(axes(left), n_codomain_axes(left), new_matrix)
+  return FusionTensor{M}(axes(left), new_matrix)
 end
 
-function Base.:/(ft::FusionTensor, x::Number)
-  return FusionTensor(axes(ft), n_codomain_axes(ft), matrix(ft) / x)
+function Base.:/(ft::FusionTensor{M}, x::Number) where {M}
+  return FusionTensor{M}(axes(ft), matrix(ft) / x)
 end
 
 # adjoint is costless: dual axes, swap domain and codomain, take matrix adjoint.
@@ -64,27 +64,27 @@ end
 # Base.axes is defined in fusiontensor.jl as a getter
 
 # conj is defined as coefficient wise complex conjugation, without axis dual
-function Base.conj(ft::FusionTensor)
-  return FusionTensor(codomain_axes(ft), domain_axes(ft), conj(matrix(ft)))
+function Base.conj(ft::FusionTensor{M}) where {M}
+  return FusionTensor{M}(axes(ft), conj(matrix(ft)))
 end
 
-function Base.copy(ft::FusionTensor)
+function Base.copy(ft::FusionTensor{M}) where {M}
   new_matrix = copy(matrix(ft))
   new_axes = copy.(axes(ft))
-  return FusionTensor(new_axes, n_codomain_axes(ft), new_matrix)
+  return FusionTensor{M}(new_axes, new_matrix)
 end
 
-function Base.deepcopy(ft::FusionTensor)
+function Base.deepcopy(ft::FusionTensor{M}) where {M}
   new_matrix = deepcopy(matrix(ft))
   new_axes = deepcopy(axes(ft))
-  return FusionTensor(new_axes, n_codomain_axes(ft), new_matrix)
+  return FusionTensor{M}(new_axes, new_matrix)
 end
 
 function Base.eachindex(::FusionTensor)
   throw(DomainError("eachindex", "eachindex not defined for FusionTensor"))
 end
 
-Base.ndims(::FusionTensor{T,N}) where {T,N} = N
+Base.ndims(::FusionTensor{M,K,T,N}) where {M,K,T,N} = N
 
 # Base.permutedims is defined in a separate file
 

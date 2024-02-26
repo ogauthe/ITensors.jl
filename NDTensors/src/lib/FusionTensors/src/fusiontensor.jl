@@ -3,41 +3,40 @@
 using NDTensors.BlockSparseArrays: BlockSparseArray
 
 struct FusionTensor{
-  T<:Number,N,G<:AbstractUnitRange,Axes<:NTuple{N,G},Arr<:BlockSparseArray{T,2}
+  NCA,NDA,T<:Number,N,G<:AbstractUnitRange,Axes<:NTuple{N,G},Arr<:BlockSparseArray{T,2}
 } <: AbstractArray{T,N}
-  # TBD more type stable with only N fixed or with NRL and NCL as type parameters?
-  # can also define N_ROW_LEG as type parameter
-  # with N fixed and n_codomain_axes dynamic, permutedims, dagger and co preserve type
-  # but tensor contraction output type is not knwon at compile time
   _axes::Axes
-  _n_codomain_axes::Int
   _matrix::Arr
+
+  function FusionTensor{NCA}(
+    legs::Axes, mat::Arr
+  ) where {
+    NCA,T<:Number,N,G<:AbstractUnitRange,Axes<:NTuple{N,G},Arr<:BlockSparseArray{T,2}
+  }
+    return new{NCA,N - NCA,T,N,G,Axes,Arr}(legs, mat)
+  end
+end
+
+# alternative constructor from split codomain and domain
+function FusionTensor(
+  codomain_legs::NTuple{NCA}, domain_legs::NTuple{NDA}, arr::Arr
+) where {NCA,NDA,T<:Number,Arr<:BlockSparseArray{T,2}}
+  axes_in = (codomain_legs..., domain_legs...)
+  return FusionTensor{NCA}(axes_in, arr)
 end
 
 # getters
 matrix(ft::FusionTensor) = ft._matrix
 Base.axes(ft::FusionTensor) = ft._axes
-n_codomain_axes(ft::FusionTensor) = ft._n_codomain_axes
 
 # misc
+n_codomain_axes(::FusionTensor{NCA}) where {NCA} = NCA
+n_domain_axes(::FusionTensor{NCA,NDA}) where {NCA,NDA} = NDA
 codomain_axes(ft::FusionTensor) = axes(ft)[begin:n_codomain_axes(ft)]
 domain_axes(ft::FusionTensor) = axes(ft)[(n_codomain_axes(ft) + 1):end]
-n_domain_axes(ft::FusionTensor) = ndims(ft) - n_codomain_axes(ft)
 matrix_size(ft::FusionTensor) = size(matrix(ft))
 row_axis(ft::FusionTensor) = axes(matrix(ft))[1]
 column_axis(ft::FusionTensor) = axes(matrix(ft))[2]
-
-# alternative constructor from split codomain and domain
-# works for both cast from dense or direct constructor from BlockSparseArray
-function FusionTensor(codomain_legs::NTuple, domain_legs::NTuple, arr)
-  # TBD cannot disable assert globally with julia 1.10
-  # remove these? Add explicit input validation with if wrong throw() end?
-  @assert length(codomain_legs) > 0
-  @assert length(domain_legs) > 0
-  axes_in = (codomain_legs..., domain_legs...)
-  n_codomain_axes = length(codomain_legs)
-  return FusionTensor(axes_in, n_codomain_axes, arr)
-end
 
 # sanity check
 function sanity_check(ft::FusionTensor)
