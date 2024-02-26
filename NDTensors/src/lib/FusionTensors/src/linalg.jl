@@ -6,25 +6,23 @@ using NDTensors.FusionTensors: FusionTensor
 # simpler to define as Frobenius norm(block) than Tr(t^dagger * t)
 function LinearAlgebra.norm(ft::FusionTensor)
   n2 = 0.0
-  for i in blocks(ft)
+  for i in blocks(ft)  # TODO
     n2 += dimension(sector(row_axis(ft)[Block(i)])) * norm(matrix(ft)[Block(i)])^2
   end
   return sqrt(n2)
 end
 
 function LinearAlgebra.qr(ft::FusionTensor)
-  q, r = block_qr(matrix(ft))
-  mid_axis = nothing  # TODO
-  qtens = FusionTensor(codomain_axes(ft), (mid_axis,), q)
-  rtens = FusionTensor((mid_axis,), domain_axes(ft), r)
+  qmat, rmat = block_qr(matrix(ft))
+  qtens = FusionTensor(codomain_axes(ft), (axes(qmat)[1],), qmat)
+  rtens = FusionTensor((axes(rmat)[0],), domain_axes(ft), rmat)
   return qtens, rtens
 end
 
 function LinearAlgebra.svd(ft::FusionTensor)
-  u, s, v = block_svd(matrix(ft))
-  mid_axis = nothing  # TODO
-  utens = FusionTensor(codomain_axes(ft), (mid_axis,), u)
-  stens = FusionTensor((mid_axis,), (mid_axis,), s)  # TODO struct DiagonalBlockMatrix
-  vtens = FusionTensor((mid_axis,), domain_axes(ft), v)
+  umat, s, vmat = block_svd(matrix(ft))
+  utens = FusionTensor(codomain_axes(ft), (axes(umat)[1],), umat)
+  stens = FusionTensor((axes(umat)[1],), (axes(vmat)[0],), s)
+  vtens = FusionTensor((axes(vmat)[0],), domain_axes(ft), vmat)
   return utens, stens, vtens
 end
