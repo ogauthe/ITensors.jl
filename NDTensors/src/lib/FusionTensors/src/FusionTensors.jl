@@ -1,5 +1,4 @@
 module FusionTensors
-# TODO does order matter?
 include("fusiontensor.jl")
 include("dense.jl")
 include("fusiontensorbase.jl")
