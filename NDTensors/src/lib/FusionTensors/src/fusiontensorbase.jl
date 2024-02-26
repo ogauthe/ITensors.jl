@@ -46,7 +46,7 @@ function Base.:-(left::FusionTensor{M}, right::FusionTensor{M}) where {M}
     throw(DomainError("Incompatible tensor axes"))
   end
 
-  new_matrix = left.matrix - right.matrix
+  new_matrix = matrix(left) - matrix(right)
 
   return FusionTensor{M}(axes(left), new_matrix)
 end
