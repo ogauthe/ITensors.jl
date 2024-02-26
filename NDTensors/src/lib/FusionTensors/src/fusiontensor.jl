@@ -64,10 +64,3 @@ function sanity_check(ft::FusionTensor)
   end
   return nothing
 end
-
-# swap row and column axes, transpose matrix blocks, dual any axis. No basis change.
-function dagger(ft::FusionTensor)  # TBD change name? TBD move to permutedims?
-  return FusionTensor(
-    dual.(domain_axes(ft)), dual.(codomain_axes(ft)), transpose(matrix(ft))
-  )
-end

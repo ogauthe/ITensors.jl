@@ -55,15 +55,15 @@ function Base.:/(ft::FusionTensor, x::Number)
   return FusionTensor(axes(ft), n_codomain_axes(ft), matrix(ft) / x)
 end
 
-# adjoint = dagger * conjugate
+# adjoint is costless: dual axes, swap domain and codomain, take matrix adjoint.
+# matrix coeff are not modified (beyond complex conjugation)
 function Base.adjoint(ft::FusionTensor)
-  ftdag = dagger(ft)
-  return FusionTensor(axes(ftdag), n_domain_axes(ftdag), conj(matrix(ftdag)))
+  return FusionTensor(dual.(domain_axes(ft)), dual.(codomain_axes(ft)), adjoint(matrix(ft)))
 end
 
 # Base.axes is defined in fusiontensor.jl as a getter
 
-# complex conjugation, no dual
+# conj is defined as coefficient wise complex conjugation, without axis dual
 function Base.conj(ft::FusionTensor)
   return FusionTensor(codomain_axes(ft), domain_axes(ft), conj(matrix(ft)))
 end
