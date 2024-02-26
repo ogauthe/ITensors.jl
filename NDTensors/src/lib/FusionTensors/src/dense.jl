@@ -4,6 +4,14 @@ using NDTensors.BlockSparseArrays: BlockSparseArray
 using NDTensors.FusionTensors: FusionTensor, matrix_size
 using NDTensors.GradedAxes: fuse
 
+function FusionTensor{M}(
+  legs, arr::DA, tol_check::Real=0.0
+) where {M,T<:Number,DA<:DenseArray{T}}
+  codomain_legs = legs[begin:M]
+  domain_legs = legs[(M + 1):end]
+  return FusionTensor(codomain_legs, domain_legs, arr, tol_check)
+end
+
 # constructor from dense array
 function FusionTensor(
   codomain_legs, domain_legs, arr::DA, tol_check::Real=0.0

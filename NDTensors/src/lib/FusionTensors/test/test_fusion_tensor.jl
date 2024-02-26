@@ -76,11 +76,23 @@ ft4 = FusionTensor((g1, g2), (g3, g4), m2)  # constructor from concatenated axes
 @test ndims(ft4) == 4
 @test size(ft4) == (6, 5, 4, 3)
 
-# test permutedims
-ft5 = permutedims(ft4, (1, 2), (3, 4))   # trivial
-@test ft5 === ft4  # same object
-
-ft5 = permutedims(ft4, (4,), (1, 2, 3))
-@test axes(ft5) == (g4, g1, g2, g3)
-@test n_codomain_axes(ft5) == 1
+# test cast from and to dense
+arr = zeros((6, 5, 4, 3))
+ft5 = FusionTensor((g1, g2), (g3, g4), arr)
+@test axes(ft5) == (g1, g2, g3, g4)
+@test n_codomain_axes(ft5) == 2
 @test isnothing(sanity_check(ft5))
+
+ft6 = FusionTensor{2}((g1, g2, g3, g4), arr)
+@test axes(ft6) == (g1, g2, g3, g4)
+@test n_codomain_axes(ft6) == 2
+@test isnothing(sanity_check(ft6))
+
+# test permutedims
+ft7 = permutedims(ft4, (1, 2), (3, 4))   # trivial
+@test ft7 === ft4  # same object
+
+ft7 = permutedims(ft4, (4,), (1, 2, 3))
+@test axes(ft7) == (g4, g1, g2, g3)
+@test n_codomain_axes(ft7) == 1
+@test isnothing(sanity_check(ft7))
