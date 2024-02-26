@@ -1,18 +1,17 @@
 # This file defines struct FusionTensor and constructors
 
 using NDTensors.BlockSparseArrays: BlockSparseArray
+using NDTensors.GradedAxes: GradedUnitRange
 
 struct FusionTensor{
-  NCA,NDA,T<:Number,N,G<:AbstractUnitRange,Axes<:NTuple{N,G},Arr<:BlockSparseArray{T,2}
+  NCA,NDA,T<:Number,N,G<:GradedUnitRange,Axes<:NTuple{N,G},Arr<:BlockSparseArray{T,2}
 } <: AbstractArray{T,N}
   _axes::Axes
   _matrix::Arr
 
   function FusionTensor{NCA}(
     legs::Axes, mat::Arr
-  ) where {
-    NCA,T<:Number,N,G<:AbstractUnitRange,Axes<:NTuple{N,G},Arr<:BlockSparseArray{T,2}
-  }
+  ) where {NCA,T<:Number,N,G<:GradedUnitRange,Axes<:NTuple{N,G},Arr<:BlockSparseArray{T,2}}
     return new{NCA,N - NCA,T,N,G,Axes,Arr}(legs, mat)
   end
 end

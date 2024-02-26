@@ -96,3 +96,50 @@ ft7 = permutedims(ft4, (4,), (1, 2, 3))
 @test axes(ft7) == (g4, g1, g2, g3)
 @test n_codomain_axes(ft7) == 1
 @test isnothing(sanity_check(ft7))
+
+# test Base operations
+ft8 = +ft4
+@test ft8 === ft4  # same object
+
+ft8 = -ft4
+@test axes(ft8) === axes(ft4)
+@test isnothing(sanity_check(ft8))
+
+ft8 = ft4 + ft4
+@test axes(ft8) === axes(ft4)
+@test isnothing(sanity_check(ft8))
+
+ft8 = ft4 - ft4
+@test axes(ft8) === axes(ft4)
+@test isnothing(sanity_check(ft8))
+
+ft8 = 2 * ft4
+@test axes(ft8) === axes(ft4)
+@test isnothing(sanity_check(ft8))
+@test eltype(ft8) == Float64
+
+ft8 = 2.0 * ft4
+@test axes(ft8) === axes(ft4)
+@test isnothing(sanity_check(ft8))
+@test eltype(ft8) == Float64
+
+ft8 = 2.0im * ft4
+@test axes(ft8) === axes(ft4)
+@test isnothing(sanity_check(ft8))
+#@test eltype(ft8) == ComplexF64  # currenty crashes for BlockSparseArray
+
+#ft8 = ft4 / 2.0  # currently unimplemented for BlockSparseArray
+#@test axes(ft8) === axes(ft4)
+#@test isnothing(sanity_check(ft8))
+
+# ft8 = adjoint(ft4) # currently unimplemented for BlockSparseArray
+# @test isnothing(sanity_check(ft8))
+
+gr3 = GradedAxes.dual(GradedAxes.fuse(g3, g4))
+gc3 = GradedAxes.dual(g1)
+m3 = BlockSparseArray{Float64}(gr3, gc3)
+ft8 = FusionTensor(GradedAxes.dual.((g3, g4)), (g1,), m3)
+ft9 = ft4 * ft8  # tensor contraction
+@test isnothing(sanity_check(ft9))
+@test codomain_axes(ft9) == codomain_axes(ft4)
+@test domain_axes(ft9) == domain_axes(ft8)

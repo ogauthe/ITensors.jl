@@ -1,6 +1,7 @@
 # This files overloads Base functions for FusionTensor
 
 using NDTensors.FusionTensors: FusionTensor, domain_axes, codomain_axes
+using NDTensors.GradedAxes: dual
 
 function Base.:*(x::Number, ft::FusionTensor{M}) where {M}
   return FusionTensor{M}(axes(ft), x * matrix(ft))
@@ -14,7 +15,7 @@ end
 function Base.:*(left::FusionTensor{M,K}, right::FusionTensor{K}) where {M,K}
 
   # check consistency
-  if domain_axes(left) != dual.(codomain_axes(right))  # TODO check dual behavior
+  if domain_axes(left) != dual.(codomain_axes(right))
     throw(DomainError("Incompatible tensor axes"))
   end
   new_matrix = matrix(left) * matrix(right)
