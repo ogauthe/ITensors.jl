@@ -14,17 +14,15 @@ using NDTensors.TensorAlgebra: BlockedPermutation, blockedperm
 end"""
 
 function Base.permutedims(
-  ft::FusionTensor{M,K,T,N},
-  new_codomain_axes::NTuple{J,Int},
-  new_domain_axes::NTuple{L,Int},
+  ft::FusionTensor{M,K,T,N}, new_codomain_axes::NTuple{J}, new_domain_axes::NTuple{L}
 ) where {M,K,T,N,J,L}
-  perm = blockedperm(new_codomain_axes, new_domain_axes)
+  perm::BlockedPermutation{2,N} = blockedperm(new_codomain_axes, new_domain_axes)
   return permutedims(ft, perm)
 end
 
 function Base.permutedims(
   ft::FusionTensor{M,K,T,N}, perm::BlockedPermutation{2,N,B}
-) where {M,K,T,N,J,L,B<:Tuple{NTuple{J,Int},NTuple{L,Int}}}
+) where {M,K,T,N,J,L,B<:Tuple{NTuple{J},NTuple{L}}}
   flat = Tuple(perm)
   # early return for identity operation. Do not copy.
   # TODO compile separetly, only for case M==J?

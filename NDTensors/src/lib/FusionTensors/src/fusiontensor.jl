@@ -4,24 +4,24 @@ using NDTensors.BlockSparseArrays: BlockSparseArray
 using NDTensors.GradedAxes: GradedUnitRange
 
 struct FusionTensor{
-  NCA,NDA,T<:Number,N,G<:GradedUnitRange,Axes<:NTuple{N,G},Arr<:BlockSparseArray{T,2}
+  M,K,T<:Number,N,G<:GradedUnitRange,Axes<:NTuple{N,G},Arr<:BlockSparseArray{T,2}
 } <: AbstractArray{T,N}
   _axes::Axes
   _matrix::Arr
 
-  function FusionTensor{NCA}(
+  function FusionTensor{M}(
     legs::Axes, mat::Arr
-  ) where {NCA,T<:Number,N,G<:GradedUnitRange,Axes<:NTuple{N,G},Arr<:BlockSparseArray{T,2}}
-    return new{NCA,N - NCA,T,N,G,Axes,Arr}(legs, mat)
+  ) where {M,T<:Number,N,G<:GradedUnitRange,Axes<:NTuple{N,G},Arr<:BlockSparseArray{T,2}}
+    return new{M,N - M,T,N,G,Axes,Arr}(legs, mat)
   end
 end
 
 # alternative constructor from split codomain and domain
 function FusionTensor(
-  codomain_legs::NTuple{NCA}, domain_legs::NTuple{NDA}, arr::Arr
-) where {NCA,NDA,T<:Number,Arr<:BlockSparseArray{T,2}}
+  codomain_legs::NTuple{M}, domain_legs::NTuple{K}, arr::Arr
+) where {M,K,T<:Number,Arr<:BlockSparseArray{T,2}}
   axes_in = (codomain_legs..., domain_legs...)
-  return FusionTensor{NCA}(axes_in, arr)
+  return FusionTensor{M}(axes_in, arr)
 end
 
 # getters
@@ -29,8 +29,8 @@ matrix(ft::FusionTensor) = ft._matrix
 Base.axes(ft::FusionTensor) = ft._axes
 
 # misc
-n_codomain_axes(::FusionTensor{NCA}) where {NCA} = NCA
-n_domain_axes(::FusionTensor{NCA,NDA}) where {NCA,NDA} = NDA
+n_codomain_axes(::FusionTensor{M}) where {M} = M
+n_domain_axes(::FusionTensor{M,K}) where {M,K} = K
 codomain_axes(ft::FusionTensor) = axes(ft)[begin:n_codomain_axes(ft)]
 domain_axes(ft::FusionTensor) = axes(ft)[(n_codomain_axes(ft) + 1):end]
 matrix_size(ft::FusionTensor) = size(matrix(ft))
