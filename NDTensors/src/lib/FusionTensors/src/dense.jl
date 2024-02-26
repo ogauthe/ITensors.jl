@@ -4,22 +4,26 @@ using NDTensors.BlockSparseArrays: BlockSparseArray
 using NDTensors.FusionTensors: FusionTensor, matrix_size
 using NDTensors.GradedAxes: fuse
 
+# constructor from dense array with split axes
+function FusionTensor(
+  codomain_legs::NTuple{M}, domain_legs::NTuple{K}, arr::DA, tol_check::R=0.0
+) where {M,K,T<:Number,N,DA<:DenseArray{T,N},R<:Real}
+  legs = (codomain_legs..., domain_legs...)
+
+  # impose passage through concatenated axes to enforce ndims(ft) == ndims(arr)
+  # at compile time
+  return FusionTensor{M}(legs, arr, tol_check)
+end
+
 # constructor from dense array with concatenate axes
 function FusionTensor{M}(
   legs::Axes, arr::DA, tol_check::R=0.0
 ) where {M,N,Axes<:NTuple{N},T<:Number,DA<:DenseArray{T,N},R<:Real}
   codomain_legs = legs[begin:M]
   domain_legs = legs[(M + 1):end]
-  return FusionTensor(codomain_legs, domain_legs, arr, tol_check)
-end
-
-# constructor from dense array with split axes
-function FusionTensor(
-  codomain_legs, domain_legs, arr::DA, tol_check::Real=0.0
-) where {T<:Number,DA<:DenseArray{T}}
 
   # input validation
-  # ndims(arr) = length(axes_in) is enforced at compile time
+  # ndims(arr) = length(legs) is enforced at compile time
   if (length.(codomain_legs)..., length.(domain_legs)...) != size(arr)
     throw(DomainError("Axes are incompatible with dense array"))
   end
