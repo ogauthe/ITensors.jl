@@ -6,8 +6,8 @@ using NDTensors.GradedAxes: fuse
 
 # constructor from dense array with concatenate axes
 function FusionTensor{M}(
-  legs::NTuple{N}, arr::DA, tol_check::Real=0.0
-) where {M,N,T<:Number,DA<:DenseArray{T,N}}
+  legs::Axes, arr::DA, tol_check::R=0.0
+) where {M,N,Axes<:NTuple{N},T<:Number,DA<:DenseArray{T,N},R<:Real}
   codomain_legs = legs[begin:M]
   domain_legs = legs[(M + 1):end]
   return FusionTensor(codomain_legs, domain_legs, arr, tol_check)
