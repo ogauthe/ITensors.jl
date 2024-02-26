@@ -3,14 +3,14 @@ using Test: @test
 using NDTensors.BlockSparseArrays: BlockSparseArray
 using NDTensors.FusionTensors:
   FusionTensor,
-  matrix,
-  n_codomain_axes,
   codomain_axes,
-  domain_axes,
-  n_domain_axes,
-  matrix_size,
-  row_axis,
   column_axis,
+  domain_axes,
+  matrix,
+  matrix_size,
+  n_codomain_axes,
+  n_domain_axes,
+  row_axis,
   sanity_check
 using NDTensors.GradedAxes
 using NDTensors.Sectors: U1

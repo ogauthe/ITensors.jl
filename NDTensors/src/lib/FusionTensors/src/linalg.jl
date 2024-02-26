@@ -1,6 +1,7 @@
 # This file defines linalg for FusionTensor
 
 using LinearAlgebra
+
 using NDTensors.FusionTensors: FusionTensor
 
 # simpler to define as Frobenius norm(block) than Tr(t^dagger * t)
