@@ -28,15 +28,15 @@ function FusionTensor{M}(
     throw(DomainError("Axes are incompatible with dense array"))
   end
 
-  # initialize matrix
+  # initialize data_matrix
   matrix_row_axis = reduce(fuse, codomain_legs)
   matrix_col_axis = reduce(fuse, domain_legs)
-  matrix = BlockSparseArray{T}(matrix_row_axis, matrix_col_axis)
+  data_matrix = BlockSparseArray{T}(matrix_row_axis, matrix_col_axis)
 
-  # fill matrix
+  # fill data_matrix
   # dummy: TODO
 
-  out = FusionTensor(codomain_legs, domain_legs, matrix)
+  out = FusionTensor(codomain_legs, domain_legs, data_matrix)
 
   # check that norm is the same in input and output
   if tol_check > 0

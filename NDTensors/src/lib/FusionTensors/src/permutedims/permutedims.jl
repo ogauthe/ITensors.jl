@@ -1,7 +1,7 @@
 using BlockArrays: Block
 
 using NDTensors.FusionTensors:
-  FusionTensor, StructuralData, flatpermutation, n_codomain_axes, n_domain_axes
+  FusionTensor, StructuralData, flatpermutation, n_codomain_axes, n_domain_axes, data_matrix
 using NDTensors.TensorAlgebra: BlockedPermutation, blockedperm
 
 # FIXME does not compile
@@ -33,10 +33,10 @@ function Base.permutedims(
   end
 
   structural_data = StructuralData(axes(ft), perm)
-  permuted_matrix = _permute_data(ft, structural_data)
+  permuted_data_matrix = _permute_data(ft, structural_data)
 
   axes_out = ntuple(i -> axes(ft)[flat[i]], N)
-  out = FusionTensor{J}(axes_out, permuted_matrix)
+  out = FusionTensor{J}(axes_out, permuted_data_matrix)
   return out
 end
 
@@ -52,8 +52,8 @@ function _permute_data(ft::FusionTensor, structural_data::StructuralData)
   permuted_arr = permutedims(arr, Tuple(perm))
 
   ftp = FusionTensor(codomain_axes_out, domain_axes_out, permuted_arr)
-  permuted_matrix = matrix(ftp)
-  return permuted_matrix
+  permuted_data_matrix = data_matrix(ftp)
+  return permuted_data_matrix
 end
 
 """

@@ -7,7 +7,7 @@ struct FusionTensor{
   M,K,T<:Number,N,G<:GradedUnitRange,Axes<:NTuple{N,G},Arr<:BlockSparseArray{T,2}
 } <: AbstractArray{T,N}
   _axes::Axes
-  _matrix::Arr
+  _data_matrix::Arr
 
   function FusionTensor{M}(
     legs::Axes, mat::Arr
@@ -25,7 +25,7 @@ function FusionTensor(
 end
 
 # getters
-matrix(ft::FusionTensor) = ft._matrix
+data_matrix(ft::FusionTensor) = ft._data_matrix
 Base.axes(ft::FusionTensor) = ft._axes
 
 # misc
@@ -33,9 +33,9 @@ n_codomain_axes(::FusionTensor{M}) where {M} = M
 n_domain_axes(::FusionTensor{M,K}) where {M,K} = K
 codomain_axes(ft::FusionTensor) = axes(ft)[begin:n_codomain_axes(ft)]
 domain_axes(ft::FusionTensor) = axes(ft)[(n_codomain_axes(ft) + 1):end]
-matrix_size(ft::FusionTensor) = size(matrix(ft))
-row_axis(ft::FusionTensor) = axes(matrix(ft))[1]
-column_axis(ft::FusionTensor) = axes(matrix(ft))[2]
+matrix_size(ft::FusionTensor) = size(data_matrix(ft))
+row_axis(ft::FusionTensor) = axes(data_matrix(ft))[1]
+column_axis(ft::FusionTensor) = axes(data_matrix(ft))[2]
 
 # sanity check
 function sanity_check(ft::FusionTensor)
@@ -48,10 +48,10 @@ function sanity_check(ft::FusionTensor)
   @assert nda == length(domain_axes(ft)) "n_domain_axes does not match domain_axes"
   @assert 0 < nda < ndims(ft) "invalid n_domain_axes"
 
-  m = matrix(ft)
-  @assert ndims(m) == 2 "invalid matrix ndims"
-  @assert size(m, 1) == prod(length.(codomain_axes(ft))) "invalid matrix row number"
-  @assert size(m, 2) == prod(length.(domain_axes(ft))) "invalid matrix column number"
+  m = data_matrix(ft)
+  @assert ndims(m) == 2 "invalid data_matrix ndims"
+  @assert size(m, 1) == prod(length.(codomain_axes(ft))) "invalid data_matrix row number"
+  @assert size(m, 2) == prod(length.(domain_axes(ft))) "invalid data_matrix column number"
 
   return nothing
 end

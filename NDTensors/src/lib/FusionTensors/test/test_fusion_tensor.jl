@@ -6,7 +6,7 @@ using NDTensors.FusionTensors:
   codomain_axes,
   column_axis,
   domain_axes,
-  matrix,
+  data_matrix,
   matrix_size,
   n_codomain_axes,
   n_domain_axes,
@@ -22,7 +22,7 @@ m = BlockSparseArray{Float64}(g1, g2)
 ft1 = FusionTensor((g1,), (g2,), m)  # constructor from split axes
 
 # getters
-@test matrix(ft1) === m
+@test data_matrix(ft1) === m
 @test axes(ft1) == (g1, g2)
 @test n_codomain_axes(ft1) == 1
 
@@ -43,13 +43,13 @@ ft1 = FusionTensor((g1,), (g2,), m)  # constructor from split axes
 
 # copy
 ft2 = copy(ft1)
-@test matrix(ft2) == m
+@test data_matrix(ft2) == m
 @test axes(ft2) == (g1, g2)
 @test n_codomain_axes(ft2) == 1
 
 # deepcopy
 ft3 = deepcopy(ft1)
-@test matrix(ft3) == m
+@test data_matrix(ft3) == m
 @test axes(ft3) == (g1, g2)
 @test n_codomain_axes(ft3) == 1
 
@@ -61,7 +61,7 @@ gc = GradedAxes.fuse(g3, g4)
 m2 = BlockSparseArray{Float64}(gr, gc)
 ft4 = FusionTensor((g1, g2), (g3, g4), m2)  # constructor from concatenated axes
 
-@test matrix(ft4) === m2
+@test data_matrix(ft4) === m2
 @test axes(ft4) == (g1, g2, g3, g4)
 @test n_codomain_axes(ft4) == 2
 
