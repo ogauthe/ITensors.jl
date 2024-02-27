@@ -39,26 +39,19 @@ column_axis(ft::FusionTensor) = axes(matrix(ft))[2]
 
 # sanity check
 function sanity_check(ft::FusionTensor)
-  nca = length(codomain_axes(ft))
-  if !(0 < nca < ndims(ft))
-    throw(DomainError(nca, "invalid codomain axes length"))
-  end
-  nda = length(domain_axes(ft))
-  if !(0 < nda < ndims(ft))
-    throw(DomainError(nda, "invalid domain axes length"))
-  end
-  if nca + nda != ndims(ft)
-    throw(DomainError(nca + nda, "invalid ndims"))
-  end
+  # TODO replace @assert with @check when JuliaLang PR 41342 is merged
+  nca = n_codomain_axes(ft)
+  @assert nca == length(codomain_axes(ft)) "n_codomain_axes does not match codomain_axes"
+  @assert 0 < nca < ndims(ft) "invalid n_codomain_axes"
+
+  nda = n_domain_axes(ft)
+  @assert nda == length(domain_axes(ft)) "n_domain_axes does not match domain_axes"
+  @assert 0 < nda < ndims(ft) "invalid n_domain_axes"
+
   m = matrix(ft)
-  if ndims(m) != 2
-    throw(DomainError(ndims(m), "invalid matrix ndims"))
-  end
-  if size(m, 1) != prod(length.(codomain_axes(ft)))
-    throw(DomainError(size(m, 1), "invalid matrix row number"))
-  end
-  if size(m, 2) != prod(length.(domain_axes(ft)))
-    throw(DomainError(size(m, 2), "invalid matrix column number"))
-  end
+  @assert ndims(m) == 2 "invalid matrix ndims"
+  @assert size(m, 1) == prod(length.(codomain_axes(ft))) "invalid matrix row number"
+  @assert size(m, 2) == prod(length.(domain_axes(ft))) "invalid matrix column number"
+
   return nothing
 end
