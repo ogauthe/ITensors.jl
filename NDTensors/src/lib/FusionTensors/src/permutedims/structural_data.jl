@@ -5,29 +5,53 @@ using NDTensors.TensorAlgebra: BlockedPermutation, blockedperm
 
 struct StructuralData{
   N,
-  M,
-  K,
+  NCoAxesIn,
+  NDoAxesIn,
+  NCoAxesOut,
+  NDoAxesOut,
   G<:GradedUnitRange,
-  B,
-  P<:BlockedPermutation{2,N,B} where {B<:Tuple{NTuple{M},NTuple{K}}},
+  B<:Tuple{NTuple{NCoAxesOut},NTuple{NDoAxesOut}},
+  P<:BlockedPermutation{2,N,B},
 }
   _permutation::P
 end
 
 # constructors
 function StructuralData(
-  axes_in::NTuple{N,G}, perm::P
+  codomain_axes_in::CoDomainAxes, domain_axes_in::DomainAxes, perm::P
 ) where {
-  N,G<:GradedUnitRange,P<:BlockedPermutation{2,N,B}
-} where {M,K,B<:Tuple{NTuple{M},NTuple{K}}}
-  return StructuralData{N,M,K,G,B,P}(perm)
+  N,
+  NCoAxesIn,
+  NDoAxesIn,
+  NCoAxesOut,
+  NDoAxesOut,
+  G<:GradedUnitRange,
+  CoDomainAxes<:NTuple{NCoAxesIn,G},
+  DomainAxes<:NTuple{NDoAxesIn,G},
+  B<:Tuple{NTuple{NCoAxesOut},NTuple{NDoAxesOut}},
+  P<:BlockedPermutation{2,N,B},
+}
+  # TODO impose constraint NCoAxesIn + NDoAxesIn = N
+  # perm imposes it for Out
+  return StructuralData{N,NCoAxesIn,NDoAxesIn,NCoAxesOut,NDoAxesOut,G,B,P}(perm)
 end
 
 # getters
 permutation(sd::StructuralData) = sd._permutation
-
-# misc
 Base.ndims(::StructuralData{N}) where {N} = N
-n_codomain_axes(::StructuralData{N,M}) where {N,M} = M
-n_domain_axes(::StructuralData{N,M,K}) where {N,M,K} = K
-flatpermutation(sd::StructuralData) = Tuple((permutation(sd)))
+n_codomain_axes_in(::StructuralData{N,NCoAxesIn}) where {N,NCoAxesIn} = NCoAxesIn
+function n_domain_axes_in(
+  ::StructuralData{N,NCoAxesIn,NDoAxesIn}
+) where {N,NCoAxesIn,NDoAxesIn}
+  return NDoAxesIn
+end
+function n_codomain_axes_out(
+  ::StructuralData{N,NCoAxesIn,NDoAxesIn,NCoAxesOut}
+) where {N,NCoAxesIn,NDoAxesIn,NCoAxesOut}
+  return NCoAxesOut
+end
+function n_domain_axes_out(
+  ::StructuralData{N,NCoAxesIn,NDoAxesIn,NCoAxesOut,NDoAxesOut}
+) where {N,NCoAxesIn,NDoAxesIn,NCoAxesOut,NDoAxesOut}
+  return NDoAxesOut
+end

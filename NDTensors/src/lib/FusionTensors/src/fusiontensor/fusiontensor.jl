@@ -4,52 +4,69 @@ using NDTensors.BlockSparseArrays: BlockSparseArray
 using NDTensors.GradedAxes: GradedUnitRange, fuse
 
 struct FusionTensor{
-  M,K,T<:Number,N,G<:GradedUnitRange,Axes<:NTuple{N,G},Arr<:BlockSparseArray{T,2}
+  T<:Number,
+  N,
+  NCoAxes,
+  NDoAxes,
+  G<:GradedUnitRange,
+  CoDomainAxes<:NTuple{NCoAxes,G},
+  DomainAxes<:NTuple{NDoAxes,G},
+  Mat<:BlockSparseArray{T,2},
 } <: AbstractArray{T,N}
-  _axes::Axes
-  _data_matrix::Arr
+  _codomain_axes::CoDomainAxes
+  _domain_axes::DomainAxes
+  _data_matrix::Mat
 
-  function FusionTensor{M}(
-    legs::Axes, mat::Arr
-  ) where {M,T<:Number,N,G<:GradedUnitRange,Axes<:NTuple{N,G},Arr<:BlockSparseArray{T,2}}
-    return new{M,N - M,T,N,G,Axes,Arr}(legs, mat)
+  # inner constructor to impose NCoAxes + NDoAxes = N
+  function FusionTensor(
+    codomain_legs::CoDomainAxes, domain_legs::DomainAxes, mat::Mat
+  ) where {
+    NCoAxes,
+    NDoAxes,
+    G,
+    T<:Number,
+    CoDomainAxes<:NTuple{NCoAxes,G},
+    DomainAxes<:NTuple{NDoAxes,G},
+    Mat<:BlockSparseArray{T,2},
+  }
+    return new{T,NCoAxes + NDoAxes,NCoAxes,NDoAxes,G,CoDomainAxes,DomainAxes,Mat}(
+      codomain_legs, domain_legs, mat
+    )
   end
 end
 
-# alternative constructor from split codomain and domain
-function FusionTensor(
-  codomain_legs::NTuple{M}, domain_legs::NTuple{K}, mat::Arr
-) where {M,K,T<:Number,Arr<:BlockSparseArray{T,2}}
-  axes_in = (codomain_legs..., domain_legs...)
-  return FusionTensor{M}(axes_in, mat)
+# alternative constructor from concatenated axes
+function FusionTensor{T,N,NCoAxes}(legs::NTuple{N}, arr) where {T,N,NCoAxes}
+  codomain_legs = legs[begin:NCoAxes]  # or ntuplie(i->legs[i], NCoAxes)?
+  domain_legs = legs[(NCoAxes + 1):end]
+  return FusionTensor(codomain_legs, domain_legs, arr)
 end
 
-# empty matrix, split codomain and domain
-function FusionTensor{T}
-  (codomain_legs::NTuple{M}, domain_legs::NTuple{K}) where {T<:Number,M,K}
-  row_axis = reduce(fuse, codomain_legs)
-  col_axis = reduce(fuse, domain_legs)
-  mat = BlockSparseArray{T}(row_axis, col_axis)
-  return FusionTensor(codomain_legs, domain_legs, mat)
-end
+# empty matrix, split axes
+#function FusionTensor{T}
+# (codomain_legs::NTuple, domain_legs::NTuple) where {T}
+# row_axis = reduce(fuse, codomain_legs)
+#  col_axis = reduce(fuse, domain_legs)
+#  mat = BlockSparseArray{T}(row_axis, col_axis)
+#  return FusionTensor(codomain_legs, domain_legs, mat)
+#end
 
-# empty matrix, concatenate axes
-function FusionTensor{M,T}
-  (legs::Axes) where {T<:Number,M,Axes}
-  codomain_legs = legs[begin:M]
-  domain_legs = legs[(M + 1):end]
+# empty matrix with concatenated axes
+function FusionTensor{T,N,NCoAxes}(legs::NTuple{N}) where {T,N,NCoAxes}
+  codomain_legs = legs[begin:NCoAxes]
+  domain_legs = legs[(NCoAxes + 1):end]
   return FusionTensor(codomain_legs, domain_legs)
 end
 
 # getters
 data_matrix(ft::FusionTensor) = ft._data_matrix
-Base.axes(ft::FusionTensor) = ft._axes
+codomain_axes(ft::FusionTensor) = ft._codomain_axes
+domain_axes(ft::FusionTensor) = ft._domain_axes
 
 # misc
-n_codomain_axes(::FusionTensor{M}) where {M} = M
-n_domain_axes(::FusionTensor{M,K}) where {M,K} = K
-codomain_axes(ft::FusionTensor) = axes(ft)[begin:n_codomain_axes(ft)]
-domain_axes(ft::FusionTensor) = axes(ft)[(n_codomain_axes(ft) + 1):end]
+n_codomain_axes(::FusionTensor{T,N,NCoAxes}) where {T,N,NCoAxes} = NCoAxes
+n_domain_axes(::FusionTensor{T,N,NCoAxes,NDoAxes}) where {T,N,NCoAxes,NDoAxes} = NDoAxes
+
 matrix_size(ft::FusionTensor) = size(data_matrix(ft))
 matrix_row_axis(ft::FusionTensor) = axes(data_matrix(ft))[1]
 matrix_column_axis(ft::FusionTensor) = axes(data_matrix(ft))[2]

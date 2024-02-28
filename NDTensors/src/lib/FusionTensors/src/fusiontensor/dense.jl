@@ -6,21 +6,21 @@ using NDTensors.GradedAxes: fuse
 
 # constructor from dense array with split axes
 function FusionTensor(
-  codomain_legs::NTuple{M}, domain_legs::NTuple{K}, arr::DA, tol_check::R=0.0
-) where {M,K,T<:Number,N,DA<:DenseArray{T,N},R<:Real}
+  codomain_legs::NTuple{NCoAxes}, domain_legs::NTuple{NDoAxes}, arr::DA, tol_check::R=0.0
+) where {NCoAxes,NDoAxes,T<:Number,N,DA<:DenseArray{T,N},R<:Real}
   legs = (codomain_legs..., domain_legs...)
 
   # impose passage through concatenated axes to enforce ndims(ft) == ndims(arr)
   # at compile time
-  return FusionTensor{M}(legs, arr, tol_check)
+  return FusionTensor{T,N,NCoAxes}(legs, arr, tol_check)
 end
 
 # constructor from dense array with concatenate axes
-function FusionTensor{M}(
+function FusionTensor{T,N,NCoAxes}(
   legs::Axes, arr::DA, tol_check::R=0.0
-) where {M,N,Axes<:NTuple{N},T<:Number,DA<:DenseArray{T,N},R<:Real}
-  codomain_legs = legs[begin:M]
-  domain_legs = legs[(M + 1):end]
+) where {NCoAxes,N,Axes<:NTuple{N},T<:Number,DA<:DenseArray{T,N},R<:Real}
+  codomain_legs = legs[begin:NCoAxes]
+  domain_legs = legs[(NCoAxes + 1):end]
 
   # input validation
   # ndims(arr) = length(legs) is enforced at compile time
@@ -29,9 +29,9 @@ function FusionTensor{M}(
   end
 
   # initialize data_matrix
-  matrix_row_axis = reduce(fuse, codomain_legs)
-  matrix_col_axis = reduce(fuse, domain_legs)
-  data_matrix = BlockSparseArray{T}(matrix_row_axis, matrix_col_axis)
+  mat_row_axis = reduce(fuse, codomain_legs)
+  mat_col_axis = reduce(fuse, domain_legs)
+  data_matrix = BlockSparseArray{T}(mat_row_axis, mat_col_axis)
 
   # fill data_matrix
   # dummy: TODO

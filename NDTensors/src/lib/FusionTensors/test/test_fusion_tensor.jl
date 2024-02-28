@@ -4,13 +4,13 @@ using NDTensors.BlockSparseArrays: BlockSparseArray
 using NDTensors.FusionTensors:
   FusionTensor,
   codomain_axes,
-  column_axis,
   domain_axes,
   data_matrix,
+  matrix_column_axis,
+  matrix_row_axis,
   matrix_size,
   n_codomain_axes,
   n_domain_axes,
-  row_axis,
   sanity_check
 using NDTensors.GradedAxes
 using NDTensors.Sectors: U1
@@ -23,16 +23,16 @@ ft1 = FusionTensor((g1,), (g2,), m)  # constructor from split axes
 
 # getters
 @test data_matrix(ft1) === m
-@test axes(ft1) == (g1, g2)
-@test n_codomain_axes(ft1) == 1
-
-# misc
 @test codomain_axes(ft1) == (g1,)
 @test domain_axes(ft1) == (g2,)
+
+# misc
+@test axes(ft1) == (g1, g2)
+@test n_codomain_axes(ft1) == 1
 @test n_domain_axes(ft1) == 1
 @test matrix_size(ft1) == (6, 5)
-@test row_axis(ft1) == g1
-@test column_axis(ft1) == g2
+@test matrix_row_axis(ft1) == g1
+@test matrix_column_axis(ft1) == g2
 @test isnothing(sanity_check(ft1))
 
 # Base methods
@@ -59,7 +59,7 @@ g4 = GradedAxes.gradedrange([U1(-1), U1(0), U1(1)], [1, 1, 1])
 gr = GradedAxes.fuse(g1, g2)
 gc = GradedAxes.fuse(g3, g4)
 m2 = BlockSparseArray{Float64}(gr, gc)
-ft4 = FusionTensor((g1, g2), (g3, g4), m2)  # constructor from concatenated axes
+ft4 = FusionTensor((g1, g2), (g3, g4), m2)
 
 @test data_matrix(ft4) === m2
 @test axes(ft4) == (g1, g2, g3, g4)
@@ -69,8 +69,8 @@ ft4 = FusionTensor((g1, g2), (g3, g4), m2)  # constructor from concatenated axes
 @test domain_axes(ft4) == (g3, g4)
 @test n_domain_axes(ft4) == 2
 @test matrix_size(ft4) == (30, 12)
-@test row_axis(ft4) == gr
-@test column_axis(ft4) == gc
+@test matrix_row_axis(ft4) == gr
+@test matrix_column_axis(ft4) == gc
 @test isnothing(sanity_check(ft4))
 
 @test ndims(ft4) == 4
@@ -78,12 +78,12 @@ ft4 = FusionTensor((g1, g2), (g3, g4), m2)  # constructor from concatenated axes
 
 # test cast from and to dense
 arr = zeros((6, 5, 4, 3))
-ft5 = FusionTensor((g1, g2), (g3, g4), arr)
+ft5 = FusionTensor((g1, g2), (g3, g4), arr)  # split axes
 @test axes(ft5) == (g1, g2, g3, g4)
 @test n_codomain_axes(ft5) == 2
 @test isnothing(sanity_check(ft5))
 
-ft6 = FusionTensor{2}((g1, g2, g3, g4), arr)
+ft6 = FusionTensor{Float64,4,2}((g1, g2, g3, g4), arr)  # concatenate axes
 @test axes(ft6) == (g1, g2, g3, g4)
 @test n_codomain_axes(ft6) == 2
 @test isnothing(sanity_check(ft6))
@@ -144,3 +144,6 @@ ft9 = ft4 * ft8  # tensor contraction
 @test isnothing(sanity_check(ft9))
 @test codomain_axes(ft9) == codomain_axes(ft4)
 @test domain_axes(ft9) == domain_axes(ft8)
+
+using NDTensors.TensorAlgebra
+#x = TensorAlgebra.contract(ft4, (1, 2, 3, 4), ft8, (3, 4, 5))
