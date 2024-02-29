@@ -9,19 +9,10 @@ using NDTensors.FusionTensors:
   n_codomain_axes_in
 using NDTensors.TensorAlgebra: BlockedPermutation, blockedperm
 
-# FIXME does not compile
-# LoadError: TypeError: in Type{...} expression, expected UnionAll, got a value of type typeof(permutedims)
-"""function Base.permutedims{J}(
-  ft::FusionTensor{M,K,T,N}, permutation::NTuple{N,Int}
-) where {M,K,T,N,J}
-  new_codomain_axes = ntuple(i -> permutation[i], J)
-  new_domain_axes = ntuple(i -> permutation[J + i], N - J)
-  return permutedims(ft, new_codomain_axes, new_domain_axes)
-end"""
-
 function Base.permutedims(
   ft::FusionTensor{T,N}, new_codomain_axes, new_domain_axes
 ) where {T,N}
+  # designed to crash if length(new_codomain_axes) + length(new_domain_axes) != N
   perm::BlockedPermutation{2,N} = blockedperm(new_codomain_axes, new_domain_axes)
   return permutedims(ft, perm)
 end
