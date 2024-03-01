@@ -77,8 +77,11 @@ end
 Base.axes(ft::FusionTensor) = (codomain_axes(ft)..., domain_axes(ft)...)
 
 # conj is defined as coefficient wise complex conjugation, without axis dual
-function Base.conj(ft::FusionTensor)
-  return FusionTensor{M}(codomain_axes(ft), domain_axes(ft), conj(data_matrix(ft)))
+# same object for real element type
+Base.conj(ft::FusionTensor{T}) where {T<:Real} = ft
+
+function Base.conj(ft::FusionTensor{T}) where {T<:Complex}
+  return FusionTensor(codomain_axes(ft), domain_axes(ft), conj(data_matrix(ft)))
 end
 
 function Base.copy(ft::FusionTensor)

@@ -37,7 +37,7 @@ end
 
 # alternative constructor from concatenated axes
 function FusionTensor{T,N,NCoAxes}(legs::NTuple{N}, arr) where {T,N,NCoAxes}
-  codomain_legs = legs[begin:NCoAxes]  # or ntuplie(i->legs[i], NCoAxes)?
+  codomain_legs = legs[begin:NCoAxes]
   domain_legs = legs[(NCoAxes + 1):end]
   return FusionTensor(codomain_legs, domain_legs, arr)
 end
