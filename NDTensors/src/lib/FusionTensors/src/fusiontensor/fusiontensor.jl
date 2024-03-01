@@ -43,13 +43,12 @@ function FusionTensor{T,N,NCoAxes}(legs::NTuple{N}, arr) where {T,N,NCoAxes}
 end
 
 # empty matrix, split axes
-#function FusionTensor{T}
-# (codomain_legs::NTuple, domain_legs::NTuple) where {T}
-# row_axis = reduce(fuse, codomain_legs)
-#  col_axis = reduce(fuse, domain_legs)
-#  mat = BlockSparseArray{T}(row_axis, col_axis)
-#  return FusionTensor(codomain_legs, domain_legs, mat)
-#end
+function FusionTensor{T}(codomain_legs::NTuple, domain_legs::NTuple) where {T}
+  row_axis = reduce(fuse, codomain_legs)
+  col_axis = reduce(fuse, domain_legs)
+  mat = BlockSparseArray{T}(row_axis, col_axis)
+  return FusionTensor(codomain_legs, domain_legs, mat)
+end
 
 # empty matrix with concatenated axes
 function FusionTensor{T,N,NCoAxes}(legs::NTuple{N}) where {T,N,NCoAxes}

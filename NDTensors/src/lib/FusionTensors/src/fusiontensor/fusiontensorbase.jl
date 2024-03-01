@@ -100,6 +100,22 @@ Base.ndims(::FusionTensor{T,N}) where {T,N} = N
 
 # Base.permutedims is defined in a separate file
 
+function Base.similar(ft::FusionTensor)
+  mat = similar(data_matrix(ft))
+  return FusionTensor(codomain_axes(ft), domain_axes(ft), mat)
+end
+
+function Base.similar(ft::FusionTensor, elt::Type)
+  mat = similar(data_matrix(ft), elt)
+  return FusionTensor(codomain_axes(ft), domain_axes(ft), mat)
+end
+
+function Base.similar(
+  ::FusionTensor, elt::Type, new_axes::Tuple{NTuple{NCoAxes,G},NTuple{NDoAxes,G}}
+) where {NCoAxes,NDoAxes,G}
+  return FusionTensor{elt}(new_axes[1], new_axes[2])
+end
+
 Base.show(io::IO, ft::FusionTensor) = print(io, "$(ndims(ft))-dim FusionTensor")
 
 function Base.show(io::IO, ::MIME"text/plain", ft::FusionTensor)
