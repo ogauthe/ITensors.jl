@@ -1,6 +1,5 @@
 # This files overloads Base functions for FusionTensor
 
-using NDTensors.FusionTensors: FusionTensor, data_matrix, codomain_axes, domain_axes
 using NDTensors.GradedAxes: dual
 
 function Base.:*(x::Number, ft::FusionTensor)

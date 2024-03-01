@@ -1,9 +1,5 @@
 # This file defines interface to cast from and to dense array
 
-using NDTensors.BlockSparseArrays: BlockSparseArray
-using NDTensors.FusionTensors: FusionTensor, matrix_size
-using NDTensors.GradedAxes: fuse
-
 # constructor from dense array with split axes
 function FusionTensor(
   codomain_legs::NTuple{NCoAxes}, domain_legs::NTuple{NDoAxes}, arr::DA, tol_check::R=0.0
