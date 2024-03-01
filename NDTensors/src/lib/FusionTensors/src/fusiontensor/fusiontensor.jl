@@ -86,5 +86,7 @@ function sanity_check(ft::FusionTensor)
   @assert size(m, 1) == prod(length.(codomain_axes(ft))) "invalid data_matrix row number"
   @assert size(m, 2) == prod(length.(domain_axes(ft))) "invalid data_matrix column number"
 
+  @assert reduce(fuse, codomain_axes(ft)) == axes(m)[1] "data_matrix row axis does not match codomain axes"
+  @assert reduce(fuse, domain_axes(ft)) == axes(m)[2] "data_matrix column axis does not match domain axes"
   return nothing
 end
