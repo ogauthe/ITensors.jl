@@ -11,9 +11,13 @@ function Base.:*(ft::FusionTensor, x::Number)
 end
 
 # tensor contraction is a block data_matrix product.
+# allow to contract with different eltype and let BlockSparseArray ensure compatibility
+# impose matching type and number of axes at compile time
+# impose matching axes at run time
 function Base.:*(
-  left::FusionTensor{T,N,NCoAxes,NDoAxes}, right::FusionTensor{T,M,NDoAxes}
-) where {T,N,NCoAxes,NDoAxes,M}
+  left::FusionTensor{T1,N,NCoAxes,NContractedAxes,G},
+  right::FusionTensor{T2,M,NContractedAxes,NDoAxes,G},
+) where {T1,T2,N,M,NCoAxes,NContractedAxes,NDoAxes,G}
 
   # check consistency
   if domain_axes(left) != dual.(codomain_axes(right))
@@ -27,9 +31,10 @@ end
 Base.:+(ft::FusionTensor) = ft
 
 # tensor addition is a block data_matrix add.
+# impose matching axes, allow different eltypes
 function Base.:+(
-  left::FusionTensor{T,N,NCoAxes,NDoAxes,G}, right::FusionTensor{T,N,NCoAxes,NDoAxes,G}
-) where {T,N,NCoAxes,NDoAxes,G}
+  left::FusionTensor{T1,N,NCoAxes,NDoAxes,G}, right::FusionTensor{T2,N,NCoAxes,NDoAxes,G}
+) where {T1,T2,N,NCoAxes,NDoAxes,G}
   # check consistency
   if codomain_axes(left) != codomain_axes(right) || domain_axes(left) != domain_axes(right)
     throw(DomainError("Incompatible tensor axes"))
@@ -45,8 +50,8 @@ function Base.:-(ft::FusionTensor)
 end
 
 function Base.:-(
-  left::FusionTensor{T,N,NCoAxes,NDoAxes,G}, right::FusionTensor{T,N,NCoAxes,NDoAxes,G}
-) where {T,N,NCoAxes,NDoAxes,G}
+  left::FusionTensor{T1,N,NCoAxes,NDoAxes,G}, right::FusionTensor{T2,N,NCoAxes,NDoAxes,G}
+) where {T1,T2,N,NCoAxes,NDoAxes,G}
   # check consistency
   if codomain_axes(left) != codomain_axes(right) || domain_axes(left) != domain_axes(right)
     throw(DomainError("Incompatible tensor axes"))
