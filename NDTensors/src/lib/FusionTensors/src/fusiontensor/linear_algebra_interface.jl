@@ -8,6 +8,31 @@ using NDTensors.BlockSparseArrays: stored_indices
 using NDTensors.GradedAxes: sectors
 using NDTensors.Sectors: dimension
 
+# allow to contract with different eltype and let BlockSparseArray ensure compatibility
+# impose matching type and number of axes at compile time
+# impose matching axes at run time
+function LinearAlgebra.mul!(
+  C::FusionTensor{T1,N,NCoAxes,NDoAxes,G},
+  A::FusionTensor{T2,M,NCoAxes,NContractedAxes,G},
+  B::FusionTensor{T3,K,NContractedAxes,NDoAxes,G},
+  α::Number,
+  β::Number,
+) where {T1,T2,T3,N,M,K,NCoAxes,NDoAxes,NContractedAxes,G}
+  if domain_axes(A) != dual.(codomain_axes(B))
+    throw(DomainError("Incompatible tensor axes for A and B"))
+  end
+  if codomain_axes(C) != codomain_axes(A)
+    throw(DomainError("Incompatible tensor axes for C and A"))
+  end
+  if domain_axes(C) != domain_axes(B)
+    throw(DomainError("Incompatible tensor axes for C and B"))
+  end
+  mul!(data_matrix(C), data_matrix(A), data_matrix(B), α, β)
+  return C
+end
+
+# the compiler automatically defines LinearAlgebra.mul!(C,A,B)
+
 # simpler to define as Frobenius norm(block) than Tr(t^dagger * t)
 function LinearAlgebra.norm(ft::FusionTensor)
   n2 = 0.0

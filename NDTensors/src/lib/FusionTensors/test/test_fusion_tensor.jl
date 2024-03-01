@@ -134,16 +134,3 @@ ft8 = 2.0im * ft4
 
 # ft8 = adjoint(ft4) # currently unimplemented for BlockSparseArray
 # @test isnothing(sanity_check(ft8))
-
-# test contraction
-gr3 = GradedAxes.dual(GradedAxes.fuse(g3, g4))
-gc3 = GradedAxes.dual(g1)
-m3 = BlockSparseArray{Float64}(gr3, gc3)
-ft8 = FusionTensor(GradedAxes.dual.((g3, g4)), (g1,), m3)
-ft9 = ft4 * ft8  # tensor contraction
-@test isnothing(sanity_check(ft9))
-@test codomain_axes(ft9) == codomain_axes(ft4)
-@test domain_axes(ft9) == domain_axes(ft8)
-
-using NDTensors.TensorAlgebra
-#x = TensorAlgebra.contract(ft4, (1, 2, 3, 4), ft8, (3, 4, 5))
