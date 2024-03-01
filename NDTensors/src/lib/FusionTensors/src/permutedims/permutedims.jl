@@ -19,9 +19,7 @@ end
 
 function Base.permutedims(
   ft::FusionTensor{T,N,NCoAxesIn}, perm::BlockedPermutation{2,N,B}
-) where {
-  T,N,NCoAxesIn,NCoAxesOut,NDoAxesOut,B<:Tuple{NTuple{NCoAxesOut},NTuple{NDoAxesOut}}
-}
+) where {T,N,NCoAxesIn,NCoAxesOut,B<:Tuple{NTuple{NCoAxesOut},NTuple}}
 
   # early return for identity operation. Do not copy.
   # TODO compile separetly, only for case M==J?
@@ -32,8 +30,8 @@ function Base.permutedims(
   structural_data = StructuralData(codomain_axes(ft), domain_axes(ft), perm)
   permuted_data_matrix = _permute_data(ft, structural_data)
 
-  codomain_axes_out = ntuple(i -> axes(ft)[perm[Block(1)][i]], NCoAxesOut)
-  domain_axes_out = ntuple(i -> axes(ft)[perm[Block(2)][i]], NDoAxesOut)
+  codomain_axes_out = (i -> axes(ft)[i]).(perm[Block(1)])
+  domain_axes_out = (i -> axes(ft)[i]).(perm[Block(2)])
   out = FusionTensor(codomain_axes_out, domain_axes_out, permuted_data_matrix)
   return out
 end
@@ -41,10 +39,10 @@ end
 function _permute_data(
   ft::FusionTensor{T,N,NCoAxesIn,NDoAxesIn,G},
   structural_data::StructuralData{N,NCoAxesIn,NDoAxesIn,NCoAxesOut,NDoAxesOut,G},
-) where {T,N,NCoAxesIn,NDoAxesIn,G,NCoAxesOut,NDoAxesOut}
+) where {T,N,NCoAxesIn,NDoAxesIn,NCoAxesOut,NDoAxesOut,G}
   perm = permutation(structural_data)
-  codomain_axes_out = ntuple(i -> axes(ft)[perm[Block(1)][i]], NCoAxesOut)
-  domain_axes_out = ntuple(i -> axes(ft)[perm[Block(2)][i]], NDoAxesOut)
+  codomain_axes_out = (i -> axes(ft)[i]).(perm[Block(1)])
+  domain_axes_out = (i -> axes(ft)[i]).(perm[Block(2)])
 
   # stupid permute: cast to dense, permutedims, cast to FusionTensor
   arr = Array(ft)
