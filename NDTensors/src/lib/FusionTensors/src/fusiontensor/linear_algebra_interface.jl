@@ -2,13 +2,24 @@
 
 using LinearAlgebra
 
-using NDTensors.FusionTensors: FusionTensor
+using BlockArrays: blocks
+
+using NDTensors.BlockSparseArrays: stored_indices
+using NDTensors.GradedAxes: sectors
+using NDTensors.Sectors: dimension
 
 # simpler to define as Frobenius norm(block) than Tr(t^dagger * t)
 function LinearAlgebra.norm(ft::FusionTensor)
   n2 = 0.0
-  for i in blocks(ft)  # TODO
-    n2 += dimension(sector(row_axis(ft)[Block(i)])) * norm(matrix(ft)[Block(i)])^2
+  m = data_matrix(ft)
+  row_sectors = sectors(axes(m)[1])
+  col_sectors = sectors(axes(m)[2])
+  for idx in stored_indices(blocks(m))  # TODO update interface?
+    nb = norm(m[Block(Tuple(idx))])
+    # do not assume row_sector == col_sector (may be false for equivariant tensor)
+    dr = dimension(row_sectors[idx[1]])
+    dc = dimension(col_sectors[idx[2]])
+    n2 += sqrt(dr) * sqrt(dc) * nb^2
   end
   return sqrt(n2)
 end
