@@ -76,61 +76,56 @@ ft4 = FusionTensor((g1, g2), (g3, g4), m2)
 @test ndims(ft4) == 4
 @test size(ft4) == (6, 5, 4, 3)
 
-# test cast from and to dense
-arr = zeros((6, 5, 4, 3))
-ft5 = FusionTensor((g1, g2), (g3, g4), arr)  # split axes
-@test axes(ft5) == (g1, g2, g3, g4)
-@test n_codomain_axes(ft5) == 2
+# test Base operations
+ft5 = +ft4
+@test ft5 === ft4  # same object
+
+ft5 = -ft4
+@test axes(ft5) === axes(ft4)
 @test isnothing(sanity_check(ft5))
 
-ft6 = FusionTensor{Float64,4,2}((g1, g2, g3, g4), arr)  # concatenate axes
-@test axes(ft6) == (g1, g2, g3, g4)
-@test n_codomain_axes(ft6) == 2
+ft5 = ft4 + ft4
+@test axes(ft5) === axes(ft4)
+@test isnothing(sanity_check(ft5))
+
+ft5 = ft4 - ft4
+@test axes(ft5) === axes(ft4)
+@test isnothing(sanity_check(ft5))
+
+ft5 = 2 * ft4
+@test axes(ft5) === axes(ft4)
+@test isnothing(sanity_check(ft5))
+@test eltype(ft5) == Float64
+
+ft5 = 2.0 * ft4
+@test axes(ft5) === axes(ft4)
+@test isnothing(sanity_check(ft5))
+@test eltype(ft5) == Float64
+
+#ft5 = ft4 / 2.0  # currently unimplemented for BlockSparseArray
+#@test axes(ft5) === axes(ft4)
+#@test isnothing(sanity_check(ft5))
+
+ft6 = 2.0im * ft4
+@test axes(ft6) === axes(ft4)
 @test isnothing(sanity_check(ft6))
+#@test eltype(ft6) == ComplexF64  # currenty crashes for BlockSparseArray
 
-# test permutedims
-ft7 = permutedims(ft4, (1, 2), (3, 4))   # trivial
-@test ft7 === ft4  # same object
+# ft7 = adjoint(ft4) # currently unimplemented for BlockSparseArray
+# @test isnothing(sanity_check(ft7))
 
-ft7 = permutedims(ft4, (4,), (1, 2, 3))
-@test axes(ft7) == (g4, g1, g2, g3)
-@test n_codomain_axes(ft7) == 1
-@test isnothing(sanity_check(ft7))
-
-# test Base operations
-ft8 = +ft4
-@test ft8 === ft4  # same object
-
-ft8 = -ft4
-@test axes(ft8) === axes(ft4)
+# test cast from and to dense
+arr = zeros((6, 5, 4, 3))
+#TODO fill with data
+ft8 = FusionTensor((g1, g2), (g3, g4), arr)  # split axes
+@test axes(ft8) == (g1, g2, g3, g4)
+@test n_codomain_axes(ft8) == 2
 @test isnothing(sanity_check(ft8))
 
-ft8 = ft4 + ft4
-@test axes(ft8) === axes(ft4)
-@test isnothing(sanity_check(ft8))
+ft9 = FusionTensor{Float64,4,2}((g1, g2, g3, g4), arr)  # concatenated axes
+@test axes(ft9) == (g1, g2, g3, g4)
+@test n_codomain_axes(ft9) == 2
+@test isnothing(sanity_check(ft9))
 
-ft8 = ft4 - ft4
-@test axes(ft8) === axes(ft4)
-@test isnothing(sanity_check(ft8))
-
-ft8 = 2 * ft4
-@test axes(ft8) === axes(ft4)
-@test isnothing(sanity_check(ft8))
-@test eltype(ft8) == Float64
-
-ft8 = 2.0 * ft4
-@test axes(ft8) === axes(ft4)
-@test isnothing(sanity_check(ft8))
-@test eltype(ft8) == Float64
-
-ft8 = 2.0im * ft4
-@test axes(ft8) === axes(ft4)
-@test isnothing(sanity_check(ft8))
-#@test eltype(ft8) == ComplexF64  # currenty crashes for BlockSparseArray
-
-#ft8 = ft4 / 2.0  # currently unimplemented for BlockSparseArray
-#@test axes(ft8) === axes(ft4)
-#@test isnothing(sanity_check(ft8))
-
-# ft8 = adjoint(ft4) # currently unimplemented for BlockSparseArray
-# @test isnothing(sanity_check(ft8))
+arr2 = Array(ft9)
+@test arr2 ≈ arr

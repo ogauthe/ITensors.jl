@@ -5,6 +5,7 @@ using NDTensors.BlockSparseArrays: BlockSparseArray
 using NDTensors.FusionTensors: FusionTensor, codomain_axes, domain_axes, sanity_check
 using NDTensors.GradedAxes
 using NDTensors.Sectors: U1
+using NDTensors.TensorAlgebra
 
 g1 = GradedAxes.gradedrange([U1(0), U1(1), U1(2)], [1, 2, 3])
 g2 = GradedAxes.gradedrange([U1(0), U1(1), U1(3)], [2, 2, 1])
@@ -36,3 +37,11 @@ mul!(ft3, ft1, ft2, 1.0, 1.0)
 @test isnothing(sanity_check(ft2))
 @test codomain_axes(ft3) === codomain_axes(ft1)
 @test domain_axes(ft3) === domain_axes(ft2)
+
+# test TensorAlgebra interface
+x = TensorAlgebra.contract(ft1, (1, 2, 3, 4), ft2, (3, 4, 5))
+@test length(x) == 2
+@test x[2] == (1, 2, 5)
+ft4 = x[1]
+@test codomain_axes(ft4) === codomain_axes(ft1)
+@test domain_axes(ft4) === domain_axes(ft2)

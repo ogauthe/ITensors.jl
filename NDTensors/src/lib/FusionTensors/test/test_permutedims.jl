@@ -1,0 +1,28 @@
+using Test: @test
+
+using NDTensors.BlockSparseArrays: BlockSparseArray
+using NDTensors.FusionTensors: FusionTensor, n_codomain_axes, sanity_check
+using NDTensors.GradedAxes
+using NDTensors.Sectors: U1
+
+g1 = GradedAxes.gradedrange([U1(0), U1(1), U1(2)], [1, 2, 3])
+g2 = GradedAxes.gradedrange([U1(0), U1(1), U1(3)], [2, 2, 1])
+g3 = GradedAxes.gradedrange([U1(-1), U1(0), U1(1)], [1, 2, 1])
+g4 = GradedAxes.gradedrange([U1(-1), U1(0), U1(1)], [1, 1, 1])
+gr = GradedAxes.fuse(g1, g2)
+gc = GradedAxes.fuse(g3, g4)
+m1 = BlockSparseArray{Float64}(gr, gc)
+ft1 = FusionTensor((g1, g2), (g3, g4), m1)
+@test isnothing(sanity_check(ft1))
+
+# test permutedims
+ft2 = permutedims(ft1, (1, 2), (3, 4))   # trivial
+@test ft1 === ft1  # same object
+
+ft3 = permutedims(ft1, ((1, 2), (3, 4)))   # trivial with 2-tuple of tuples
+@test ft1 === ft3  # same object
+
+ft4 = permutedims(ft1, (4,), (1, 2, 3))
+@test axes(ft4) == (g4, g1, g2, g3)
+@test n_codomain_axes(ft4) == 1
+@test isnothing(sanity_check(ft4))
