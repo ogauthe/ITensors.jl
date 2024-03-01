@@ -1,3 +1,5 @@
+# this file defines permutedims for a FusionTensor
+
 using BlockArrays: Block
 
 using NDTensors.FusionTensors:
@@ -9,6 +11,14 @@ using NDTensors.FusionTensors:
   n_codomain_axes_in
 using NDTensors.TensorAlgebra: BlockedPermutation, blockedperm
 
+# permutedims with 1 tuple of 2 separate tuples
+function Base.permutedims(ft::FusionTensor{T,N}, new_axes::Tuple{NTuple,NTuple}) where {T,N}
+  # designed to crash if length(new_axes[1]) + length(new_axes[2]) != N
+  perm::BlockedPermutation{2,N} = blockedperm(new_axes[1], new_axes[2])
+  return permutedims(ft, perm)
+end
+
+# permutedims with 2 separate tuples
 function Base.permutedims(
   ft::FusionTensor{T,N}, new_codomain_axes, new_domain_axes
 ) where {T,N}
@@ -17,6 +27,11 @@ function Base.permutedims(
   return permutedims(ft, perm)
 end
 
+# TBD how to deal with NCoAxesOut = 0 or NDoAxesOut = 0 cases
+# 1) forbid: clean crash. Handle separetly inner product of 2 FT
+# 2) add an extra dummy leg => unexpected that permutedims output has different ndim
+# 3) add dummy row axis in data_matrix (stays 2D), but keep N dims in FT
+#    worth a try, but may lead to strange behaviors
 function Base.permutedims(
   ft::FusionTensor{T,N,NCoAxesIn}, perm::BlockedPermutation{2,N,B}
 ) where {T,N,NCoAxesIn,NCoAxesOut,B<:Tuple{NTuple{NCoAxesOut},NTuple}}
@@ -45,6 +60,7 @@ function _permute_data(
   domain_axes_out = (i -> axes(ft)[i]).(perm[Block(2)])
 
   # stupid permute: cast to dense, permutedims, cast to FusionTensor
+  # TODO write it properly
   arr = Array(ft)
   permuted_arr = permutedims(arr, Tuple(perm))
 
