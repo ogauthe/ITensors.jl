@@ -44,7 +44,7 @@ function LinearAlgebra.norm(ft::FusionTensor)
     # do not assume row_sector == col_sector (may be false for equivariant tensor)
     dr = dimension(row_sectors[idx[1]])
     dc = dimension(col_sectors[idx[2]])
-    n2 += sqrt(dr) * sqrt(dc) * nb^2
+    n2 += sqrt(dr * dc) * nb^2
   end
   return sqrt(n2)
 end
