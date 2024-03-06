@@ -23,7 +23,7 @@ struct FusionTensor{
   ) where {
     NCoAxes,
     NDoAxes,
-    G,
+    G<:GradedUnitRange,
     T<:Number,
     CoDomainAxes<:NTuple{NCoAxes,G},
     DomainAxes<:NTuple{NDoAxes,G},
