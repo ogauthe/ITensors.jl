@@ -80,6 +80,7 @@ function sanity_check(ft::FusionTensor)
   nda = n_domain_axes(ft)
   @assert nda == length(domain_axes(ft)) "n_domain_axes does not match domain_axes"
   @assert 0 < nda < ndims(ft) "invalid n_domain_axes"
+  @assert nca + nda == ndims(ft) "invalid ndims"
 
   m = data_matrix(ft)
   @assert ndims(m) == 2 "invalid data_matrix ndims"
