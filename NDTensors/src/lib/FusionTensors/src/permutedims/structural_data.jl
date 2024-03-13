@@ -40,16 +40,19 @@ end
 permutation(sd::StructuralData) = sd._permutation
 Base.ndims(::StructuralData{N}) where {N} = N
 n_codomain_axes_in(::StructuralData{N,NCoAxesIn}) where {N,NCoAxesIn} = NCoAxesIn
+
 function n_domain_axes_in(
   ::StructuralData{N,NCoAxesIn,NDoAxesIn}
 ) where {N,NCoAxesIn,NDoAxesIn}
   return NDoAxesIn
 end
+
 function n_codomain_axes_out(
   ::StructuralData{N,NCoAxesIn,NDoAxesIn,NCoAxesOut}
 ) where {N,NCoAxesIn,NDoAxesIn,NCoAxesOut}
   return NCoAxesOut
 end
+
 function n_domain_axes_out(
   ::StructuralData{N,NCoAxesIn,NDoAxesIn,NCoAxesOut,NDoAxesOut}
 ) where {N,NCoAxesIn,NDoAxesIn,NCoAxesOut,NDoAxesOut}

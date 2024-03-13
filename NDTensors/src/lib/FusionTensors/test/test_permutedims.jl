@@ -17,12 +17,12 @@ ft1 = FusionTensor((g1, g2), (g3, g4), m1)
 
 # test permutedims
 ft2 = permutedims(ft1, (1, 2), (3, 4))   # trivial
-@test ft1 === ft1  # same object
+@test ft2 === ft1  # same object
 
-ft3 = permutedims(ft1, ((1, 2), (3, 4)))   # trivial with 2-tuple of tuples
-@test ft1 === ft3  # same object
+ft2 = permutedims(ft1, ((1, 2), (3, 4)))   # trivial with 2-tuple of tuples
+@test ft2 === ft1  # same object
 
-ft4 = permutedims(ft1, (4,), (1, 2, 3))
-@test axes(ft4) == (g4, g1, g2, g3)
-@test n_codomain_axes(ft4) == 1
-@test isnothing(sanity_check(ft4))
+ft3 = permutedims(ft1, (4,), (1, 2, 3))
+@test axes(ft3) == (g4, g1, g2, g3)
+@test n_codomain_axes(ft3) == 1
+@test isnothing(sanity_check(ft3))
