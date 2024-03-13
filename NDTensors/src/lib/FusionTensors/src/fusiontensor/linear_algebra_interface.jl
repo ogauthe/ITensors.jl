@@ -4,7 +4,7 @@ using LinearAlgebra
 
 using BlockArrays: blocks
 
-using NDTensors.BlockSparseArrays: stored_indices
+using NDTensors.BlockSparseArrays: stored_indices #, block_qr, block_svd
 using NDTensors.GradedAxes: sectors
 using NDTensors.Sectors: dimension
 
@@ -50,14 +50,14 @@ function LinearAlgebra.norm(ft::FusionTensor)
 end
 
 function LinearAlgebra.qr(ft::FusionTensor)
-  qmat, rmat = block_qr(matrix(ft))
+  qmat, rmat = block_qr(data_matrix(ft))
   qtens = FusionTensor(codomain_axes(ft), (axes(qmat)[1],), qmat)
   rtens = FusionTensor((axes(rmat)[0],), domain_axes(ft), rmat)
   return qtens, rtens
 end
 
 function LinearAlgebra.svd(ft::FusionTensor)
-  umat, s, vmat = block_svd(matrix(ft))
+  umat, s, vmat = block_svd(data_matrix(ft))
   utens = FusionTensor(codomain_axes(ft), (axes(umat)[1],), umat)
   stens = FusionTensor((axes(umat)[1],), (axes(vmat)[0],), s)
   vtens = FusionTensor((axes(vmat)[0],), domain_axes(ft), vmat)

@@ -1,5 +1,6 @@
 using BlockArrays:
   BlockArrays, Block, BlockRange, BlockedUnitRange, blockedrange, blocklength
+using NDTensors.Sectors
 
 struct GradedUnitRange{T,S} <: AbstractGradedUnitRange{T,S}
   blockedrange::BlockedUnitRange{T}
@@ -31,7 +32,9 @@ function gradedrange(nondual_sectors::Vector, a::BlockedUnitRange, isdual=false)
 end
 
 # quantum dimension of the GradedUnitRange
-dimension(s::GradedUnitRange) = dimension.(sectors(s)) ⋅ blocklengths(s)
+function Sectors.dimension(s::GradedUnitRange)
+  return sum(Sectors.dimension.(sectors(s)) .* blocklengths(s))
+end
 
 # BlockArrays block axis interface
 # Used in printing
