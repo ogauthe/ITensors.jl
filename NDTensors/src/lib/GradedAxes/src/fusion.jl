@@ -38,6 +38,19 @@ function tensor_product(a1::OneToOne, a2::OneToOne)
   return OneToOne()
 end
 
+# Handle dual. Always return a non-dual GradedUnitRange.
+function tensor_product(a1::AbstractUnitRange, a2::UnitRangeDual)
+  return tensor_product(a1, label_dual(dual(a2)))
+end
+
+function tensor_product(a1::UnitRangeDual, a2::AbstractUnitRange)
+  return tensor_product(label_dual(dual(a1)), a2)
+end
+
+function tensor_product(a1::UnitRangeDual, a2::UnitRangeDual)
+  return tensor_product(label_dual(dual(a1)), label_dual(dual(a2)))
+end
+
 function fuse_labels(x, y)
   return error(
     "`fuse_labels` not implemented for object of type `$(typeof(x))` and `$(typeof(y))`."
@@ -62,10 +75,14 @@ function tensor_product(a1::BlockedUnitRange, a2::BlockedUnitRange)
 end
 
 function blocksortperm(a::BlockedUnitRange)
-  # TODO: Figure out how to deal with dual sectors.
-  # TODO: `rev=isdual(a)`  may not be correct for symmetries beyond `U(1)`.
-  ## return Block.(sortperm(nondual_sectors(a); rev=isdual(a)))
   return Block.(sortperm(blocklabels(a)))
+end
+
+function blocksortperm(a::UnitRangeDual)
+  # If it is dual, reverse the sorting so the sectors
+  # end up sorted in the same way whether or not the space
+  # is dual.
+  return Block.(sortperm(blocklabels(label_dual(dual(a)))))
 end
 
 using BlockArrays: Block, BlockVector
@@ -83,24 +100,32 @@ end
 # Get the permutation for sorting, then group by common elements.
 # groupsortperm([2, 1, 2, 3]) == [[2], [1, 3], [4]]
 function blockmergesortperm(a::BlockedUnitRange)
-  # If it is dual, reverse the sorting so the sectors
-  # end up sorted in the same way whether or not the space
-  # is dual.
-  # TODO: Figure out how to deal with dual sectors.
-  # TODO: `rev=isdual(a)`  may not be correct for symmetries beyond `U(1)`.
-  ## return Block.(groupsortperm(nondual_sectors(a); rev=isdual(a)))
   return Block.(groupsortperm(blocklabels(a)))
 end
 
 # Used by `TensorAlgebra.splitdims` in `BlockSparseArraysGradedAxesExt`.
 invblockperm(a::Vector{<:Block{1}}) = Block.(invperm(Int.(a)))
 
-# Used by `TensorAlgebra.fusedims` in `BlockSparseArraysGradedAxesExt`.
-function blockmergesortperm(a::GradedUnitRange)
+function blockmergesortperm(a::UnitRangeDual)
   # If it is dual, reverse the sorting so the sectors
   # end up sorted in the same way whether or not the space
   # is dual.
-  # TODO: Figure out how to deal with dual sectors.
-  # TODO: `rev=isdual(a)`  may not be correct for symmetries beyond `U(1)`.
-  return Block.(groupsortperm(blocklabels(a)))
+  return Block.(groupsortperm(blocklabels(label_dual(dual(a)))))
+end
+
+# fusion_product generalizes tensor_product to non-abelian groups and fusion categories
+# in the case of abelian groups, it is equivalent to tensor_product + applying blockmergesortperm
+function fusion_product(a1::AbstractUnitRange, a2::AbstractUnitRange)
+  return error("Not implemented")
+end
+
+# Handle dual. Always return a non-dual GradedUnitRange.
+function fusion_product(g1::UnitRangeDual, g2::AbstractUnitRange)
+  return fusion_product(label_dual(dual(g1)), g2)
+end
+function fusion_product(g1::AbstractUnitRange, g2::UnitRangeDual)
+  return fusion_product(g1, label_dual(dual(g2)))
+end
+function fusion_product(g1::UnitRangeDual, g2::UnitRangeDual)
+  return fusion_product(label_dual(dual(g1)), label_dual(dual(g2)))
 end
