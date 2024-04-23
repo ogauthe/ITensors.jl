@@ -9,8 +9,9 @@ function set_eltype(array::AbstractArray, param)
   return convert(set_eltype(typeof(array), param), array)
 end
 
+## This will fail if position of `ndims` is not defined for `type`
 function set_ndims(type::Type{<:AbstractArray}, param)
-  return error("Not implemented")
+  return set_type_parameter(type, ndims, param)
 end
 
 using SimpleTraits: SimpleTraits, @traitdef, @traitimpl
@@ -29,6 +30,7 @@ position(::Type{<:AbstractArray}, ::typeof(parenttype)) = Self()
 
 is_wrapped_array(arraytype::Type{<:AbstractArray}) = (parenttype(arraytype) ≠ arraytype)
 @inline is_wrapped_array(array::AbstractArray) = is_wrapped_array(typeof(array))
+@inline is_wrapped_array(object) = false
 
 using SimpleTraits: Not, @traitfn
 

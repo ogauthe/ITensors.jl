@@ -301,6 +301,7 @@ function emptyITensor(::Type{ElT}=EmptyNumber) where {ElT<:Number}
   return itensor(EmptyTensor(ElT, ()))
 end
 
+using NDTensors.TypeParameterAccessors: set_eltype, type_parameters, specify_type_parameters
 """
     ITensor([ElT::Type, ]A::Array, inds)
     ITensor([ElT::Type, ]A::Array, inds::Index...)
@@ -695,11 +696,11 @@ zero(T::ITensor)::ITensor = itensor(zero(tensor(T)))
 # Helper functions for different view behaviors
 # TODO: Move to NDTensors.jl
 function (arraytype::Type{<:AbstractArray})(::NeverAlias, A::AbstractArray)
-  return specify_parameters(arraytype, get_parameters(A))(A)
+  return specify_type_parameters(arraytype, type_parameters(A))(A)
 end
 
 function (arraytype::Type{<:AbstractArray})(::AllowAlias, A::AbstractArray)
-  return convert(specify_parameters(arraytype, get_parameters(A)), A)
+  return convert(specify_type_parameters(arraytype, type_parameters(A)), A)
 end
 
 """
@@ -794,7 +795,7 @@ symmetrystyle(T::Tensor) = symmetrystyle(inds(T))
 symmetrystyle(T::ITensor)::SymmetryStyle = symmetrystyle(tensor(T))
 
 eltype(T::ITensor) = eltype(tensor(T))
-scalartype(x::ITensor) = eltype(x)
+NDTensors.scalartype(x::ITensor) = eltype(x)
 
 """
     order(A::ITensor)
@@ -2112,37 +2113,4 @@ function readcpp(io::IO, ::Type{ITensor}; format="v3")
   else
     throw(ArgumentError("read ITensor: format=$format not supported"))
   end
-end
-
-function HDF5.write(parent::Union{HDF5.File,HDF5.Group}, name::AbstractString, T::ITensor)
-  g = create_group(parent, name)
-  attributes(g)["type"] = "ITensor"
-  attributes(g)["version"] = 1
-  write(g, "inds", inds(T))
-  return write(g, "storage", storage(T))
-end
-
-function HDF5.read(
-  parent::Union{HDF5.File,HDF5.Group}, name::AbstractString, ::Type{ITensor}
-)
-  g = open_group(parent, name)
-  if read(attributes(g)["type"]) != "ITensor"
-    error("HDF5 group or file does not contain ITensor data")
-  end
-  # TODO: use Vector{Index} here?
-  inds = read(g, "inds", IndexSet)
-
-  # check input file for key name of ITensor data
-  # ITensors.jl <= v0.1.x uses `store` as key
-  # whereas ITensors.jl >= v0.2.x uses `storage` as key
-  for key in ["storage", "store"]
-    if haskey(g, key)
-      stypestr = read(attributes(open_group(g, key))["type"])
-      stype = eval(Meta.parse(stypestr))
-      storage = read(g, key, stype)
-      return itensor(storage, inds)
-    end
-  end
-  return error("HDF5 file: $(g) does not contain correct ITensor data.\nNeither key
-               `store` nor `storage` could be found.")
 end

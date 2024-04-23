@@ -4,6 +4,9 @@
 module TestITensorDMRG
 using ITensors
 using NDTensors
+using NDTensors.AMDGPUExtensions: roc
+using NDTensors.CUDAExtensions: cu
+using NDTensors.MetalExtensions: mtl
 using Random
 
 reference_energies = Dict([
@@ -11,7 +14,6 @@ reference_energies = Dict([
 ])
 
 is_broken(dev, elt::Type, conserve_qns::Val) = false
-is_broken(dev::typeof(NDTensors.cu), elt::Type, conserve_qns::Val{true}) = true
 
 include("dmrg.jl")
 

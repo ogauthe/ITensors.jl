@@ -119,11 +119,12 @@ dense(storagetype::Type{<:Dense}) = storagetype
 # TODO: make these more general, move to tensorstorage.jl
 datatype(storetype::Type{<:Dense{<:Any,DataT}}) where {DataT} = DataT
 
+using .TypeParameterAccessors: unwrap_array_type
 function promote_rule(
   ::Type{<:Dense{ElT1,DataT1}}, ::Type{<:Dense{ElT2,DataT2}}
 ) where {ElT1,DataT1,ElT2,DataT2}
   ElR = promote_type(ElT1, ElT2)
-  VecR = promote_type(unwrap_type(DataT1), unwrap_type(DataT2))
+  VecR = promote_type(unwrap_array_type(DataT1), unwrap_array_type(DataT2))
   VecR = similartype(VecR, ElR)
   return Dense{ElR,VecR}
 end
@@ -139,39 +140,4 @@ end
 
 function convert(::Type{<:Dense{ElR,DataT}}, D::Dense) where {ElR,DataT}
   return Dense(convert(DataT, data(D)))
-end
-
-function HDF5.write(
-  parent::Union{HDF5.File,HDF5.Group}, name::String, D::Store
-) where {Store<:Dense}
-  g = create_group(parent, name)
-  attributes(g)["type"] = "Dense{$(eltype(Store))}"
-  attributes(g)["version"] = 1
-  if eltype(D) != Nothing
-    write(g, "data", D.data)
-  end
-end
-
-function HDF5.read(
-  parent::Union{HDF5.File,HDF5.Group}, name::AbstractString, ::Type{Store}
-) where {Store<:Dense}
-  g = open_group(parent, name)
-  ElT = eltype(Store)
-  typestr = "Dense{$ElT}"
-  if read(attributes(g)["type"]) != typestr
-    error("HDF5 group or file does not contain $typestr data")
-  end
-  if ElT == Nothing
-    return Dense{Nothing}()
-  end
-  # Attribute __complex__ is attached to the "data" dataset
-  # by the h5 library used by C++ version of ITensor:
-  if haskey(attributes(g["data"]), "__complex__")
-    M = read(g, "data")
-    nelt = size(M, 1) * size(M, 2)
-    data = Vector(reinterpret(ComplexF64, reshape(M, nelt)))
-  else
-    data = read(g, "data")
-  end
-  return Dense{ElT}(data)
 end
