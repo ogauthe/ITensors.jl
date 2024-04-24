@@ -7,19 +7,19 @@ using NDTensors.GradedAxes
 using NDTensors.Sectors: U1
 using NDTensors.TensorAlgebra
 
-g1 = GradedAxes.gradedrange([U1(0), U1(1), U1(2)], [1, 2, 3])
-g2 = GradedAxes.gradedrange([U1(0), U1(1), U1(3)], [2, 2, 1])
-g3 = GradedAxes.gradedrange([U1(-1), U1(0), U1(1)], [1, 2, 1])
-g4 = GradedAxes.gradedrange([U1(-1), U1(0), U1(1)], [1, 1, 1])
+g1 = GradedAxes.gradedrange([U1(0) => 1, U1(1) => 2, U1(2) => 3])
+g2 = GradedAxes.gradedrange([U1(0) => 2, U1(1) => 2, U1(3) => 1])
+g3 = GradedAxes.gradedrange([U1(-1) => 1, U1(0) => 2, U1(1) => 1])
+g4 = GradedAxes.gradedrange([U1(-1) => 1, U1(0) => 1, U1(1) => 1])
 
-gr1 = GradedAxes.fuse(g1, g2)
-gc1 = GradedAxes.fuse(g3, g4)
+gr1 = GradedAxes.fusion_product(g1, g2)
+gc1 = GradedAxes.fusion_product(g3, g4)
 m1 = BlockSparseArray{Float64}(gr1, gc1)
 ft1 = FusionTensor((g1, g2), (g3, g4), m1)
 @test isnothing(sanity_check(ft1))
 
-gr2 = GradedAxes.dual(GradedAxes.fuse(g3, g4))
-gc2 = GradedAxes.dual(g1)
+gr2 = GradedAxes.fusion_product(GradedAxes.dual.((g3, g4))...)
+gc2 = GradedAxes.label_dual(g1)
 m2 = BlockSparseArray{Float64}(gr2, gc2)
 ft2 = FusionTensor(GradedAxes.dual.((g3, g4)), (g1,), m2)
 @test isnothing(sanity_check(ft2))

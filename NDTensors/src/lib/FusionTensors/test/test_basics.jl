@@ -15,8 +15,8 @@ using NDTensors.FusionTensors:
 using NDTensors.GradedAxes
 using NDTensors.Sectors: U1
 
-g1 = GradedAxes.gradedrange([U1(0), U1(1), U1(2)], [1, 2, 3])
-g2 = GradedAxes.gradedrange([U1(0), U1(1), U1(3)], [2, 2, 1])
+g1 = GradedAxes.gradedrange([U1(0) => 1, U1(1) => 2, U1(2) => 3])
+g2 = GradedAxes.gradedrange([U1(0) => 2, U1(1) => 2, U1(3) => 1])
 m = BlockSparseArray{Float64}(g1, g2)
 
 ft1 = FusionTensor((g1,), (g2,), m)  # constructor from split axes
@@ -59,10 +59,10 @@ ft2 = deepcopy(ft1)
 @test domain_axes(ft2) == domain_axes(ft1)
 
 # more than 2 axes
-g3 = GradedAxes.gradedrange([U1(-1), U1(0), U1(1)], [1, 2, 1])
-g4 = GradedAxes.gradedrange([U1(-1), U1(0), U1(1)], [1, 1, 1])
-gr = GradedAxes.fuse(g1, g2)
-gc = GradedAxes.fuse(g3, g4)
+g3 = GradedAxes.gradedrange([U1(-1) => 1, U1(0) => 2, U1(1) => 1])
+g4 = GradedAxes.gradedrange([U1(-1) => 1, U1(0) => 1, U1(1) => 1])
+gr = GradedAxes.fusion_product(g1, g2)
+gc = GradedAxes.fusion_product(g3, g4)
 m2 = BlockSparseArray{Float64}(gr, gc)
 ft3 = FusionTensor((g1, g2), (g3, g4), m2)
 
@@ -112,26 +112,26 @@ ft4 = 2.0 * ft3
 @test domain_axes(ft4) === domain_axes(ft3)
 @test eltype(ft4) == Float64
 
-# ft4 = ft3 / 2.0  # currently unimplemented for BlockSparseArray
-# @test codomain_axes(ft4) === codomain_axes(ft3)
-# @test domain_axes(ft4) === domain_axes(ft3)
-# @test isnothing(sanity_check(ft4))
+ft4 = ft3 / 2.0
+@test codomain_axes(ft4) === codomain_axes(ft3)
+@test domain_axes(ft4) === domain_axes(ft3)
+@test isnothing(sanity_check(ft4))
 
 ft5 = 2.0im * ft3
 @test isnothing(sanity_check(ft5))
 @test codomain_axes(ft5) === codomain_axes(ft3)
 @test domain_axes(ft5) === domain_axes(ft3)
-#@test eltype(ft5) == ComplexF64  # currenty crashes for BlockSparseArray
+@test eltype(ft5) == ComplexF64
 
 ft4 = conj(ft3)
 @test ft4 === ft3  # same object
 
 ft6 = conj(ft5)
-#@test ft6 !== ft5  # different object  # currently crashes due to ft5 eltype still Float64
+@test ft6 !== ft5  # different object
 @test isnothing(sanity_check(ft6))
 @test codomain_axes(ft6) === codomain_axes(ft5)
 @test domain_axes(ft6) === domain_axes(ft5)
-#@test eltype(ft6) == ComplexF64  # currenty crashes for BlockSparseArray
+@test eltype(ft6) == ComplexF64
 
 # ft7 = adjoint(ft3) # currently unimplemented for BlockSparseArray
 # @test isnothing(sanity_check(ft7))

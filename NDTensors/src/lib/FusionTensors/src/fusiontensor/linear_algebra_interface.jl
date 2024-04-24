@@ -2,22 +2,21 @@
 
 using LinearAlgebra
 
-using BlockArrays: blocks
+using BlockArrays
 
 using NDTensors.BlockSparseArrays: stored_indices #, block_qr, block_svd
-using NDTensors.GradedAxes: sectors
-using NDTensors.Sectors: dimension
+using NDTensors.Sectors: quantum_dimension
 
 # allow to contract with different eltype and let BlockSparseArray ensure compatibility
 # impose matching type and number of axes at compile time
 # impose matching axes at run time
 function LinearAlgebra.mul!(
-  C::FusionTensor{T1,N,NCoAxes,NDoAxes,G},
-  A::FusionTensor{T2,M,NCoAxes,NContractedAxes,G},
-  B::FusionTensor{T3,K,NContractedAxes,NDoAxes,G},
+  C::FusionTensor{T1,N,NCoAxes,NDoAxes},
+  A::FusionTensor{T2,M,NCoAxes,NContractedAxes},
+  B::FusionTensor{T3,K,NContractedAxes,NDoAxes},
   α::Number,
   β::Number,
-) where {T1,T2,T3,N,M,K,NCoAxes,NDoAxes,NContractedAxes,G}
+) where {T1,T2,T3,N,M,K,NCoAxes,NDoAxes,NContractedAxes}
   if domain_axes(A) != dual.(codomain_axes(B))
     throw(DomainError("Incompatible tensor axes for A and B"))
   end
@@ -37,13 +36,13 @@ end
 function LinearAlgebra.norm(ft::FusionTensor)
   n2 = 0.0
   m = data_matrix(ft)
-  row_sectors = sectors(axes(m)[1])
-  col_sectors = sectors(axes(m)[2])
-  for idx in stored_indices(blocks(m))  # TODO update interface?
+  row_sectors = BlockArrays.blocklengths(axes(m)[1])
+  col_sectors = BlockArrays.blocklengths(axes(m)[2])
+  for idx in stored_indices(BlockArrays.blocks(m))  # TODO update interface?
     nb = norm(m[Block(Tuple(idx))])
     # do not assume row_sector == col_sector (may be false for equivariant tensor)
-    dr = dimension(row_sectors[idx[1]])
-    dc = dimension(col_sectors[idx[2]])
+    dr = quantum_dimension(row_sectors[idx[1]])
+    dc = quantum_dimension(col_sectors[idx[2]])
     n2 += sqrt(dr * dc) * nb^2
   end
   return sqrt(n2)

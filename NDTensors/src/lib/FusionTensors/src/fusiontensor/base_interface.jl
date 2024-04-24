@@ -15,9 +15,9 @@ end
 # impose matching type and number of axes at compile time
 # impose matching axes at run time
 function Base.:*(
-  left::FusionTensor{T1,N,NCoAxes,NContractedAxes,G},
-  right::FusionTensor{T2,M,NContractedAxes,NDoAxes,G},
-) where {T1,T2,N,M,NCoAxes,NContractedAxes,NDoAxes,G}
+  left::FusionTensor{T1,N,NCoAxes,NContractedAxes},
+  right::FusionTensor{T2,M,NContractedAxes,NDoAxes},
+) where {T1,T2,N,M,NCoAxes,NContractedAxes,NDoAxes}
 
   # check consistency
   if domain_axes(left) != dual.(codomain_axes(right))
@@ -33,8 +33,8 @@ Base.:+(ft::FusionTensor) = ft
 # tensor addition is a block data_matrix add.
 # impose matching axes, allow different eltypes
 function Base.:+(
-  left::FusionTensor{T1,N,NCoAxes,NDoAxes,G}, right::FusionTensor{T2,N,NCoAxes,NDoAxes,G}
-) where {T1,T2,N,NCoAxes,NDoAxes,G}
+  left::FusionTensor{T1,N,NCoAxes,NDoAxes}, right::FusionTensor{T2,N,NCoAxes,NDoAxes}
+) where {T1,T2,N,NCoAxes,NDoAxes}
   # check consistency
   if codomain_axes(left) != codomain_axes(right) || domain_axes(left) != domain_axes(right)
     throw(DomainError("Incompatible tensor axes"))
@@ -50,8 +50,8 @@ function Base.:-(ft::FusionTensor)
 end
 
 function Base.:-(
-  left::FusionTensor{T1,N,NCoAxes,NDoAxes,G}, right::FusionTensor{T2,N,NCoAxes,NDoAxes,G}
-) where {T1,T2,N,NCoAxes,NDoAxes,G}
+  left::FusionTensor{T1,N,NCoAxes,NDoAxes}, right::FusionTensor{T2,N,NCoAxes,NDoAxes}
+) where {T1,T2,N,NCoAxes,NDoAxes}
   # check consistency
   if codomain_axes(left) != codomain_axes(right) || domain_axes(left) != domain_axes(right)
     throw(DomainError("Incompatible tensor axes"))
@@ -118,8 +118,8 @@ function Base.similar(ft::FusionTensor, elt::Type)
 end
 
 function Base.similar(
-  ::FusionTensor, elt::Type, new_axes::Tuple{NTuple{NCoAxes,G},NTuple{NDoAxes,G}}
-) where {NCoAxes,NDoAxes,G}
+  ::FusionTensor, elt::Type, new_axes::Tuple{NTuple{NCoAxes},NTuple{NDoAxes}}
+) where {NCoAxes,NDoAxes}
   return FusionTensor{elt}(new_axes[1], new_axes[2])
 end
 

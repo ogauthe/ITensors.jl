@@ -47,6 +47,7 @@ for lib in [
   :SortedSets,
   :TagSets,
   :UnallocatedArrays,
+  :FusionTensors,
 ]
   include("lib/$(lib)/src/$(lib).jl")
   @eval using .$lib: $lib
