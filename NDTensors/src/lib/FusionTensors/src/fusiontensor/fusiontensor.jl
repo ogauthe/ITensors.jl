@@ -1,10 +1,7 @@
 # This file defines struct FusionTensor and constructors
 
-using NDTensors.BlockSparseArrays: BlockSparseArray
-using NDTensors.GradedAxes: GradedUnitRange, UnitRangeDual, fusion_product
-
 # TBD remve NCoAxes and NDoAxes as explicit parameters?
-struct FusionTensor{T,N,NCoAxes,NDoAxes,CoDomainAxes,DomainAxes,Mat} <: AbstractArray{T,N}
+struct FusionTensor{T,N,CoDomainAxes,DomainAxes,Mat} <: AbstractArray{T,N}
   _codomain_axes::CoDomainAxes
   _domain_axes::DomainAxes
   _data_matrix::Mat
@@ -14,42 +11,24 @@ struct FusionTensor{T,N,NCoAxes,NDoAxes,CoDomainAxes,DomainAxes,Mat} <: Abstract
     codomain_legs::CoDomainAxes, domain_legs::DomainAxes, mat::Mat
   ) where {
     T<:Number,
-    NCoAxes,
-    NDoAxes,
-    CoDomainAxes<:Tuple{Vararg{Union{GradedUnitRange,UnitRangeDual},NCoAxes}},
-    DomainAxes<:Tuple{Vararg{Union{GradedUnitRange,UnitRangeDual},NDoAxes}},
-    Mat<:BlockSparseArray{T,2},
+    CoDomainAxes<:Tuple{Vararg{Union{GradedAxes.GradedUnitRange,GradedAxes.UnitRangeDual}}},
+    DomainAxes<:Tuple{Vararg{Union{GradedAxes.GradedUnitRange,GradedAxes.UnitRangeDual}}},
+    Mat<:BlockSparseArrays.BlockSparseArray{T,2},
   }
-    return new{T,NCoAxes + NDoAxes,NCoAxes,NDoAxes,CoDomainAxes,DomainAxes,Mat}(
+    return new{
+      T,fieldcount(CoDomainAxes) + fieldcount(DomainAxes),CoDomainAxes,DomainAxes,Mat
+    }(
       codomain_legs, domain_legs, mat
     )
   end
 end
 
-# alternative constructor from concatenated axes
-function FusionTensor{T,N,NCoAxes}(
-  legs::L, arr::AbstractArray
-) where {T,N,NCoAxes,L<:Tuple{Vararg{Union{GradedUnitRange,UnitRangeDual},N}}}
-  codomain_legs = legs[begin:NCoAxes]
-  domain_legs = legs[(NCoAxes + 1):end]
-  return FusionTensor(codomain_legs, domain_legs, arr)
-end
-
-# empty matrix, split axes
+# empty matrix
 function FusionTensor{T}(codomain_legs::Tuple, domain_legs::Tuple) where {T}
-  row_axis = reduce(fusion_product, codomain_legs)
-  col_axis = reduce(fusion_product, domain_legs)
-  mat = BlockSparseArray{T}(row_axis, col_axis)
+  row_axis = reduce(GradedAxes.fusion_product, codomain_legs)
+  col_axis = reduce(GradedAxes.fusion_product, domain_legs)
+  mat = BlockSparseArrays.BlockSparseArray{T}(row_axis, col_axis)
   return FusionTensor(codomain_legs, domain_legs, mat)
-end
-
-# empty matrix with concatenated axes
-function FusionTensor{T,N,NCoAxes}(
-  legs::L
-) where {T,N,NCoAxes,L<:Tuple{Vararg{Union{GradedUnitRange,UnitRangeDual},N}}}
-  codomain_legs = legs[begin:NCoAxes]
-  domain_legs = legs[(NCoAxes + 1):end]
-  return FusionTensor(codomain_legs, domain_legs)
 end
 
 # getters
@@ -58,8 +37,14 @@ codomain_axes(ft::FusionTensor) = ft._codomain_axes
 domain_axes(ft::FusionTensor) = ft._domain_axes
 
 # misc
-n_codomain_axes(::FusionTensor{T,N,NCoAxes}) where {T,N,NCoAxes} = NCoAxes
-n_domain_axes(::FusionTensor{T,N,NCoAxes,NDoAxes}) where {T,N,NCoAxes,NDoAxes} = NDoAxes
+function n_codomain_axes(::FusionTensor{T,N,CoDomainAxes}) where {T,N,CoDomainAxes}
+  return fieldcount(CoDomainAxes)
+end
+function n_domain_axes(
+  ::FusionTensor{T,N,CoDomainAxes,DomainAxes}
+) where {T,N,CoDomainAxes,DomainAxes}
+  return fieldcount(DomainAxes)
+end
 
 matrix_size(ft::FusionTensor) = size(data_matrix(ft))
 matrix_row_axis(ft::FusionTensor) = axes(data_matrix(ft))[1]
@@ -82,7 +67,7 @@ function sanity_check(ft::FusionTensor)
   @assert size(m, 1) == prod(length.(codomain_axes(ft))) "invalid data_matrix row number"
   @assert size(m, 2) == prod(length.(domain_axes(ft))) "invalid data_matrix column number"
 
-  @assert reduce(fusion_product, codomain_axes(ft)) == axes(m)[1] "data_matrix row axis does not match codomain axes"
-  @assert reduce(fusion_product, domain_axes(ft)) == axes(m)[2] "data_matrix column axis does not match domain axes"
+  @assert reduce(GradedAxes.fusion_product, codomain_axes(ft)) == axes(m)[1] "data_matrix row axis does not match codomain axes"
+  @assert reduce(GradedAxes.fusion_product, domain_axes(ft)) == axes(m)[2] "data_matrix column axis does not match domain axes"
   return nothing
 end

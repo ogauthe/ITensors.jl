@@ -1,14 +1,12 @@
 # this file defines permutedims for a FusionTensor
 
-using BlockArrays: Block, blocklengths
-
-using NDTensors.TensorAlgebra: BlockedPermutation, blockedperm
-
 # permutedims with 1 tuple of 2 separate tuples
 function Base.permutedims(ft::FusionTensor{T,N}, new_axes::Tuple{NTuple,NTuple}) where {T,N}
 
   # designed to crash if length(new_axes[1]) + length(new_axes[2]) != N
-  perm::BlockedPermutation{2,N} = blockedperm(new_axes[1], new_axes[2])
+  perm::TensorAlgebra.BlockedPermutation{2,N} = TensorAlgebra.blockedperm(
+    new_axes[1], new_axes[2]
+  )
   return permutedims(ft, perm)
 end
 
@@ -18,7 +16,9 @@ function Base.permutedims(
 ) where {T,N}
 
   # designed to crash if length(new_codomain_axes) + length(new_domain_axes) != N
-  perm::BlockedPermutation{2,N} = blockedperm(new_codomain_axes, new_domain_axes)
+  perm::TensorAlgebra.BlockedPermutation{2,N} = TensorAlgebra.blockedperm(
+    new_codomain_axes, new_domain_axes
+  )
   return permutedims(ft, perm)
 end
 
@@ -27,10 +27,12 @@ end
 # 2) add an extra dummy leg => unexpected that permutedims output has different ndim
 # 3) add dummy row axis in data_matrix (stays 2D), but keep N dims in FT
 #    worth a try, but may lead to strange behaviors
-function Base.permutedims(ft::FusionTensor{T,N}, perm::BlockedPermutation{2,N}) where {T,N}
+function Base.permutedims(
+  ft::FusionTensor{T,N}, perm::TensorAlgebra.BlockedPermutation{2,N}
+) where {T,N}
 
   # early return for identity operation. Do not copy.
-  if n_codomain_axes(ft) == first(blocklengths(perm))  # evaluated at compile time
+  if n_codomain_axes(ft) == first(BlockArrays.blocklengths(perm))  # evaluated at compile time
     if Tuple(perm) == ntuple(i -> i, N)
       return ft
     end
@@ -39,8 +41,8 @@ function Base.permutedims(ft::FusionTensor{T,N}, perm::BlockedPermutation{2,N}) 
   structural_data = StructuralData(codomain_axes(ft), domain_axes(ft), perm)
   permuted_data_matrix = _permute_data(ft, structural_data)
 
-  codomain_axes_out = (i -> axes(ft)[i]).(perm[Block(1)])
-  domain_axes_out = (i -> axes(ft)[i]).(perm[Block(2)])
+  codomain_axes_out = (i -> axes(ft)[i]).(perm[BlockArrays.Block(1)])
+  domain_axes_out = (i -> axes(ft)[i]).(perm[BlockArrays.Block(2)])
   out = FusionTensor(codomain_axes_out, domain_axes_out, permuted_data_matrix)
   return out
 end
@@ -50,8 +52,8 @@ function _permute_data(
   structural_data::StructuralData{N,NCoAxesIn,NDoAxesIn,NCoAxesOut,NDoAxesOut,G},
 ) where {T,N,NCoAxesIn,NDoAxesIn,NCoAxesOut,NDoAxesOut,G}
   perm = permutation(structural_data)
-  codomain_axes_out = (i -> axes(ft)[i]).(perm[Block(1)])
-  domain_axes_out = (i -> axes(ft)[i]).(perm[Block(2)])
+  codomain_axes_out = (i -> axes(ft)[i]).(perm[BlockArrays.Block(1)])
+  domain_axes_out = (i -> axes(ft)[i]).(perm[BlockArrays.Block(2)])
 
   # stupid permute: cast to dense, permutedims, cast to FusionTensor
   # TODO write it properly

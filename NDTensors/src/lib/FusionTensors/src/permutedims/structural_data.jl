@@ -1,17 +1,11 @@
-using BlockArrays: blocks
-
-#using NDTensors.FusionTensors: FusionTensor
-using NDTensors.TensorAlgebra: BlockedPermutation, blockedperm
-
 struct StructuralData{
   N,
   NCoAxesIn,
   NDoAxesIn,
   NCoAxesOut,
   NDoAxesOut,
-  G<:GradedUnitRange,
   B<:Tuple{NTuple{NCoAxesOut},NTuple{NDoAxesOut}},
-  P<:BlockedPermutation{2,N,B},
+  P<:TensorAlgebra.BlockedPermutation{2,N,B},
 }
   _permutation::P
 end
@@ -25,11 +19,10 @@ function StructuralData(
   NDoAxesIn,
   NCoAxesOut,
   NDoAxesOut,
-  G<:GradedUnitRange,
   CoDomainAxes<:NTuple{NCoAxesIn,G},
   DomainAxes<:NTuple{NDoAxesIn,G},
   B<:Tuple{NTuple{NCoAxesOut},NTuple{NDoAxesOut}},
-  P<:BlockedPermutation{2,N,B},
+  P<:TensorAlgebra.BlockedPermutation{2,N,B},
 }
   # TODO impose constraint NCoAxesIn + NDoAxesIn = N
   # perm imposes it for Out

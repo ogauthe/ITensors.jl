@@ -139,15 +139,10 @@ ft6 = conj(ft5)
 # test cast from and to dense
 arr = zeros((6, 5, 4, 3))
 #TODO fill with data
-ft8 = FusionTensor((g1, g2), (g3, g4), arr)  # split axes
+ft8 = FusionTensor((g1, g2), (g3, g4), arr)
 @test axes(ft8) == (g1, g2, g3, g4)
 @test n_codomain_axes(ft8) == 2
 @test isnothing(sanity_check(ft8))
 
-ft9 = FusionTensor{Float64,4,2}((g1, g2, g3, g4), arr)  # concatenated axes
-@test axes(ft9) == (g1, g2, g3, g4)
-@test n_codomain_axes(ft9) == 2
-@test isnothing(sanity_check(ft9))
-
-arr2 = Array(ft9)
+arr2 = Array(ft8)
 @test arr2 ≈ arr

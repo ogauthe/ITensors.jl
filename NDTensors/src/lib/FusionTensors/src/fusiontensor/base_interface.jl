@@ -1,6 +1,4 @@
-# This files overloads Base functions for FusionTensor
-
-using NDTensors.GradedAxes: dual
+# This files defines Base functions for FusionTensor
 
 function Base.:*(x::Number, ft::FusionTensor)
   return FusionTensor(codomain_axes(ft), domain_axes(ft), x * data_matrix(ft))
@@ -14,13 +12,15 @@ end
 # allow to contract with different eltype and let BlockSparseArray ensure compatibility
 # impose matching type and number of axes at compile time
 # impose matching axes at run time
-function Base.:*(
-  left::FusionTensor{T1,N,NCoAxes,NContractedAxes},
-  right::FusionTensor{T2,M,NContractedAxes,NDoAxes},
-) where {T1,T2,N,M,NCoAxes,NContractedAxes,NDoAxes}
+function Base.:*(left::FusionTensor, right::FusionTensor)
+
+  # compile time check
+  if n_domain_axes(left) != n_codomain_axes(left)
+    throw(DomainError("Incompatible tensor structures"))
+  end
 
   # check consistency
-  if domain_axes(left) != dual.(codomain_axes(right))
+  if domain_axes(left) != GradedAxes.dual.(codomain_axes(right))
     throw(DomainError("Incompatible tensor axes"))
   end
   new_data_matrix = data_matrix(left) * data_matrix(right)
@@ -32,9 +32,14 @@ Base.:+(ft::FusionTensor) = ft
 
 # tensor addition is a block data_matrix add.
 # impose matching axes, allow different eltypes
-function Base.:+(
-  left::FusionTensor{T1,N,NCoAxes,NDoAxes}, right::FusionTensor{T2,N,NCoAxes,NDoAxes}
-) where {T1,T2,N,NCoAxes,NDoAxes}
+function Base.:+(left::FusionTensor, right::FusionTensor)
+
+  # compile time check
+  if n_codomain_axes(left) != n_codomain_axes(left) ||
+    n_domain_axes(left) != n_domain_axes(left)
+    throw(DomainError("Incompatible tensor structures"))
+  end
+
   # check consistency
   if codomain_axes(left) != codomain_axes(right) || domain_axes(left) != domain_axes(right)
     throw(DomainError("Incompatible tensor axes"))
@@ -49,9 +54,13 @@ function Base.:-(ft::FusionTensor)
   return FusionTensor(codomain_axes(ft), domain_axes(ft), new_data_matrix)
 end
 
-function Base.:-(
-  left::FusionTensor{T1,N,NCoAxes,NDoAxes}, right::FusionTensor{T2,N,NCoAxes,NDoAxes}
-) where {T1,T2,N,NCoAxes,NDoAxes}
+function Base.:-(left::FusionTensor, right::FusionTensor)
+  # compile time check
+  if n_codomain_axes(left) != n_codomain_axes(left) ||
+    n_domain_axes(left) != n_domain_axes(left)
+    throw(DomainError("Incompatible tensor structures"))
+  end
+
   # check consistency
   if codomain_axes(left) != codomain_axes(right) || domain_axes(left) != domain_axes(right)
     throw(DomainError("Incompatible tensor axes"))
@@ -70,7 +79,9 @@ end
 # data_matrix coeff are not modified (beyond complex conjugation)
 function Base.adjoint(ft::FusionTensor)
   return FusionTensor(
-    dual.(domain_axes(ft)), dual.(codomain_axes(ft)), adjoint(data_matrix(ft))
+    GradedAxes.dual.(domain_axes(ft)),
+    GradedAxes.dual.(codomain_axes(ft)),
+    adjoint(data_matrix(ft)),
   )
 end
 
@@ -117,9 +128,7 @@ function Base.similar(ft::FusionTensor, elt::Type)
   return FusionTensor(codomain_axes(ft), domain_axes(ft), mat)
 end
 
-function Base.similar(
-  ::FusionTensor, elt::Type, new_axes::Tuple{NTuple{NCoAxes},NTuple{NDoAxes}}
-) where {NCoAxes,NDoAxes}
+function Base.similar(::FusionTensor, elt::Type, new_axes::Tuple{<:Tuple,<:Tuple})
   return FusionTensor{elt}(new_axes[1], new_axes[2])
 end
 
