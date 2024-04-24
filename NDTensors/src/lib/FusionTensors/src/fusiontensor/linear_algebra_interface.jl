@@ -38,10 +38,9 @@ end
 function LinearAlgebra.norm(ft::FusionTensor)
   n2 = 0.0
   m = data_matrix(ft)
-  row_sectors = BlockArrays.blocklengths(axes(m)[1])
-  col_sectors = BlockArrays.blocklengths(axes(m)[2])
-  for idx in stored_indices(BlockArrays.blocks(m))  # TODO update interface?
-    nb = norm(m[Block(Tuple(idx))])
+  row_sectors, col_sectors = GradedAxes.blocklabels.(axes(m))
+  for idx in BlockSparseArrays.stored_indices(BlockArrays.blocks(m))  # TODO update interface?
+    nb = LinearAlgebra.norm(m[BlockArrays.Block(Tuple(idx))])
     # do not assume row_sector == col_sector (may be false for equivariant tensor)
     dr = Sectors.quantum_dimension(row_sectors[idx[1]])
     dc = Sectors.quantum_dimension(col_sectors[idx[2]])
