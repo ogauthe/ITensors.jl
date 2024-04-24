@@ -13,18 +13,10 @@ end
 # impose matching type and number of axes at compile time
 # impose matching axes at run time
 function Base.:*(left::FusionTensor, right::FusionTensor)
-
-  # compile time check
-  if n_domain_axes(left) != n_codomain_axes(left)
-    throw(DomainError("Incompatible tensor structures"))
-  end
-
-  # check consistency
-  if domain_axes(left) != GradedAxes.dual.(codomain_axes(right))
+  if !matching_dual(domain_axes(left), codomain_axes(right))
     throw(DomainError("Incompatible tensor axes"))
   end
   new_data_matrix = data_matrix(left) * data_matrix(right)
-
   return FusionTensor(codomain_axes(left), domain_axes(right), new_data_matrix)
 end
 
@@ -33,19 +25,11 @@ Base.:+(ft::FusionTensor) = ft
 # tensor addition is a block data_matrix add.
 # impose matching axes, allow different eltypes
 function Base.:+(left::FusionTensor, right::FusionTensor)
-
-  # compile time check
-  if n_codomain_axes(left) != n_codomain_axes(left) ||
-    n_domain_axes(left) != n_domain_axes(left)
-    throw(DomainError("Incompatible tensor structures"))
-  end
-
-  # check consistency
-  if codomain_axes(left) != codomain_axes(right) || domain_axes(left) != domain_axes(right)
+  if !matching_axes(codomain_axes(left), codomain_axes(right)) ||
+    !matching_axes(codomain_axes(left), codomain_axes(right))
     throw(DomainError("Incompatible tensor axes"))
   end
   new_data_matrix = data_matrix(left) + data_matrix(right)
-
   return FusionTensor(codomain_axes(left), domain_axes(left), new_data_matrix)
 end
 
@@ -55,19 +39,11 @@ function Base.:-(ft::FusionTensor)
 end
 
 function Base.:-(left::FusionTensor, right::FusionTensor)
-  # compile time check
-  if n_codomain_axes(left) != n_codomain_axes(left) ||
-    n_domain_axes(left) != n_domain_axes(left)
-    throw(DomainError("Incompatible tensor structures"))
-  end
-
-  # check consistency
-  if codomain_axes(left) != codomain_axes(right) || domain_axes(left) != domain_axes(right)
+  if !matching_axes(codomain_axes(left), codomain_axes(right)) ||
+    !matching_axes(codomain_axes(left), codomain_axes(right))
     throw(DomainError("Incompatible tensor axes"))
   end
-
   new_data_matrix = data_matrix(left) - data_matrix(right)
-
   return FusionTensor(codomain_axes(left), domain_axes(left), new_data_matrix)
 end
 

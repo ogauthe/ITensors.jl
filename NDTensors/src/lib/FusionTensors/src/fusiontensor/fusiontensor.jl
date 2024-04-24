@@ -67,7 +67,21 @@ function sanity_check(ft::FusionTensor)
   @assert size(m, 1) == prod(length.(codomain_axes(ft))) "invalid data_matrix row number"
   @assert size(m, 2) == prod(length.(domain_axes(ft))) "invalid data_matrix column number"
 
-  @assert reduce(GradedAxes.fusion_product, codomain_axes(ft)) == axes(m)[1] "data_matrix row axis does not match codomain axes"
-  @assert reduce(GradedAxes.fusion_product, domain_axes(ft)) == axes(m)[2] "data_matrix column axis does not match domain axes"
+  @assert GradedAxes.gradedisequal(
+    reduce(GradedAxes.fusion_product, codomain_axes(ft)), axes(m)[1]
+  ) "data_matrix row axis does not match codomain axes"
+  @assert GradedAxes.gradedisequal(
+    reduce(GradedAxes.fusion_product, domain_axes(ft)), axes(m)[2]
+  ) "data_matrix column axis does not match domain axes"
   return nothing
+end
+
+function matching_axes(axes1::T, axes2::T) where {T}
+  if length(axes1) != length(axes2)  # in cases axes1 is a Vector
+    return false
+  end
+  return all(GradedAxes.gradedisequal.(axes1, axes2))
+end
+function matching_dual(axes1, axes2)
+  return matching_axes(axes1, GradedAxes.dual.(axes2))
 end

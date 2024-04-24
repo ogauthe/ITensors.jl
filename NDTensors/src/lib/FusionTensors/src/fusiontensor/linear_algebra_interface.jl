@@ -19,13 +19,13 @@ function LinearAlgebra.mul!(
   end
 
   # input validation
-  if domain_axes(A) != GradedAxes.dual.(codomain_axes(B))
+  if !matching_dual(domain_axes(A), codomain_axes(B))
     throw(DomainError("Incompatible tensor axes for A and B"))
   end
-  if codomain_axes(C) != codomain_axes(A)
+  if !matching_axes(codomain_axes(C) != codomain_axes(A))
     throw(DomainError("Incompatible tensor axes for C and A"))
   end
-  if domain_axes(C) != domain_axes(B)
+  if !matching_axes(domain_axes(C) != domain_axes(B))
     throw(DomainError("Incompatible tensor axes for C and B"))
   end
   LinearAlgebra.mul!(data_matrix(C), data_matrix(A), data_matrix(B), α, β)

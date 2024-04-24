@@ -6,33 +6,35 @@ using NDTensors.FusionTensors:
   codomain_axes,
   domain_axes,
   data_matrix,
+  matching_axes,
+  matching_dual,
   matrix_column_axis,
   matrix_row_axis,
   matrix_size,
   n_codomain_axes,
   n_domain_axes,
   sanity_check
-using NDTensors.GradedAxes
+using NDTensors.GradedAxes: fusion_product, gradedisequal, gradedrange
 using NDTensors.Sectors: U1
 
-g1 = GradedAxes.gradedrange([U1(0) => 1, U1(1) => 2, U1(2) => 3])
-g2 = GradedAxes.gradedrange([U1(0) => 2, U1(1) => 2, U1(3) => 1])
+g1 = gradedrange([U1(0) => 1, U1(1) => 2, U1(2) => 3])
+g2 = gradedrange([U1(0) => 2, U1(1) => 2, U1(3) => 1])
 m = BlockSparseArray{Float64}(g1, g2)
 
 ft1 = FusionTensor((g1,), (g2,), m)  # constructor from split axes
 
 # getters
 @test data_matrix(ft1) === m
-@test codomain_axes(ft1) == (g1,)
-@test domain_axes(ft1) == (g2,)
+@test matching_axes(codomain_axes(ft1), (g1,))
+@test matching_axes(domain_axes(ft1), (g2,))
 
 # misc
-@test axes(ft1) == (g1, g2)
+@test matching_axes(axes(ft1), (g1, g2))
 @test n_codomain_axes(ft1) == 1
 @test n_domain_axes(ft1) == 1
 @test matrix_size(ft1) == (6, 5)
-@test matrix_row_axis(ft1) == g1
-@test matrix_column_axis(ft1) == g2
+@test gradedisequal(matrix_row_axis(ft1), g1)
+@test gradedisequal(matrix_column_axis(ft1), g2)
 @test isnothing(sanity_check(ft1))
 
 # Base methods
@@ -47,35 +49,35 @@ ft2 = copy(ft1)
 @test ft2 !== ft1
 @test data_matrix(ft2) == data_matrix(ft1)
 @test data_matrix(ft2) !== data_matrix(ft1)
-@test codomain_axes(ft2) == codomain_axes(ft1)
-@test domain_axes(ft2) == domain_axes(ft1)
+@test matching_axes(codomain_axes(ft2), codomain_axes(ft1))
+@test matching_axes(domain_axes(ft2), domain_axes(ft1))
 
 # deepcopy
 ft2 = deepcopy(ft1)
 @test ft2 !== ft1
 @test data_matrix(ft2) == data_matrix(ft1)
 @test data_matrix(ft2) !== data_matrix(ft1)
-@test codomain_axes(ft2) == codomain_axes(ft1)
-@test domain_axes(ft2) == domain_axes(ft1)
+@test matching_axes(codomain_axes(ft2), codomain_axes(ft1))
+@test matching_axes(domain_axes(ft2), domain_axes(ft1))
 
 # more than 2 axes
-g3 = GradedAxes.gradedrange([U1(-1) => 1, U1(0) => 2, U1(1) => 1])
-g4 = GradedAxes.gradedrange([U1(-1) => 1, U1(0) => 1, U1(1) => 1])
-gr = GradedAxes.fusion_product(g1, g2)
-gc = GradedAxes.fusion_product(g3, g4)
+g3 = gradedrange([U1(-1) => 1, U1(0) => 2, U1(1) => 1])
+g4 = gradedrange([U1(-1) => 1, U1(0) => 1, U1(1) => 1])
+gr = fusion_product(g1, g2)
+gc = fusion_product(g3, g4)
 m2 = BlockSparseArray{Float64}(gr, gc)
 ft3 = FusionTensor((g1, g2), (g3, g4), m2)
 
 @test data_matrix(ft3) === m2
-@test codomain_axes(ft3) == (g1, g2)
-@test domain_axes(ft3) == (g3, g4)
+@test matching_axes(codomain_axes(ft3), (g1, g2))
+@test matching_axes(domain_axes(ft3), (g3, g4))
 
 @test axes(ft3) == (g1, g2, g3, g4)
 @test n_codomain_axes(ft3) == 2
 @test n_domain_axes(ft3) == 2
 @test matrix_size(ft3) == (30, 12)
-@test matrix_row_axis(ft3) == gr
-@test matrix_column_axis(ft3) == gc
+@test gradedisequal(matrix_row_axis(ft3), gr)
+@test gradedisequal(matrix_column_axis(ft3), gc)
 @test isnothing(sanity_check(ft3))
 
 @test ndims(ft3) == 4
@@ -140,7 +142,7 @@ ft6 = conj(ft5)
 arr = zeros((6, 5, 4, 3))
 #TODO fill with data
 ft8 = FusionTensor((g1, g2), (g3, g4), arr)
-@test axes(ft8) == (g1, g2, g3, g4)
+@test matching_axes(axes(ft8), (g1, g2, g3, g4))
 @test n_codomain_axes(ft8) == 2
 @test isnothing(sanity_check(ft8))
 

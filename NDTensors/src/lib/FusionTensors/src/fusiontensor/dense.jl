@@ -28,9 +28,9 @@ end
 
 # constructor from dense array with norm check
 function FusionTensor(
-  codomain_legs::CoDomainAxes, domain_legs::DomainAxes, dense::DA, tol_check::Real
-) where {CoDomainAxes<:Tuple,DomainAxes<:Tuple,T<:Number,N,DA<:DenseArray{T,N}}
-  ft = FusionTensor{T,N,NCoAxes}(legs, dense, tol_check)
+  codomain_legs::CoDomainAxes, domain_legs::DomainAxes, dense::DenseArray, tol_check::Real
+) where {CoDomainAxes,DomainAxes}
+  ft = FusionTensor(codomain_legs, domain_legs, dense)
 
   # check that norm is the same in input and output
   dense_norm = LinearAlgebra.norm(dense)
