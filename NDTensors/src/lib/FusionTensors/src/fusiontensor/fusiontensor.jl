@@ -2,21 +2,22 @@
 
 # TBD remve NCoAxes and NDoAxes as explicit parameters?
 struct FusionTensor{T,N,CoDomainAxes,DomainAxes,Mat} <: AbstractArray{T,N}
-  _codomain_axes::CoDomainAxes
-  _domain_axes::DomainAxes
-  _data_matrix::Mat
+  codomain_axes::CoDomainAxes
+  domain_axes::DomainAxes
+  data_matrix::Mat
 
   # inner constructor to impose constraints on types
   function FusionTensor(
-    codomain_legs::CoDomainAxes, domain_legs::DomainAxes, mat::Mat
-  ) where {
-    T<:Number,
-    CoDomainAxes<:Tuple{Vararg{Union{GradedAxes.GradedUnitRange,GradedAxes.UnitRangeDual}}},
-    DomainAxes<:Tuple{Vararg{Union{GradedAxes.GradedUnitRange,GradedAxes.UnitRangeDual}}},
-    Mat<:BlockSparseArrays.BlockSparseArray{T,2},
-  }
+    codomain_legs::Tuple{Vararg{AbstractUnitRange}},
+    domain_legs::Tuple{Vararg{AbstractUnitRange}},
+    mat::BlockSparseArrays.BlockSparseArray{<:Any,2},
+  )
     return new{
-      T,fieldcount(CoDomainAxes) + fieldcount(DomainAxes),CoDomainAxes,DomainAxes,Mat
+      eltype(mat),
+      length(codomain_legs) + length(domain_legs),
+      typeof(codomain_legs),
+      typeof(domain_legs),
+      typeof(mat),
     }(
       codomain_legs, domain_legs, mat
     )
@@ -32,19 +33,13 @@ function FusionTensor{T}(codomain_legs::Tuple, domain_legs::Tuple) where {T}
 end
 
 # getters
-data_matrix(ft::FusionTensor) = ft._data_matrix
-codomain_axes(ft::FusionTensor) = ft._codomain_axes
-domain_axes(ft::FusionTensor) = ft._domain_axes
+data_matrix(ft::FusionTensor) = ft.data_matrix
+codomain_axes(ft::FusionTensor) = ft.codomain_axes
+domain_axes(ft::FusionTensor) = ft.domain_axes
 
 # misc
-function n_codomain_axes(::FusionTensor{T,N,CoDomainAxes}) where {T,N,CoDomainAxes}
-  return fieldcount(CoDomainAxes)
-end
-function n_domain_axes(
-  ::FusionTensor{T,N,CoDomainAxes,DomainAxes}
-) where {T,N,CoDomainAxes,DomainAxes}
-  return fieldcount(DomainAxes)
-end
+ndims_codomain(ft::FusionTensor) = length(codomain_axes(ft))
+ndims_domain(ft::FusionTensor) = length(domain_axes(ft))
 
 matrix_size(ft::FusionTensor) = size(data_matrix(ft))
 matrix_row_axis(ft::FusionTensor) = axes(data_matrix(ft))[1]
