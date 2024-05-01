@@ -8,13 +8,13 @@ function LinearAlgebra.mul!(
 )
 
   # compile time checks
-  if n_domain_axes(A) != n_codomain_axes(B)
+  if ndims_domain(A) != ndims_codomain(B)
     throw(DomainError("Incompatible tensor structures for A and B"))
   end
-  if n_codomain_axes(A) != n_codomain_axes(C)
+  if ndims_codomain(A) != ndims_codomain(C)
     throw(DomainError("Incompatible tensor structures for A and C"))
   end
-  if n_domain_axes(B) != n_domain_axes(C)
+  if ndims_domain(B) != ndims_domain(C)
     throw(DomainError("Incompatible tensor structures for B and C"))
   end
 
@@ -22,10 +22,10 @@ function LinearAlgebra.mul!(
   if !matching_dual(domain_axes(A), codomain_axes(B))
     throw(DomainError("Incompatible tensor axes for A and B"))
   end
-  if !matching_axes(codomain_axes(C) != codomain_axes(A))
+  if !matching_axes(codomain_axes(C), codomain_axes(A))
     throw(DomainError("Incompatible tensor axes for C and A"))
   end
-  if !matching_axes(domain_axes(C) != domain_axes(B))
+  if !matching_axes(domain_axes(C), domain_axes(B))
     throw(DomainError("Incompatible tensor axes for C and B"))
   end
   LinearAlgebra.mul!(data_matrix(C), data_matrix(A), data_matrix(B), α, β)

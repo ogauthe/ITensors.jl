@@ -1,6 +1,5 @@
 # This file defines struct FusionTensor and constructors
 
-# TBD remve NCoAxes and NDoAxes as explicit parameters?
 struct FusionTensor{T,N,CoDomainAxes,DomainAxes,Mat} <: AbstractArray{T,N}
   codomain_axes::CoDomainAxes
   domain_axes::DomainAxes
@@ -26,10 +25,23 @@ end
 
 # empty matrix
 function FusionTensor{T}(codomain_legs::Tuple, domain_legs::Tuple) where {T}
-  row_axis = reduce(GradedAxes.fusion_product, codomain_legs)
-  col_axis = reduce(GradedAxes.fusion_product, domain_legs)
-  mat = BlockSparseArrays.BlockSparseArray{T}(row_axis, col_axis)
+  init = trivial(first(codomain_legs))
+  row_axis = dual(reduce(GradedAxes.fusion_product, codomain_legs; init=init))
+  col_axis = reduce(GradedAxes.fusion_product, domain_legs; init=init)
+  mat = BlockSparseArrays.BlockSparseArray{T}(row_axis, col_axis)  # CRASH
   return FusionTensor(codomain_legs, domain_legs, mat)
+end
+
+function FusionTensor{T}(::Tuple{}, domain_legs::Tuple) where {T}
+  init = trivial(first(domain_legs))
+  row_axis = dual(init)
+  col_axis = reduce(GradedAxes.fusion_product, domain_legs; init=init)
+  mat = BlockSparseArrays.BlockSparseArray{T}(row_axis, col_axis)  # CRASH
+  return FusionTensor(codomain_legs, domain_legs, mat)
+end
+
+function FusionTensor{T}(::Tuple{}, ::Tuple{}) where {T}
+  return error("At lease one axis must be provided")
 end
 
 # getters
@@ -63,16 +75,28 @@ function sanity_check(ft::FusionTensor)
   @assert size(m, 2) == prod(length.(domain_axes(ft))) "invalid data_matrix column number"
 
   @assert GradedAxes.gradedisequal(
-    reduce(GradedAxes.fusion_product, codomain_axes(ft)), axes(m)[1]
+    axes(m)[1],
+    dual(
+      reduce(
+        GradedAxes.fusion_product,
+        codomain_axes(ft);
+        init=Sectors.to_graded_axis(Sectors.trivial(symmetry(ft))),
+      ),
+    ),
   ) "data_matrix row axis does not match codomain axes"
   @assert GradedAxes.gradedisequal(
-    reduce(GradedAxes.fusion_product, domain_axes(ft)), axes(m)[2]
+    axes(m)[2],
+    reduce(
+      GradedAxes.fusion_product,
+      codomain_axes(ft);
+      init=Sectors.to_graded_axis(Sectors.trivial(symmetry(ft))),
+    ),
   ) "data_matrix column axis does not match domain axes"
   return nothing
 end
 
-function matching_axes(axes1::T, axes2::T) where {T}
-  if length(axes1) != length(axes2)  # in cases axes1 is a Vector
+function matching_axes(axes1::T, axes2::T) where {T<:Tuple}
+  if length(axes1) != length(axes2)
     return false
   end
   return all(GradedAxes.gradedisequal.(axes1, axes2))

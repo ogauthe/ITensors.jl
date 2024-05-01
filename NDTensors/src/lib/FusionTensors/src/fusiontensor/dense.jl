@@ -1,12 +1,10 @@
 # This file defines interface to cast from and to dense array
 
 # constructor from dense array
-function FusionTensor(
-  codomain_legs::CoDomainAxes, domain_legs::DomainAxes, dense::DA
-) where {CoDomainAxes<:Tuple,DomainAxes<:Tuple,T<:Number,N,DA<:DenseArray{T,N}}
+function FusionTensor(codomain_legs::Tuple, domain_legs::Tuple, dense::DenseArray)
 
   # compile time check
-  if fieldcount(CoDomainAxes) + fieldcount(DomainAxes) != N
+  if length(CoDomainAxes) + length(DomainAxes) != ndims(dense)
     throw(DomainError("legs dimensions are incompatible with dense array"))
   end
 
@@ -28,8 +26,8 @@ end
 
 # constructor from dense array with norm check
 function FusionTensor(
-  codomain_legs::CoDomainAxes, domain_legs::DomainAxes, dense::DenseArray, tol_check::Real
-) where {CoDomainAxes,DomainAxes}
+  codomain_legs::Tuple, domain_legs::Tuple, dense::DenseArray, tol_check::Real
+)
   ft = FusionTensor(codomain_legs, domain_legs, dense)
 
   # check that norm is the same in input and output
