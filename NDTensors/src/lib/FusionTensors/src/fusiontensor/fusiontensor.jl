@@ -60,13 +60,13 @@ matrix_column_axis(ft::FusionTensor) = axes(data_matrix(ft))[2]
 # sanity check
 function sanity_check(ft::FusionTensor)
   # TODO replace @assert with @check when JuliaLang PR 41342 is merged
-  nca = n_codomain_axes(ft)
-  @assert nca == length(codomain_axes(ft)) "n_codomain_axes does not match codomain_axes"
-  @assert 0 < nca < ndims(ft) "invalid n_codomain_axes"
+  nca = ndims_codomain(ft)
+  @assert nca == length(codomain_axes(ft)) "ndims_codomain does not match codomain_axes"
+  @assert nca < ndims(ft) "invalid ndims_codomain"
 
-  nda = n_domain_axes(ft)
-  @assert nda == length(domain_axes(ft)) "n_domain_axes does not match domain_axes"
-  @assert 0 < nda < ndims(ft) "invalid n_domain_axes"
+  nda = ndims_domain(ft)
+  @assert nda == length(domain_axes(ft)) "ndims_domain does not match domain_axes"
+  @assert nda < ndims(ft) "invalid ndims_domain"
   @assert nca + nda == ndims(ft) "invalid ndims"
 
   m = data_matrix(ft)
