@@ -11,15 +11,15 @@ using NDTensors.FusionTensors:
   matrix_column_axis,
   matrix_row_axis,
   matrix_size,
-  n_codomain_axes,
-  n_domain_axes,
+  ndims_codomain,
+  ndims_domain,
   sanity_check
 using NDTensors.GradedAxes: fusion_product, gradedisequal, gradedrange
 using NDTensors.Sectors: U1
 
 g1 = gradedrange([U1(0) => 1, U1(1) => 2, U1(2) => 3])
 g2 = gradedrange([U1(0) => 2, U1(1) => 2, U1(3) => 1])
-m = BlockSparseArray{Float64}(g1, g2)
+m = BlockSparseArray{Float64}(g1, g2);
 
 ft1 = FusionTensor((g1,), (g2,), m)  # constructor from split axes
 
@@ -30,8 +30,8 @@ ft1 = FusionTensor((g1,), (g2,), m)  # constructor from split axes
 
 # misc
 @test matching_axes(axes(ft1), (g1, g2))
-@test n_codomain_axes(ft1) == 1
-@test n_domain_axes(ft1) == 1
+@test ndims_codomain(ft1) == 1
+@test ndims_domain(ft1) == 1
 @test matrix_size(ft1) == (6, 5)
 @test gradedisequal(matrix_row_axis(ft1), g1)
 @test gradedisequal(matrix_column_axis(ft1), g2)
@@ -73,8 +73,8 @@ ft3 = FusionTensor((g1, g2), (g3, g4), m2)
 @test matching_axes(domain_axes(ft3), (g3, g4))
 
 @test axes(ft3) == (g1, g2, g3, g4)
-@test n_codomain_axes(ft3) == 2
-@test n_domain_axes(ft3) == 2
+@test ndims_codomain(ft3) == 2
+@test ndims_domain(ft3) == 2
 @test matrix_size(ft3) == (30, 12)
 @test gradedisequal(matrix_row_axis(ft3), gr)
 @test gradedisequal(matrix_column_axis(ft3), gc)
@@ -135,7 +135,7 @@ ft6 = conj(ft5)
 @test domain_axes(ft6) === domain_axes(ft5)
 @test eltype(ft6) == ComplexF64
 
-# ft7 = adjoint(ft3) # currently unimplemented for BlockSparseArray
+# ft7 = adjoint(ft3) # currently unimplemented
 # @test isnothing(sanity_check(ft7))
 
 # test cast from and to dense
@@ -143,7 +143,7 @@ arr = zeros((6, 5, 4, 3))
 #TODO fill with data
 ft8 = FusionTensor((g1, g2), (g3, g4), arr)
 @test matching_axes(axes(ft8), (g1, g2, g3, g4))
-@test n_codomain_axes(ft8) == 2
+@test ndims_codomain(ft8) == 2
 @test isnothing(sanity_check(ft8))
 
 arr2 = Array(ft8)

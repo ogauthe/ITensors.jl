@@ -32,14 +32,14 @@ function Base.permutedims(
 ) where {T,N}
 
   # early return for identity operation. Do not copy.
-  if n_codomain_axes(ft) == first(BlockArrays.blocklengths(perm))  # evaluated at compile time
+  if ndims_codomain(ft) == first(BlockArrays.blocklengths(perm))  # evaluated at compile time
     if Tuple(perm) == ntuple(i -> i, N)
       return ft
     end
   end
 
   structural_data = StructuralData(codomain_axes(ft), domain_axes(ft), perm)
-  permuted_data_matrix = _permute_data(ft, structural_data)
+  permuted_data_matrix = permute_data(ft, structural_data)
 
   codomain_axes_out = (i -> axes(ft)[i]).(perm[BlockArrays.Block(1)])
   domain_axes_out = (i -> axes(ft)[i]).(perm[BlockArrays.Block(2)])
@@ -47,10 +47,7 @@ function Base.permutedims(
   return out
 end
 
-function _permute_data(
-  ft::FusionTensor{T,N,NCoAxesIn,NDoAxesIn,G},
-  structural_data::StructuralData{N,NCoAxesIn,NDoAxesIn,NCoAxesOut,NDoAxesOut,G},
-) where {T,N,NCoAxesIn,NDoAxesIn,NCoAxesOut,NDoAxesOut,G}
+function permute_data(ft::FusionTensor, structural_data::StructuralData)
   perm = permutation(structural_data)
   codomain_axes_out = (i -> axes(ft)[i]).(perm[BlockArrays.Block(1)])
   domain_axes_out = (i -> axes(ft)[i]).(perm[BlockArrays.Block(2)])
@@ -117,7 +114,7 @@ function permutedims(  # args != Base.permutedims. Change name?
 
   # TODO cache me
   structural_data = compute_structural_data(
-    t.axes, permutation, t.n_codomain_axes, n_codomain_out
+    t.axes, permutation, t ndims_codomain, n_codomain_out
   )
 
   out_row_axis, out_col_axis, out_blocks = transpose_data(

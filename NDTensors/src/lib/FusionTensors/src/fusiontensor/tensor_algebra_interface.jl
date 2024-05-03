@@ -70,6 +70,6 @@ function TensorAlgebra.contract!(
 )
   a1_perm = permutedims(a1, biperm1)
   a2_perm = permutedims(a2, biperm2)
-  mul!(a_dest, a1_perm, a2_perm, α, β)
+  LinearAlgebra.mul!(a_dest, a1_perm, a2_perm, α, β)
   return a_dest
 end

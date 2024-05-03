@@ -4,7 +4,7 @@
 function FusionTensor(codomain_legs::Tuple, domain_legs::Tuple, dense::DenseArray)
 
   # compile time check
-  if length(CoDomainAxes) + length(DomainAxes) != ndims(dense)
+  if length(codomain_legs) + length(domain_legs) != ndims(dense)
     throw(DomainError("legs dimensions are incompatible with dense array"))
   end
 
@@ -16,7 +16,9 @@ function FusionTensor(codomain_legs::Tuple, domain_legs::Tuple, dense::DenseArra
   # initialize data_matrix
   mat_row_axis = reduce(GradedAxes.fusion_product, codomain_legs)
   mat_col_axis = reduce(GradedAxes.fusion_product, domain_legs)  # TBD take dual?
-  data_matrix = BlockSparseArrays.BlockSparseArray{T}(mat_row_axis, mat_col_axis)
+  data_matrix = BlockSparseArrays.BlockSparseArray{eltype(dense)}(
+    mat_row_axis, mat_col_axis
+  )
 
   # fill data_matrix
   # dummy: TODO

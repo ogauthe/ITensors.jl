@@ -9,7 +9,7 @@ struct FusionTensor{T,N,CoDomainAxes,DomainAxes,Mat} <: AbstractArray{T,N}
   function FusionTensor(
     codomain_legs::Tuple{Vararg{AbstractUnitRange}},
     domain_legs::Tuple{Vararg{AbstractUnitRange}},
-    mat::BlockSparseArrays.BlockSparseArray{<:Any,2},
+    mat::BlockSparseArrays.BlockSparseArray{<:Number,2},
   )
     return new{
       eltype(mat),
@@ -18,30 +18,29 @@ struct FusionTensor{T,N,CoDomainAxes,DomainAxes,Mat} <: AbstractArray{T,N}
       typeof(domain_legs),
       typeof(mat),
     }(
-      codomain_legs, domain_legs, mat
+      # TBD enforce mat arrow direction to be dual, nondual?
+      codomain_legs,
+      domain_legs,
+      mat,
     )
   end
 end
 
 # empty matrix
 function FusionTensor{T}(codomain_legs::Tuple, domain_legs::Tuple) where {T}
-  init = trivial(first(codomain_legs))
-  row_axis = dual(reduce(GradedAxes.fusion_product, codomain_legs; init=init))
+  if length(codomain_legs) > 0
+    init = Sectors.trivial(first(codomain_legs))
+  elseif length(domain_legs) > 0
+    init = Sectors.trivial(first(domain_legs))
+  else
+    return error("At lease one axis must be provided")
+  end
+  # TODO set to dual once BlockSparseArray is fixed
+  #row_axis = GradedAxes.dual(reduce(GradedAxes.fusion_product, codomain_legs; init=init))
+  row_axis = reduce(GradedAxes.fusion_product, codomain_legs; init=init)
   col_axis = reduce(GradedAxes.fusion_product, domain_legs; init=init)
-  mat = BlockSparseArrays.BlockSparseArray{T}(row_axis, col_axis)  # CRASH
+  mat = BlockSparseArrays.BlockSparseArray{T}(row_axis, col_axis)
   return FusionTensor(codomain_legs, domain_legs, mat)
-end
-
-function FusionTensor{T}(::Tuple{}, domain_legs::Tuple) where {T}
-  init = trivial(first(domain_legs))
-  row_axis = dual(init)
-  col_axis = reduce(GradedAxes.fusion_product, domain_legs; init=init)
-  mat = BlockSparseArrays.BlockSparseArray{T}(row_axis, col_axis)  # CRASH
-  return FusionTensor(codomain_legs, domain_legs, mat)
-end
-
-function FusionTensor{T}(::Tuple{}, ::Tuple{}) where {T}
-  return error("At lease one axis must be provided")
 end
 
 # getters
@@ -76,21 +75,14 @@ function sanity_check(ft::FusionTensor)
 
   @assert GradedAxes.gradedisequal(
     axes(m)[1],
-    dual(
-      reduce(
-        GradedAxes.fusion_product,
-        codomain_axes(ft);
-        init=Sectors.to_graded_axis(Sectors.trivial(symmetry(ft))),
-      ),
-    ),
+    # TODO set to dual once BlockSparseArray is fixed
+    #GradedAxes.dual(
+    reduce(GradedAxes.fusion_product, codomain_axes(ft); init=Sectors.trivial(axes(m)[1])),
+    # ),
   ) "data_matrix row axis does not match codomain axes"
   @assert GradedAxes.gradedisequal(
     axes(m)[2],
-    reduce(
-      GradedAxes.fusion_product,
-      codomain_axes(ft);
-      init=Sectors.to_graded_axis(Sectors.trivial(symmetry(ft))),
-    ),
+    reduce(GradedAxes.fusion_product, domain_axes(ft); init=Sectors.trivial(axes(m)[2])),
   ) "data_matrix column axis does not match domain axes"
   return nothing
 end

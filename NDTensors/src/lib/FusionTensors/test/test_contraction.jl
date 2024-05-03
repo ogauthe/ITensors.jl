@@ -1,4 +1,4 @@
-using LinearAlgebra
+using LinearAlgebra: mul!
 using Test: @test
 
 using NDTensors.BlockSparseArrays: BlockSparseArray
@@ -18,8 +18,8 @@ m1 = BlockSparseArray{Float64}(gr1, gc1)
 ft1 = FusionTensor((g1, g2), (g3, g4), m1)
 @test isnothing(sanity_check(ft1))
 
-gr2 = GradedAxes.fusion_product(GradedAxes.dual.((g3, g4))...)
-gc2 = GradedAxes.label_dual(g1)
+gr2 = reduce(GradedAxes.fusion_product, GradedAxes.dual.((g3, g4)))
+gc2 = g1
 m2 = BlockSparseArray{Float64}(gr2, gc2)
 ft2 = FusionTensor(GradedAxes.dual.((g3, g4)), (g1,), m2)
 @test isnothing(sanity_check(ft2))

@@ -1,7 +1,7 @@
 using Test: @test
 
 using NDTensors.BlockSparseArrays: BlockSparseArray
-using NDTensors.FusionTensors: FusionTensor, n_codomain_axes, sanity_check
+using NDTensors.FusionTensors: FusionTensor, ndims_codomain, sanity_check
 using NDTensors.GradedAxes
 using NDTensors.Sectors: U1
 
@@ -24,5 +24,5 @@ ft2 = permutedims(ft1, ((1, 2), (3, 4)))   # trivial with 2-tuple of tuples
 
 ft3 = permutedims(ft1, (4,), (1, 2, 3))
 @test axes(ft3) == (g4, g1, g2, g3)
-@test n_codomain_axes(ft3) == 1
+@test ndims_codomain(ft3) == 1
 @test isnothing(sanity_check(ft3))
