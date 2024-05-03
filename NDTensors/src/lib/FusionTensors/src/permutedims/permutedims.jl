@@ -22,11 +22,6 @@ function Base.permutedims(
   return permutedims(ft, perm)
 end
 
-# TBD how to deal with NCoAxesOut = 0 or NDoAxesOut = 0 cases
-# 1) forbid: clean crash. Handle separetly inner product of 2 FT
-# 2) add an extra dummy leg => unexpected that permutedims output has different ndim
-# 3) add dummy row axis in data_matrix (stays 2D), but keep N dims in FT
-#    worth a try, but may lead to strange behaviors
 function Base.permutedims(
   ft::FusionTensor{T,N}, perm::TensorAlgebra.BlockedPermutation{2,N}
 ) where {T,N}

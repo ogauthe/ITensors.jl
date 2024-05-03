@@ -14,11 +14,7 @@ function FusionTensor(codomain_legs::Tuple, domain_legs::Tuple, dense::DenseArra
   end
 
   # initialize data_matrix
-  mat_row_axis = reduce(GradedAxes.fusion_product, codomain_legs)
-  mat_col_axis = reduce(GradedAxes.fusion_product, domain_legs)  # TBD take dual?
-  data_matrix = BlockSparseArrays.BlockSparseArray{eltype(dense)}(
-    mat_row_axis, mat_col_axis
-  )
+  data_matrix = initialize_data_matrix(codomain_legs, domain_legs, eltype(dense))
 
   # fill data_matrix
   # dummy: TODO

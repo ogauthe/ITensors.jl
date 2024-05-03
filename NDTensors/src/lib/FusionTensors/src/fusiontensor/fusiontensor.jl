@@ -26,35 +26,46 @@ struct FusionTensor{T,N,CoDomainAxes,DomainAxes,Mat} <: AbstractArray{T,N}
   end
 end
 
-# empty matrix
-function FusionTensor{T}(codomain_legs::Tuple, domain_legs::Tuple) where {T}
-  if length(codomain_legs) > 0
-    init = Sectors.trivial(first(codomain_legs))
-  elseif length(domain_legs) > 0
-    init = Sectors.trivial(first(domain_legs))
-  else
-    return error("At lease one axis must be provided")
-  end
-  # TODO set to dual once BlockSparseArray is fixed
-  #row_axis = GradedAxes.dual(reduce(GradedAxes.fusion_product, codomain_legs; init=init))
-  row_axis = reduce(GradedAxes.fusion_product, codomain_legs; init=init)
-  col_axis = reduce(GradedAxes.fusion_product, domain_legs; init=init)
-  mat = BlockSparseArrays.BlockSparseArray{T}(row_axis, col_axis)
-  return FusionTensor(codomain_legs, domain_legs, mat)
-end
-
 # getters
 data_matrix(ft::FusionTensor) = ft.data_matrix
 codomain_axes(ft::FusionTensor) = ft.codomain_axes
 domain_axes(ft::FusionTensor) = ft.domain_axes
 
-# misc
+# misc access
 ndims_codomain(ft::FusionTensor) = length(codomain_axes(ft))
 ndims_domain(ft::FusionTensor) = length(domain_axes(ft))
 
 matrix_size(ft::FusionTensor) = size(data_matrix(ft))
 matrix_row_axis(ft::FusionTensor) = axes(data_matrix(ft))[1]
 matrix_column_axis(ft::FusionTensor) = axes(data_matrix(ft))[2]
+
+# init data_matrix
+function initialize_data_matrix(
+  codomain_legs::Tuple, domain_legs::Tuple, data_type::Type{<:Number}
+)
+  init = initialize_trivial_axis(codomain_legs::Tuple, domain_legs::Tuple)
+  mat_row_axis = reduce(GradedAxes.fusion_product, codomain_legs; init=init) # TODO take dual
+  mat_col_axis = reduce(GradedAxes.fusion_product, domain_legs; init=init)
+  data_matrix = BlockSparseArrays.BlockSparseArray{data_type}(mat_row_axis, mat_col_axis)
+  return data_matrix
+end
+function initialize_trivial_axis(codomain_legs::Tuple, ::Tuple)
+  return Sectors.trivial(first(codomain_legs))
+end
+
+function initialize_trivial_axis(::Tuple{}, domain_legs::Tuple)
+  return Sectors.trivial(first(domain_legs))
+end
+
+function initialize_trivial_axis(::Tuple{}, ::Tuple{})
+  return error("At lease one axis must be provided")
+end
+
+# empty matrix
+function FusionTensor{T}(codomain_legs::Tuple, domain_legs::Tuple) where {T}
+  mat = initialize_data_matrix(codomain_legs, domain_legs, T)
+  return FusionTensor(codomain_legs, domain_legs, mat)
+end
 
 # sanity check
 function sanity_check(ft::FusionTensor)
