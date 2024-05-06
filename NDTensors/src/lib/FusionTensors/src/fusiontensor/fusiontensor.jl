@@ -9,7 +9,7 @@ struct FusionTensor{T,N,CoDomainAxes,DomainAxes,Mat} <: AbstractArray{T,N}
   function FusionTensor(
     codomain_legs::Tuple{Vararg{AbstractUnitRange}},
     domain_legs::Tuple{Vararg{AbstractUnitRange}},
-    mat::BlockSparseArrays.BlockSparseArray{<:Number,2},
+    mat::BlockSparseArrays.BlockSparseMatrix,
   )
     return new{
       eltype(mat),
@@ -24,6 +24,29 @@ struct FusionTensor{T,N,CoDomainAxes,DomainAxes,Mat} <: AbstractArray{T,N}
       mat,
     )
   end
+
+  # needed to remove ambiguity
+  function FusionTensor(
+    ::Tuple{},
+    domain_legs::Tuple{Vararg{AbstractUnitRange}},
+    mat::BlockSparseArrays.BlockSparseMatrix,
+  )
+    return new{eltype(mat),length(domain_legs),Tuple{},typeof(domain_legs),typeof(mat)}(
+      (), domain_legs, mat
+    )
+  end
+  function FusionTensor(
+    codomain_legs::Tuple{Vararg{AbstractUnitRange}},
+    ::Tuple{},
+    mat::BlockSparseArrays.BlockSparseMatrix,
+  )
+    return new{eltype(mat),length(codomain_legs),typeof(codomain_legs),Tuple{},typeof(mat)}(
+      codomain_legs, (), mat
+    )
+  end
+  function FusionTensor(::Tuple{}, ::Tuple{}, mat::BlockSparseArrays.BlockSparseMatrix)
+    return new{eltype(mat),0,Tuple{},Tuple{},typeof(mat)}((), (), mat)
+  end
 end
 
 # getters
@@ -35,19 +58,19 @@ domain_axes(ft::FusionTensor) = ft.domain_axes
 ndims_codomain(ft::FusionTensor) = length(codomain_axes(ft))
 ndims_domain(ft::FusionTensor) = length(domain_axes(ft))
 
-matrix_size(ft::FusionTensor) = size(data_matrix(ft))
+matrix_size(ft::FusionTensor) = Sectors.quantum_dimension.(axes(data_matrix(ft)))
 matrix_row_axis(ft::FusionTensor) = axes(data_matrix(ft))[1]
 matrix_column_axis(ft::FusionTensor) = axes(data_matrix(ft))[2]
 
 # init data_matrix
 function initialize_data_matrix(
-  codomain_legs::Tuple, domain_legs::Tuple, data_type::Type{<:Number}
+  data_type::Type{<:Number}, codomain_legs::Tuple, domain_legs::Tuple
 )
+  # TODO anyway to avoid type hint?
   init = initialize_trivial_axis(codomain_legs::Tuple, domain_legs::Tuple)
-  mat_row_axis = reduce(GradedAxes.fusion_product, codomain_legs; init=init) # TODO take dual
-  mat_col_axis = reduce(GradedAxes.fusion_product, domain_legs; init=init)
-  data_matrix = BlockSparseArrays.BlockSparseArray{data_type}(mat_row_axis, mat_col_axis)
-  return data_matrix
+  mat_row_axis::typeof(init) = reduce(GradedAxes.fusion_product, codomain_legs; init=init) # TODO take dual
+  mat_col_axis::typeof(init) = reduce(GradedAxes.fusion_product, domain_legs; init=init)
+  return BlockSparseArrays.BlockSparseArray{data_type}(mat_row_axis, mat_col_axis)
 end
 function initialize_trivial_axis(codomain_legs::Tuple, ::Tuple)
   return Sectors.trivial(first(codomain_legs))
@@ -63,7 +86,7 @@ end
 
 # empty matrix
 function FusionTensor{T}(codomain_legs::Tuple, domain_legs::Tuple) where {T}
-  mat = initialize_data_matrix(codomain_legs, domain_legs, T)
+  mat = initialize_data_matrix(T, codomain_legs, domain_legs)
   return FusionTensor(codomain_legs, domain_legs, mat)
 end
 

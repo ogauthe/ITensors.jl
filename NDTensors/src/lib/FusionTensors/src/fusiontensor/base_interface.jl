@@ -119,4 +119,4 @@ function Base.show(io::IO, ::MIME"text/plain", ft::FusionTensor)
   return nothing
 end
 
-Base.size(ft::FusionTensor) = length.(axes(ft))
+Base.size(ft::FusionTensor) = Sectors.quantum_dimension.(axes(ft))  # TBD store it?

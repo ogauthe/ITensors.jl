@@ -3,11 +3,15 @@ module FusionTensors
 using LinearAlgebra: LinearAlgebra
 
 using BlockArrays: BlockArrays
+using HalfIntegers: HalfIntegers
 
 import NDTensors.BlockSparseArrays
 import NDTensors.GradedAxes
-import NDTensors.Sectors
+import NDTensors.Sectors: Sectors, ⊗
 import NDTensors.TensorAlgebra
+
+include("fusiontrees/clebsch_gordan.jl")
+include("fusiontrees/fusion_tree.jl")
 
 include("fusiontensor/fusiontensor.jl")
 include("fusiontensor/base_interface.jl")

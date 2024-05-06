@@ -32,8 +32,9 @@ function fusion_trees(
   category_trees_irreps = ntuple(c -> fusion_trees(category_tree_input[c], isdual), n_cat)
 
   # compute kronecker product of fusion trees
-  trees = first(first(category_trees_irreps))
-  for c in 2:n_cat
+  # more efficient with iterative construction instead of Iterators.product
+  trees = first(last(category_trees_irreps))
+  for c in reverse(1:(n_cat - 1))  # F order loop
     trees = collect(
       _tensor_kron(t, tc) for t in trees for tc in first(category_trees_irreps[c])
     )
@@ -41,13 +42,11 @@ function fusion_trees(
 
   # recover irreps for each tree
   # do not use previous loop as category type would change at each step
-  tree_irreps = Vector{eltype(irreps)}()
-  ranges = ntuple(c -> 1:length(first(category_trees_irreps[c])), n_cat)
-  for it in CartesianIndices(ranges)
-    cats = ntuple(c -> category_trees_irreps[c][2][it[c]], n_cat)
-    s = recover_key(eltype(category_irreps), cats)
-    push!(tree_irreps, s)
-  end
+  tree_irreps = [
+    recover_key(eltype(category_irreps), it) for it in Iterators.flatten((
+      Iterators.product(ntuple(c -> category_trees_irreps[c][2], n_cat)...),
+    ),)
+  ]
 
   return trees, tree_irreps
 end
