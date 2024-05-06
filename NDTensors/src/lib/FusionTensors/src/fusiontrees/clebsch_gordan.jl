@@ -4,28 +4,15 @@
 
 using WignerSymbols: clebschgordan
 
-# TBD how to deal with fusion ring inner degeneracies
-# always return a rank-4 tensor?
-# TBD move this function into Sectors?
-function clebsch_gordan_tensor(c1::C, c2::C, c3::C) where {C<:Sectors.AbstractCategory}
-  return clebsch_gordan_tensor(Sectors.SymmetryStyle(c1), c1, c2, c3)
-end
-
-function clebsch_gordan_tensor(s1::C, s2::C, s3::C) where {C<:Sectors.CategoryProduct}
-  c1 = Tuple(Sectors.categories(s1))
-  c2 = Tuple(Sectors.categories(s2))
-  c3 = Tuple(Sectors.categories(s3))
-  cats_cg = clebsch_gordan_tensor.(c1, c2, c3)
-  cgt = reduce(_tensor_kron, cats_cg)
-  return cgt
-end
-
-function clebsch_gordan_tensor(::Sectors.AbelianGroup, s1, s2, s3)
-  return s1 ⊗ s2 == s3 ? ones((1, 1, 1)) : zeros((1, 1, 1))
-end
+clebsch_gordan_tensor(s1, s2, s3) = clebsch_gordan_tensor(s1, s2, s3, false, false, 1)
 
 function clebsch_gordan_tensor(
-  ::Sectors.NonAbelianGroup, s1::Sectors.SU{2}, s2::Sectors.SU{2}, s3::Sectors.SU{2}
+  s1::Sectors.SU{2},
+  s2::Sectors.SU{2},
+  s3::Sectors.SU{2},
+  isdual1::Bool,
+  isdual2::Bool,
+  ::Int,
 )
   d1 = Sectors.quantum_dimension(s1)
   d2 = Sectors.quantum_dimension(s2)
@@ -44,13 +31,30 @@ function clebsch_gordan_tensor(
       end
     end
   end
+  if isdual1
+    diag1 = reshape((-1) .^ collect(((d1 % 2) + 1):(d1 % 2 + d1)), (d1, 1, 1))
+    cgtensor = diag1 .* reverse(cgtensor; dims=1)
+  end
+  if isdual2
+    diag2 = reshape((-1) .^ collect(((d2 % 2) + 1):(d2 % 2 + d2)), (1, d2, 1))
+    cgtensor = diag2 .* reverse(cgtensor; dims=2)
+  end
+
   return cgtensor
 end
 
-# LinearAlgebra.kron does not allow input with ndims=3
-function _tensor_kron(a, b)
-  sha = ntuple(i -> Bool(i % 2) ? size(a, i ÷ 2 + 1) : 1, 2 * ndims(a))
-  shb = ntuple(i -> Bool(i % 2) ? 1 : size(b, i ÷ 2), 2 * ndims(b))
-  c = reshape(a, sha) .* reshape(b, shb)
-  return reshape(c, size(a) .* size(b))
+function clebsch_gordan_tensor(
+  s1::Sectors.SU{3},
+  s2::Sectors.SU{3},
+  s3::Sectors.SU{3},
+  isdual1::Bool,
+  isdual2::Bool,
+  inner_degen_index::Int,
+)
+  d1 = Sectors.quantum_dimension(s1)
+  d2 = Sectors.quantum_dimension(s2)
+  d3 = Sectors.quantum_dimension(s3)
+  cgtensor = zeros(d1, d2, d3)
+  # dummy
+  return cgtensor
 end
