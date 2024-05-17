@@ -14,7 +14,7 @@ function _tensor_kron(a, b)
   return reshape(c, size(a) .* size(b))
 end
 
-function fusion_trees(::Tuple{}, idual::Tuple{})
+function fusion_trees(::Tuple{}, ::Tuple{})
   return [ones((1,))], [Sectors.sector(())]
 end
 
@@ -65,7 +65,7 @@ end
 
 # fusion tree for an Abelian group is trivial
 # it does not depend on dual
-function fusion_trees(::Sectors.AbelianGroup, irreps_arrow, ::Any)
+function fusion_trees(::Sectors.AbelianGroup, irreps_arrow, ::Tuple)
   irrep_prod = reduce(⊗, irreps_arrow)
   return [ones(ntuple(_ -> 1, length(irreps_arrow) + 1))], [irrep_prod]
 end

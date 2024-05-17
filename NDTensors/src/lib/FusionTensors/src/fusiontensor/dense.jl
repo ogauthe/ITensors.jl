@@ -4,10 +4,9 @@ function decompose_axis(leg::AbstractUnitRange)
   irrep_configuration = GradedAxes.blocklabels(leg)
   sector_dims = Sectors.quantum_dimension.(irrep_configuration)
   sector_degens = convert.(Int, (BlockArrays.blocklengths(leg)))
-  isdual = typeof(leg) <: GradedAxes.UnitRangeDual
   block_boundaries = [0, cumsum(sector_degens .* sector_dims)...]
   shifts = range.(block_boundaries[begin:(end - 1)] .+ 1, block_boundaries[2:end])
-  return irrep_configuration, sector_dims, sector_degens, isdual, shifts
+  return irrep_configuration, sector_dims, sector_degens, shifts
 end
 
 function transpose_tuple_ntuple(t::Tuple{Vararg{<:NTuple{N,Any}}}) where {N}
@@ -77,14 +76,14 @@ function FusionTensor(codomain_legs::Tuple, domain_legs::Tuple, dense::AbstractA
   end
 
   # split axes into irrep configuration blocks
-  codomain_irrep_configurations, codomain_dims, codomain_degens, codomain_isdual, codomain_shifts = decompose_axes(
+  codomain_irrep_configurations, codomain_dims, codomain_degens, codomain_shifts = decompose_axes(
     codomain_legs
   )
-  domain_irrep_configurations, domain_dims, domain_degens, domain_isdual, domain_shifts = decompose_axes(
+  domain_irrep_configurations, domain_dims, domain_degens, domain_shifts = decompose_axes(
     domain_legs
   )
-
-  codomain_isdual = .!codomain_isdual  # TBD: dual
+  codomain_isdual = .!GradedAxes.isdual.(codomain_legs)  # TBD: dual
+  domain_isdual = GradedAxes.isdual.(domain_legs)
 
   # precompute codomain fusion trees and sort them by irrep
   # TODO anyway to change Vector{Vector} into Matrix{Vector{Array}}?
@@ -254,13 +253,14 @@ function Base.Array(ft::FusionTensor)
   existing_sectors_dims = Sectors.quantum_dimension.(existing_sectors)
 
   # split axes into irrep configuration blocks
-  codomain_irrep_configurations, codomain_dims, codomain_degens, codomain_isdual, codomain_shifts = decompose_axes(
+  codomain_irrep_configurations, codomain_dims, codomain_degens, codomain_shifts = decompose_axes(
     codomain_legs
   )
-  domain_irrep_configurations, domain_dims, domain_degens, domain_isdual, domain_shifts = decompose_axes(
+  domain_irrep_configurations, domain_dims, domain_degens, domain_shifts = decompose_axes(
     domain_legs
   )
-  codomain_isdual = .!codomain_isdual  # TBD
+  codomain_isdual = .!GradedAxes.isdual.(codomain_legs)  # TBD dual
+  domain_isdual = GradedAxes.isdual.(domain_legs)
 
   # precompute codomain fusion trees and sort them by irrep
   # TODO anyway to change Vector{Vector} into Matrix{Vector{Array}}?
