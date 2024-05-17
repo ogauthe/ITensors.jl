@@ -66,11 +66,14 @@ matrix_column_axis(ft::FusionTensor) = axes(data_matrix(ft))[2]
 function initialize_data_matrix(
   data_type::Type{<:Number}, codomain_legs::Tuple, domain_legs::Tuple
 )
-  # TODO anyway to avoid type hint?
+  # fusion trees have Float64 eltype: need compatible type
+  promoted = promote_type(data_type, Float64)
+
+  # TODO anyway to avoid type hint below?
   init = initialize_trivial_axis(codomain_legs::Tuple, domain_legs::Tuple)
   mat_row_axis::typeof(init) = reduce(GradedAxes.fusion_product, codomain_legs; init=init) # TODO take dual
   mat_col_axis::typeof(init) = reduce(GradedAxes.fusion_product, domain_legs; init=init)
-  return BlockSparseArrays.BlockSparseArray{data_type}(mat_row_axis, mat_col_axis)
+  return BlockSparseArrays.BlockSparseArray{promoted}(mat_row_axis, mat_col_axis)
 end
 function initialize_trivial_axis(codomain_legs::Tuple, ::Tuple)
   return Sectors.trivial(first(codomain_legs))

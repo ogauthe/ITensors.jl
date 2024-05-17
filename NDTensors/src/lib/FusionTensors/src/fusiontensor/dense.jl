@@ -62,11 +62,16 @@ function FusionTensor(codomain_legs::Tuple, domain_legs::Tuple, dense::AbstractA
 
   # initialize data_matrix
   data_mat = initialize_data_matrix(eltype(dense), codomain_legs, domain_legs)
+
+  # find sectors
+  # TODO ADAPT ONCE ROW_AXIS IS DUAL
   row_sectors, col_sectors = GradedAxes.blocklabels.(axes(data_mat))
-  row_shared_indices = findall(in(col_sectors), row_sectors)
-  allowed_sectors = row_sectors[row_shared_indices]
+  dual_row_sectors = GradedAxes.dual.(row_sectors)
+  row_shared_indices = findall(in(col_sectors), dual_row_sectors)
+  allowed_sectors = dual_row_sectors[row_shared_indices]
   allowed_sectors_dims = Sectors.quantum_dimension.(allowed_sectors)
-  col_shared_indices = findall(in(allowed_sectors), col_sectors)
+  # col_shared indices may have non-trivial order. TODO check with dual row
+  col_shared_indices::Vector{Int} = findfirst.(.==(allowed_sectors), Ref(col_sectors))
   n_sectors = length(allowed_sectors)
 
   existing_blocks = BlockArrays.Block.(row_shared_indices, col_shared_indices)
@@ -92,7 +97,7 @@ function FusionTensor(codomain_legs::Tuple, domain_legs::Tuple, dense::AbstractA
   # predict shifts in data_matrix
   block_shifts_row = zeros(Int, n_sectors, 1)
   contribute_row_config = Vector{NTuple{length(codomain_legs),Int}}()
-  init = initialize_trivial_axis(codomain_legs, domain_legs)
+  init = Sectors.trivial(eltype(col_sectors))
   for iter_co in Iterators.product(eachindex.(codomain_irrep_configurations)...)
     irreps_config = getindex.(codomain_irrep_configurations, iter_co)
     rep = reduce(GradedAxes.fusion_product, irreps_config; init=init)
@@ -325,11 +330,11 @@ function Base.Array(ft::FusionTensor)
         codomain_sector_dims = getindex.(codomain_dims, iter_co)
         codomain_sector_dims_prod = prod(codomain_sector_dims)
 
-        dense_shape = (
+        dense_shape_mat = (
           codomain_sector_size * domain_sector_size * domain_sector_dims_prod,
           codomain_sector_dims_prod,
         )
-        dense_block = zeros(eltype(ft), dense_shape)
+        dense_block = zeros(eltype(ft), dense_shape_mat)
 
         # loop for each symmetry sector inside this configuration
         for i_sec in 1:n_sectors  # some sectors may be empty but at least one is allowed
@@ -380,8 +385,14 @@ function Base.Array(ft::FusionTensor)
           domain_sector_dims...,
           codomain_sector_dims...,
         )
-        dense[coslices..., doslices...] = permutedims(
-          reshape(dense_block, degen_dim_shape), perm_dense_data
+        dense_shape = (
+          (codomain_sector_degens .* codomain_sector_dims)...,
+          (domain_sector_degens .* domain_sector_dims)...,
+        )
+        @show (coslices..., doslices...)
+        @show degen_dim_shape
+        dense[coslices..., doslices...] = reshape(
+          permutedims(reshape(dense_block, degen_dim_shape), perm_dense_data), dense_shape
         )
       end
       block_shifts_column += domain_sector_size * length.(pruned_domain_trees)
