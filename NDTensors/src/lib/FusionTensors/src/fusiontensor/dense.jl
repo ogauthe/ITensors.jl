@@ -3,10 +3,10 @@
 function decompose_axis(leg::AbstractUnitRange)
   irrep_configuration = GradedAxes.blocklabels(leg)
   sector_dims = Sectors.quantum_dimension.(irrep_configuration)
-  sector_degens = convert.(Int, (BlockArrays.blocklengths(leg)))
+  sector_degens = GradedAxes.unlabel.(BlockArrays.blocklengths(leg))
   block_boundaries = [0, cumsum(sector_degens .* sector_dims)...]
   shifts = range.(block_boundaries[begin:(end - 1)] .+ 1, block_boundaries[2:end])
-  return irrep_configuration, sector_dims, sector_degens, shifts
+  return irrep_configuration, sector_degens, shifts
 end
 
 function transpose_tuple_ntuple(t::Tuple{Vararg{<:NTuple{N,Any}}}) where {N}
@@ -14,6 +14,74 @@ function transpose_tuple_ntuple(t::Tuple{Vararg{<:NTuple{N,Any}}}) where {N}
 end
 
 decompose_axes(legs) = transpose_tuple_ntuple(decompose_axis.(legs))
+
+function shape_split_degen_dims(legs, it)
+  config_sectors = getindex.(GradedAxes.blocklabels.(legs), it)
+  config_degens = GradedAxes.unlabel.(getindex.(GradedAxes.blocklengths.(legs), it))
+  config_dims = Sectors.quantum_dimension.(config_sectors)
+  shape = ntuple(
+    i -> Bool(i % 2) ? config_degens[fld1(i, 2)] : config_dims[fld1(i, 2)], 2 * length(legs)
+  )
+  return shape
+end
+
+function prune_fusion_trees(
+  irreps_config::NTuple{N,C}, irreps_isdual::NTuple{N,Bool}, target_sectors::Vector{C}
+) where {N,C<:Sectors.AbstractCategory}
+  # A fusion tree fuses k irreps with quantum dimensions dim1, ..., dimk onto one
+  # irrep P with quantum dimension dimP. There may be several path that produce
+  # this irrep in the fusion ring and each of them correspond to a single "simple" fusion
+  # tree with one degree of freedom.
+  # We take the ndofP trees that fuse on irrep P and merge all of these into one thick
+  # fusion tree containing all degrees of freedom for irrep P.
+  # The result is a k+2 dimension fusion tree with size (dim1, dim2, ..., dimk, dimP, nof_P)
+  #
+  #
+  #      dimP  ndofP
+  #         \  /
+  #          \/
+  #          /
+  #         /
+  #        /\
+  #       /  \
+  #      /\   \
+  #     /  \   \
+  #   dim1 dim1 dim3
+  #
+  # It is convenient to merge together the dimension legs to yield a 3-dim tensor
+  #
+  #  dim1*dim2*dim3-------------dimP
+  #                     |
+  #                   ndofP
+
+  @assert issorted(target_sectors)
+  target_sectors_dims = Sectors.quantum_dimension.(target_sectors)
+  irreps_dims_prod = prod(Sectors.quantum_dimension.(irreps_config))
+  n_sectors = length(target_sectors)
+  rep = reduce(GradedAxes.fusion_product, irreps_config; init=Sectors.trivial(C))
+  trees, tree_irreps = fusion_trees(irreps_config, irreps_isdual)
+  trees_sector = [
+    zeros((irreps_dims_prod, target_sectors_dims[i_sec], 0)) for i_sec in 1:n_sectors
+  ]
+  i_sec, j = 1, 1
+  while i_sec <= n_sectors && j <= lastindex(tree_irreps)
+    if target_sectors[i_sec] < tree_irreps[j]
+      i_sec += 1
+    elseif tree_irreps[j] < target_sectors[i_sec]
+      j += 1
+    else
+      shape_3legs = (
+        irreps_dims_prod,
+        target_sectors_dims[i_sec],
+        GradedAxes.unlabel.(GradedAxes.blocklengths(rep)[j]),
+      )
+      trees_sector[i_sec] = reshape(trees[j], shape_3legs)
+      i_sec += 1
+      j += 1
+    end
+  end
+  return trees_sector
+end
 
 # no codomain leg
 function FusionTensor(::Tuple{}, domain_legs::Tuple, dense::AbstractArray)
@@ -45,13 +113,14 @@ function FusionTensor(::Tuple{}, ::Tuple{}, dense::AbstractArray)
 end
 
 # constructor from dense array
-# TBD add @inbounds?
 # TBD dual in codomain?
-# TBD inline internal degen in fusion_tree?
 function FusionTensor(codomain_legs::Tuple, domain_legs::Tuple, dense::AbstractArray)
 
   # compile time check
-  if length(codomain_legs) + length(domain_legs) != ndims(dense)
+  N_CO = length(codomain_legs)
+  N_DO = length(domain_legs)
+  N = ndims(dense)
+  if N_CO + N_DO != N
     throw(DomainError("legs are incompatible with array ndims"))
   end
 
@@ -67,11 +136,11 @@ function FusionTensor(codomain_legs::Tuple, domain_legs::Tuple, dense::AbstractA
   # TODO ADAPT ONCE ROW_AXIS IS DUAL
   row_sectors, col_sectors = GradedAxes.blocklabels.(axes(data_mat))
   dual_row_sectors = GradedAxes.dual.(row_sectors)
-  row_shared_indices = findall(in(col_sectors), dual_row_sectors)
-  allowed_sectors = dual_row_sectors[row_shared_indices]
+  col_shared_indices = findall(in(dual_row_sectors), col_sectors)
+  allowed_sectors = col_sectors[col_shared_indices]
   allowed_sectors_dims = Sectors.quantum_dimension.(allowed_sectors)
   # col_shared indices may have non-trivial order. TODO check with dual row
-  col_shared_indices::Vector{Int} = findfirst.(.==(allowed_sectors), Ref(col_sectors))
+  row_shared_indices::Vector{Int} = findfirst.(.==(allowed_sectors), Ref(dual_row_sectors))
   n_sectors = length(allowed_sectors)
 
   existing_blocks = BlockArrays.Block.(row_shared_indices, col_shared_indices)
@@ -81,124 +150,159 @@ function FusionTensor(codomain_legs::Tuple, domain_legs::Tuple, dense::AbstractA
   end
 
   # split axes into irrep configuration blocks
-  codomain_irrep_configurations, codomain_dims, codomain_degens, codomain_shifts = decompose_axes(
-    codomain_legs
-  )
-  domain_irrep_configurations, domain_dims, domain_degens, domain_shifts = decompose_axes(
-    domain_legs
-  )
+  codomain_irrep_configurations, _, codomain_shifts = decompose_axes(codomain_legs)
+  domain_irrep_configurations, domain_degens, domain_shifts = decompose_axes(domain_legs)
   codomain_isdual = .!GradedAxes.isdual.(codomain_legs)  # TBD: dual
   domain_isdual = GradedAxes.isdual.(domain_legs)
 
   # precompute codomain fusion trees and sort them by irrep
-  # TODO anyway to change Vector{Vector} into Matrix{Vector{Array}}?
-  #                      config  sector  ndof  tree
-  codomain_fusion_trees = Vector{Vector{Vector{Vector{Float64}}}}()
+  codomain_trees = Matrix{Array{Float64,3}}(undef, (n_sectors, 0))
   # predict shifts in data_matrix
-  block_shifts_row = zeros(Int, n_sectors, 1)
-  contribute_row_config = Vector{NTuple{length(codomain_legs),Int}}()
+  allowed_codomain_configs = Vector{NTuple{N_CO,Int}}()
   init = Sectors.trivial(eltype(col_sectors))
   for iter_co in Iterators.product(eachindex.(codomain_irrep_configurations)...)
     irreps_config = getindex.(codomain_irrep_configurations, iter_co)
     rep = reduce(GradedAxes.fusion_product, irreps_config; init=init)
-    if !isempty(intersect(allowed_sectors, GradedAxes.blocklabels(rep)))
-      trees, irreps = fusion_trees(irreps_config, codomain_isdual)
-      kept_trees = [vec.(trees[findall(==(sec), irreps)]) for sec in allowed_sectors]
-      internal_degens = length.(kept_trees)
-      push!(contribute_row_config, iter_co)
-      push!(codomain_fusion_trees, kept_trees)
-      external_codomain_degen = getindex.(codomain_degens, iter_co)
-      config_shift =
-        block_shifts_row[:, end] + prod(external_codomain_degen) * internal_degens
-      block_shifts_row = hcat(block_shifts_row, config_shift)
+    if !isempty(intersect(GradedAxes.blocklabels(rep), allowed_sectors))
+      trees_config_sector = prune_fusion_trees(
+        irreps_config, codomain_isdual, allowed_sectors
+      )
+      codomain_trees = hcat(codomain_trees, trees_config_sector)
+      push!(allowed_codomain_configs, iter_co)
     end
   end
 
   # prepare contraction
-  perm_dense_data = (
-    ntuple(i -> 2 * i - 1, ndims(dense))..., ntuple(i -> 2 * i, ndims(dense))...
-  )
-  block_shifts_column = zeros(Int, n_sectors)
+  perm_dense_data = (ntuple(i -> 2 * i - 1, N)..., ntuple(i -> 2 * i, N)...)
 
   # loop for each domain irrep configuration
+  block_shifts_columns = zeros(Int, n_sectors)
   for iter_do in Iterators.product(eachindex.(domain_irrep_configurations)...)
-    irreps_config = getindex.(domain_irrep_configurations, iter_do)
-    rep = reduce(GradedAxes.fusion_product, irreps_config; init=init)
-    if !isempty(intersect(allowed_sectors, GradedAxes.blocklabels(rep)))
-      (domain_trees, domain_irreps) = fusion_trees(irreps_config, domain_isdual)
-      domain_sector_degens = getindex.(domain_degens, iter_do)
-      domain_sector_size = prod(domain_sector_degens)
-      domain_sector_dims = getindex.(domain_dims, iter_do)
-      domain_sector_dims_prod = prod(domain_sector_dims)
-      doslices = getindex.(domain_shifts, iter_do)
-      do_degen_dims = transpose_tuple_ntuple((domain_sector_degens, domain_sector_dims))
-      do_shape = ntuple(i -> do_degen_dims[fld1(i, 2)][mod1(i, 2)], 2 * length(domain_legs))
+    domain_config_irreps = getindex.(domain_irrep_configurations, iter_do)
+    domain_fused_rep = reduce(GradedAxes.fusion_product, domain_config_irreps; init=init)
+    domain_config_fused_irreps = GradedAxes.blocklabels(domain_fused_rep)
 
-      # keep only irreps that contribute
-      pruned_domain_trees = [Vector{Matrix{Float64}}() for _ in 1:n_sectors]
-      for i_sec in 1:n_sectors
-        shape_dotree = (domain_sector_dims_prod, allowed_sectors_dims[i_sec])
-        domain_sector_indices = findall(==(allowed_sectors[i_sec]), domain_irreps)
-        pruned_domain_trees[i_sec] =
-          (t -> reshape(t, shape_dotree)).(domain_trees[domain_sector_indices])
-      end
+    if !isempty(intersect(allowed_sectors, domain_config_fused_irreps))
+      domain_trees_config = prune_fusion_trees(
+        domain_config_irreps, domain_isdual, allowed_sectors
+      )
+      doslices = getindex.(domain_shifts, iter_do)
 
       # loop for each codomain irrep configuration
-      for (i_co, iter_co) in enumerate(contribute_row_config)
-        codomain_trees = codomain_fusion_trees[i_co]
-        codomain_sector_degens = getindex.(codomain_degens, iter_co)
-        codomain_sector_size = prod(codomain_sector_degens)
-        codomain_sector_dims = getindex.(codomain_dims, iter_co)
-        codomain_sector_dims_prod = prod(codomain_sector_dims)
-        coslices = getindex.(codomain_shifts, iter_co)
-        co_degen_dims = transpose_tuple_ntuple((
-          codomain_sector_degens, codomain_sector_dims
-        ))
-        co_shape = ntuple(
-          i -> co_degen_dims[fld1(i, 2)][mod1(i, 2)], 2 * length(codomain_legs)
+      block_shifts_rows = zeros(Int, n_sectors)
+      for (i_co, iter_co) in enumerate(allowed_codomain_configs)
+        codomain_config_irreps = getindex.(codomain_irrep_configurations, iter_co)
+        codomain_fused_rep = reduce(
+          GradedAxes.fusion_product, codomain_config_irreps; init=init
         )
-        dense_shape = (co_shape..., do_shape...)
-        sector_size = codomain_sector_size * domain_sector_size
-        block_shape = (sector_size * codomain_sector_dims_prod, domain_sector_dims_prod)
-        sym_shape = (codomain_sector_size, domain_sector_size)
-        @show (coslices, doslices)
-        dense_data_irrep_config = reshape(
-          (@view dense[coslices..., doslices...]), dense_shape
+        codomain_config_fused_irreps = GradedAxes.blocklabels(codomain_fused_rep)
+        allowed_sectors_config = intersect(
+          domain_config_fused_irreps, codomain_config_fused_irreps
         )
-        dense_block = reshape(
-          permutedims(dense_data_irrep_config, perm_dense_data), block_shape
-        )
+        if !isempty(allowed_sectors_config)
+          coslices = getindex.(codomain_shifts, iter_co)
 
-        # loop for each symmetry sector inside this configuration
-        for i_sec in 1:n_sectors  # some sectors may be empty but at least one is allowed
-          block = @view data_mat[existing_blocks[i_sec]]  # TBD @view needed?
+          # start from a dense tensor with N=4 axes divided into N_CO=2 ndims_codomain
+          # and N_DO=2 ndims_domain. It may have several irrep configurations, select one
+          # of them. The associated dense block has shape
+          #
+          #        ----------------------dense_block------------------
+          #        |                  |                |             |
+          #       degen1*dim1    degen2*dim2      degen3*dim3     degen4*dim4
+          #
+          dense_block = @view dense[coslices..., doslices...]
 
-          # write shapes explicitly for code clarity, could use :
-          sec_dim = allowed_sectors_dims[i_sec]
-          shape_1tree = (sector_size, codomain_sector_dims_prod * sec_dim)
-          c1 = block_shifts_column[i_sec]
+          # each leg of this this dense block can now be opened to form a 2N-dim tensor.
+          # note that this 2N-dim form is only defined at the level of the irrep configuration,
+          # not for a larger dense block.
+          #
+          #        -------------dense_block_split_degen_dim------------
+          #        |                 |                |               |
+          #       / \               / \              / \             / \
+          #      /   \             /   \            /   \           /   \
+          #  degen1  dim1      degen2  dim2     degen3  dim3    degen4  dim4
+          #
+          dense_block_split_shape = (
+            shape_split_degen_dims(codomain_legs, iter_co)...,
+            shape_split_degen_dims(domain_legs, iter_do)...,
+          )
+          dense_block_split_degen_dim = reshape(dense_block, dense_block_split_shape)
 
-          # loop for each domain fusion tree    TBD inline in fusion tree?
-          for dotree in pruned_domain_trees[i_sec]   # idicb
-            data_1tree_mat = dense_block * dotree
-            data_1tree = reshape(data_1tree_mat, shape_1tree)
+          # Now we permute the axes to group together degenearacies on one side and irrep
+          # dimensions on the other side. This is the bottleneck.
+          #
+          #        ------------------dense_block_permuted-----------------
+          #        |        |       |       |       |      |      |      |
+          #       degen1  degen2  degen3  degen4   dim1   dim2   dim3   dim4
+          #
+          dense_block_permuted = permutedims(dense_block_split_degen_dim, perm_dense_data)
 
-            c2 = c1 + domain_sector_size
-            r1 = block_shifts_row[i_sec, i_co]
+          # Finally, it is convenient to merge together legs corresponding to codomain or
+          # to codomain and produce a rank-4 tensor
+          #
+          #        -----------------dense_block_config--------------
+          #        |                 |               |             |
+          #       degen1*degen2   degen3*degen4    dim1*dim2    dim3*dim4
+          #
+          permuted_dense_shape = size(dense_block_permuted)
+          codomain_config_size = prod(permuted_dense_shape[begin:N_CO])
+          domain_config_size = prod(permuted_dense_shape[(N_CO + 1):N])
+          shape_config = (
+            codomain_config_size,
+            domain_config_size,
+            prod(permuted_dense_shape[(N + 1):(N + N_CO)]),
+            prod(permuted_dense_shape[(N + N_CO + 1):end]),
+          )
+          dense_block_config = reshape(dense_block_permuted, shape_config)
+          # in this form, we can apply fusion trees on both the domain and the codomain.
 
-            # loop for each codomain fusion tree
-            for cotree in codomain_trees[i_sec]  # idirb
-              sym_data = data_1tree * cotree
-              r2 = r1 + codomain_sector_size
-              # fill data_matrix
-              block[(r1 + 1):r2, (c1 + 1):c2] = reshape(sym_data, sym_shape) / sec_dim
-              r1 = r2
-            end
-            c1 = c2
+          # loop for each symmetry sector inside this configuration
+          for sec in allowed_sectors_config
+            i_sec::Int = findfirst(==(sec), allowed_sectors)  # cannot be nothing
+            dim_sec = allowed_sectors_dims[i_sec]
+            ndof_config_sector_codomain = size(codomain_trees[i_sec, i_co], 3)
+            ndof_config_sector_domain = size(domain_trees_config[i_sec], 3)
+
+            # contract domain tree
+            #             -------------------------data_1tree----------------------
+            #             |               |              |           |            |
+            #       degen1*degen2   degen3*degen4    dim1*dim2    sec_dim    ndofP_domain
+            #
+            data_1tree::Array{eltype(data_mat),5} = TensorAlgebra.contract(
+              (1, 2, 3, 5, 6),
+              dense_block_config,
+              (1, 2, 3, 4),
+              domain_trees_config[i_sec],
+              (4, 5, 6),
+            )
+
+            # contract codomain tree
+            #             -----------------------sym_data-------------------
+            #             |              |                  |              |
+            #       degen1*degen2   ndofP_codomain    degen3*degen4   ndofP_domain
+            #
+            sym_data::Array{eltype(data_mat),4} = TensorAlgebra.contract(
+              (1, 7, 2, 6),   # HERE WE FIX INNER STRUCTURE FOR MATRIX BLOCKS
+              data_1tree,
+              (1, 2, 3, 5, 6),
+              codomain_trees[i_sec, i_co],
+              (3, 5, 7),
+            )
+
+            # reshape sym_data as a matrix and write matrix block
+            r1 = block_shifts_rows[i_sec]
+            r2 = r1 + codomain_config_size * ndof_config_sector_codomain
+            c1 = block_shifts_columns[i_sec]
+            c2 = c1 + domain_config_size * ndof_config_sector_domain
+            data_mat[existing_blocks[i_sec]][(r1 + 1):r2, (c1 + 1):c2] =
+              reshape(sym_data, (r2 - r1, c2 - c1)) / dim_sec
+            block_shifts_rows[i_sec] = r2
           end
         end
       end
-      block_shifts_column += domain_sector_size * length.(pruned_domain_trees)
+
+      domain_config_size = prod(getindex.(domain_degens, iter_do))
+      block_shifts_columns += domain_config_size * size.(domain_trees_config, 3)
     end
   end
 
@@ -254,148 +358,170 @@ function Base.Array(ft::FusionTensor)
   existing_blocks = BlockSparseArrays.block_stored_indices(data_matrix(ft))
   n_sectors = length(existing_blocks)
   existing_sectors = [col_sectors[it[2]] for it in eachindex(existing_blocks)]   # subset of allowed_sectors
-  matrix_blocks = [@view data_matrix(ft)[it] for it in existing_blocks]  # TBD @view?
-  existing_sectors_dims = Sectors.quantum_dimension.(existing_sectors)
+  matrix_blocks = [data_matrix(ft)[it] for it in existing_blocks]
 
   # split axes into irrep configuration blocks
-  codomain_irrep_configurations, codomain_dims, codomain_degens, codomain_shifts = decompose_axes(
+  codomain_irrep_configurations, codomain_degens, codomain_shifts = decompose_axes(
     codomain_legs
   )
-  domain_irrep_configurations, domain_dims, domain_degens, domain_shifts = decompose_axes(
-    domain_legs
-  )
+  domain_irrep_configurations, domain_degens, domain_shifts = decompose_axes(domain_legs)
   codomain_isdual = .!GradedAxes.isdual.(codomain_legs)  # TBD dual
   domain_isdual = GradedAxes.isdual.(domain_legs)
 
   # precompute codomain fusion trees and sort them by irrep
-  # TODO anyway to change Vector{Vector} into Matrix{Vector{Array}}?
-  #                      config  sector  ndof  tree
-  codomain_fusion_trees = Vector{Vector{Vector{Matrix{Float64}}}}()
+  codomain_trees = Matrix{Array{Float64,3}}(undef, (n_sectors, 0))
   # predict shifts in data_matrix
-  contribute_row_config = Vector{NTuple{length(codomain_legs),Int}}()
+  existing_codomain_configs = Vector{NTuple{ndims_codomain(ft),Int}}()
   init = Sectors.trivial(eltype(col_sectors))
-
   for iter_co in Iterators.product(eachindex.(codomain_irrep_configurations)...)
     irreps_config = getindex.(codomain_irrep_configurations, iter_co)
     rep = reduce(GradedAxes.fusion_product, irreps_config; init=init)
-    if !isempty(intersect(existing_sectors, GradedAxes.blocklabels(rep)))
-      trees, irreps = fusion_trees(irreps_config, codomain_isdual)
-      codomain_dims_prod = prod(getindex.(codomain_dims, iter_co))
-      kept_trees = [
-        reshape.(
-          trees[findall(==(existing_sectors[i_sec]), irreps)],
-          Ref((codomain_dims_prod, existing_sectors_dims[i_sec])),
-        ) for i_sec in 1:n_sectors
-      ]
-      push!(contribute_row_config, iter_co)
-      push!(codomain_fusion_trees, kept_trees)
+    if !isempty(intersect(GradedAxes.blocklabels(rep), existing_sectors))
+      trees_config_sector = prune_fusion_trees(
+        irreps_config, codomain_isdual, existing_sectors
+      )
+      codomain_trees = hcat(codomain_trees, trees_config_sector)
+      push!(existing_codomain_configs, iter_co)
     end
   end
 
   # prepare contraction
-  perm_dense_data = ntuple(i -> fld1(i, 2) + (1 - i % 2) * ndims(ft), 2 * ndims(ft))
-  block_shifts_column = zeros(Int, n_sectors)
-
-  # TBD currently optimizes for contraction. Change to optimize for data moves?
+  inverse_perm_dense_data = ntuple(i -> fld1(i, 2) + (1 - i % 2) * ndims(ft), 2 * ndims(ft))
 
   # loop for each domain irrep configuration
+  block_shifts_column = zeros(Int, n_sectors)
   for iter_do in Iterators.product(eachindex.(domain_irrep_configurations)...)
-    irreps_config = getindex.(domain_irrep_configurations, iter_do)
-    rep = reduce(GradedAxes.fusion_product, irreps_config; init=init)
-    if !isempty(intersect(existing_sectors, GradedAxes.blocklabels(rep)))
-      @show iter_do, irreps_config
-      (domain_trees, domain_irreps) = fusion_trees(irreps_config, domain_isdual)
-      domain_sector_degens = getindex.(domain_degens, iter_do)
-      domain_sector_size = prod(domain_sector_degens)
-      domain_sector_dims = getindex.(domain_dims, iter_do)
-      domain_sector_dims_prod = prod(domain_sector_dims)
+    domain_config_irreps = getindex.(domain_irrep_configurations, iter_do)
+    domain_fused_rep = reduce(GradedAxes.fusion_product, domain_config_irreps; init=init)
+    domain_config_fused_irreps = GradedAxes.blocklabels(domain_fused_rep)
+
+    if !isempty(intersect(existing_sectors, domain_config_fused_irreps))
+      domain_trees_config = prune_fusion_trees(
+        domain_config_irreps, domain_isdual, existing_sectors
+      )
       doslices = getindex.(domain_shifts, iter_do)
       block_shifts_row = zeros(Int, n_sectors)
-
-      # keep only irreps that contribute
-      pruned_domain_trees = [Vector{Matrix{Float64}}() for _ in 1:n_sectors]
-      for i_sec in 1:n_sectors
-        shape_dotree = (domain_sector_dims_prod, existing_sectors_dims[i_sec])
-        domain_sector_indices = findall(==(existing_sectors[i_sec]), domain_irreps)
-        pruned_domain_trees[i_sec] =
-          (t -> reshape(t, shape_dotree)).(domain_trees[domain_sector_indices])
-      end
+      domain_config_size = prod(getindex.(domain_degens, iter_do))
 
       # loop for each codomain irrep configuration
-      for (i_co, iter_co) in enumerate(contribute_row_config)
-        @show iter_co
-        codomain_trees = codomain_fusion_trees[i_co]
-        codomain_sector_degens = getindex.(codomain_degens, iter_co)
-        codomain_sector_size = prod(codomain_sector_degens)
-        codomain_sector_dims = getindex.(codomain_dims, iter_co)
-        codomain_sector_dims_prod = prod(codomain_sector_dims)
-
-        dense_shape_mat = (
-          codomain_sector_size * domain_sector_size * domain_sector_dims_prod,
-          codomain_sector_dims_prod,
+      for (i_co, iter_co) in enumerate(existing_codomain_configs)
+        codomain_config_irreps = getindex.(codomain_irrep_configurations, iter_co)
+        codomain_fused_rep = reduce(
+          GradedAxes.fusion_product, codomain_config_irreps; init=init
         )
-        dense_block = zeros(eltype(ft), dense_shape_mat)
-
-        # loop for each symmetry sector inside this configuration
-        for i_sec in 1:n_sectors  # some sectors may be empty but at least one is allowed
-          @show i_sec
-
-          sec_dim = existing_sectors_dims[i_sec]
-          c1 = block_shifts_column[i_sec]
-          r1 = block_shifts_row[i_sec]
-          internal_degen_row_sector = length(codomain_trees[i_sec])
-          internal_degen_col_sector = length(pruned_domain_trees[i_sec])
-          r2 = r1 + internal_degen_row_sector * codomain_sector_size
-          c2 = c1 + internal_degen_col_sector * domain_sector_size
-          configuration_block_sector = reshape(
-            matrix_blocks[i_sec][(r1 + 1):r2, (c1 + 1):c2],
-            (
-              internal_degen_row_sector,
-              codomain_sector_size,
-              internal_degen_col_sector,
-              domain_sector_size,
-            ),
+        codomain_config_fused_irreps = GradedAxes.blocklabels(codomain_fused_rep)
+        existing_sectors_config = intersect(
+          domain_config_fused_irreps, codomain_config_fused_irreps, existing_sectors
+        )
+        if !isempty(existing_sectors_config)
+          codomain_config_size = prod(getindex.(codomain_degens, iter_co))
+          dense_shape_mat = (
+            codomain_config_size,
+            domain_config_size,
+            prod(Sectors.quantum_dimension.(codomain_config_irreps)),
+            prod(Sectors.quantum_dimension.(domain_config_irreps)),
           )
 
-          # loop for each domain fusion tree
-          for (idocb, dotree) in enumerate(pruned_domain_trees[i_sec])
-            @show idocb
-            data_1tree = vec(configuration_block_sector[:, :, idocb, :]) .* vec(dotree)'
-            data_1tree_mat = reshape(
-              data_1tree,
-              (
-                internal_degen_row_sector,
-                codomain_sector_size * domain_sector_size * domain_sector_dims_prod,
-                sec_dim,
-              ),
+          #        -----------------dense_block_config--------------
+          #        |                 |               |             |
+          #       degen1*degen2   degen3*degen4    dim1*dim2    dim3*dim4
+          #
+          dense_block_config = zeros(eltype(ft), dense_shape_mat)
+
+          # loop for each symmetry sector inside this configuration
+          for sec in existing_sectors_config
+            i_sec::Int = findfirst(==(sec), existing_sectors)
+
+            c1 = block_shifts_column[i_sec]
+            r1 = block_shifts_row[i_sec]
+            domain_ndof_config_sector = size(domain_trees_config[i_sec], 3)
+            codomain_ndof_config_sector = size(codomain_trees[i_sec, i_co], 3)
+            r2 = r1 + codomain_ndof_config_sector * codomain_config_size
+            c2 = c1 + domain_ndof_config_sector * domain_config_size
+
+            #             -----------------------sym_data-------------------
+            #             |              |                  |              |
+            #       degen1*degen2   ndofP_codomain    degen3*degen4   ndofP_domain
+            #
+            sym_data_shape = (
+              codomain_config_size,
+              codomain_ndof_config_sector,
+              domain_config_size,
+              domain_ndof_config_sector,
+            )
+            sym_data = reshape(
+              (@view matrix_blocks[i_sec][(r1 + 1):r2, (c1 + 1):c2]), sym_data_shape
             )
 
-            # loop for each codomain fusion tree
-            for (idorb, cotree) in enumerate(codomain_trees[i_sec])
-              @show idorb
-              dense_block += data_1tree_mat[idorb, :, :] * cotree'
-            end
+            # contract codomain tree
+            #             -------------------------data_1tree------------------------
+            #             |               |               |              |          |
+            #       degen1*degen2   degen3*degen4    ndofP_domain    dim1*dim2   sec_dim
+            #
+            data_1tree::Array{eltype(ft),5} = TensorAlgebra.contract(
+              (1, 2, 6, 3, 5),
+              sym_data,
+              (1, 7, 2, 6),
+              codomain_trees[i_sec, i_co],
+              (3, 5, 7),
+            )
+
+            #        -----------------dense_block_config--------------
+            #        |                 |               |             |
+            #       degen1*degen2   degen3*degen4    dim1*dim2    dim3*dim4
+            #
+            TensorAlgebra.contract!(
+              dense_block_config,
+              (1, 2, 3, 4),
+              data_1tree,
+              (1, 2, 6, 3, 5),
+              domain_trees_config[i_sec],
+              (4, 5, 6),
+              1.0,
+              1.0,
+            )
+
+            block_shifts_row[i_sec] = r2
           end
-          block_shifts_row[i_sec] = r2
+          coslices = getindex.(codomain_shifts, iter_co)
+          degen_dim_shape = (
+            getindex.(codomain_degens, iter_co)...,
+            getindex.(domain_degens, iter_do)...,
+            Sectors.quantum_dimension.(codomain_config_irreps)...,
+            Sectors.quantum_dimension.(domain_config_irreps)...,
+          )
+
+          #        -------------------dense_block_permuted----------------
+          #        |        |       |       |       |      |      |      |
+          #       degen1  degen2  degen3  degen4   dim1   dim2   dim3   dim4
+          #
+          dense_block_permuted = reshape(dense_block_config, degen_dim_shape)
+
+          #        --------------dense_block_split_degen_dim--------------
+          #        |        |       |       |       |      |      |      |
+          #       degen1  degen2  degen3  degen4   dim1   dim2   dim3   dim4
+          #
+          dense_block_split_degen_dim = permutedims(
+            dense_block_permuted, inverse_perm_dense_data
+          )
+
+          #        ----------------------------------------------------
+          #        |                 |                |               |
+          #       / \               / \              / \             / \
+          #      /   \             /   \            /   \           /   \
+          #  degen1  dim1      degen2  dim2     degen3  dim3    degen4  dim4
+          #
+          dense_block_split_shape = size(dense_block_split_degen_dim)
+          dense_shape = ntuple(
+            i -> dense_block_split_shape[2 * i - 1] * dense_block_split_shape[2 * i],
+            ndims(ft),
+          )
+          dense[coslices..., doslices...] = reshape(
+            dense_block_split_degen_dim, dense_shape
+          )
         end
-        coslices = getindex.(codomain_shifts, iter_co)
-        degen_dim_shape = (
-          codomain_sector_degens...,
-          domain_sector_degens...,
-          domain_sector_dims...,
-          codomain_sector_dims...,
-        )
-        dense_shape = (
-          (codomain_sector_degens .* codomain_sector_dims)...,
-          (domain_sector_degens .* domain_sector_dims)...,
-        )
-        @show (coslices..., doslices...)
-        @show degen_dim_shape
-        dense[coslices..., doslices...] = reshape(
-          permutedims(reshape(dense_block, degen_dim_shape), perm_dense_data), dense_shape
-        )
       end
-      block_shifts_column += domain_sector_size * length.(pruned_domain_trees)
+      block_shifts_column += domain_config_size * size.(domain_trees_config, 3)
     end
   end
 

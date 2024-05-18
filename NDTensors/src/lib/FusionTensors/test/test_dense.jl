@@ -17,7 +17,7 @@ using NDTensors.FusionTensors:
   initialize_data_matrix,
   initialize_trivial_axis
 using NDTensors.GradedAxes: GradedAxes
-using NDTensors.Sectors: SU2, U1, sector, quantum_dimension
+using NDTensors.Sectors: Sectors, SU2, U1, sector, quantum_dimension
 using NDTensors.TensorAlgebra: TensorAlgebra, BlockedPermutation, blockedperm, blocklengths
 
 @testset "Abelian FusionTensor" begin
@@ -62,15 +62,15 @@ using NDTensors.TensorAlgebra: TensorAlgebra, BlockedPermutation, blockedperm, b
   g4 = GradedAxes.gradedrange([U1(0) => 2, U1(2) => 1])
   codomain_legs = GradedAxes.dual.((g1, g2))
   domain_legs = (g3, g4)
-  m = zeros((4, 5, 5, 3))
-  m[1:2, 1:3, 1:4, 1:2] .= 1.0
-  m[3:4, 1:3, 5:5, 1:2] .= 2.0
-  m[1:2, 4:5, 5:5, 1:2] .= 3.0
-  m[3:4, 4:5, 1:4, 3:3] .= 4.0
-  ft = FusionTensor(codomain_legs, domain_legs, m)
+  dense = zeros((4, 5, 5, 3))
+  dense[1:2, 1:3, 1:4, 1:2] .= 1.0
+  dense[3:4, 1:3, 5:5, 1:2] .= 2.0
+  dense[1:2, 4:5, 5:5, 1:2] .= 3.0
+  dense[3:4, 4:5, 1:4, 3:3] .= 4.0
+  ft = FusionTensor(codomain_legs, domain_legs, dense)
   @test size(data_matrix(ft)) == (20, 15)
   @test BlockArrays.blocksize(data_matrix(ft)) == (3, 4)
-  @test Array(ft) ≈ m
+  @test Array(ft) ≈ dense
 end
 
 @testset "SU(2) FusionTensor" begin

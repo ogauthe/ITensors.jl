@@ -67,11 +67,11 @@ end
 # it does not depend on dual
 function fusion_trees(::Sectors.AbelianGroup, irreps_arrow, ::Tuple)
   irrep_prod = reduce(⊗, irreps_arrow)
-  return [ones(ntuple(_ -> 1, length(irreps_arrow) + 1))], [irrep_prod]
+  return [ones(ntuple(_ -> 1, length(irreps_arrow) + 2))], [irrep_prod]
 end
 
 # isdual information is still needed to define CG tensor
-function fusion_trees(::Sectors.NonAbelianGroup, irreps_arrow, isdual)
+function fusion_trees(::Sectors.NonAbelianGroup, irreps_arrow::NTuple{N}, isdual) where {N}
   # for a non-abelian group, a given set of irreps leads to several different sectors
   # with many degrees of freedom
   # 3 possible conventions:        | exemple for fusion tree SU2(1/2)^3
@@ -79,24 +79,32 @@ function fusion_trees(::Sectors.NonAbelianGroup, irreps_arrow, isdual)
   # - 1 tree = 1 output sector     | 2 tree with shapes (2,2,2,2,2), (2,2,2,1,4)
   # - 1 tree = 1 degree of freedom | 3 trees with shapes (2,2,2,2), (2,2,2,2), (2,2,2,4)
 
-  # here choose 1 tree = 1 degree of freedom
-
   tree_matrices = [ones((1, 1))]
-  unsorted_tree_irreps = [Sectors.trivial(eltype(irreps_arrow))]
+  unmerged_tree_irreps = [Sectors.trivial(eltype(irreps_arrow))]
 
+  # compute trees as 1 tree = 1 degree of freedom
   for (i, irrep) in enumerate(irreps_arrow)
-    tree_matrices, unsorted_tree_irreps = add_cg_layer(
-      tree_matrices, unsorted_tree_irreps, irrep, isdual[i]
+    tree_matrices, unmerged_tree_irreps = add_cg_layer(
+      tree_matrices, unmerged_tree_irreps, irrep, isdual[i]
     )
   end
 
-  sh0 = Sectors.quantum_dimension.(irreps_arrow)
-  so = sortperm(unsorted_tree_irreps; alg=MergeSort)  # impose deterministic sort
-  tree_irreps = Vector{eltype(irreps_arrow)}()
-  trees = Vector{Array{Float64,length(irreps_arrow) + 1}}()
-  for k in so
-    push!(tree_irreps, unsorted_tree_irreps[k])
-    push!(trees, reshape(tree_matrices[k], (sh0..., size(tree_matrices[k], 2))))
+  # merge trees fusing on the same irrep at the very end
+  # simpler + avoids moving data at each step
+  # convention: the trees are not normalized, i.e they do not define isometries but
+  # carry a scaling factor tree' * tree = dim(irrep) * I
+  shape_input = Sectors.quantum_dimension.(irreps_arrow)
+  tree_irreps = sort(unique(unmerged_tree_irreps))
+  trees = Vector{Array{Float64,N + 2}}()
+  for irrep in tree_irreps
+    sector_indices = findall(==(irrep), unmerged_tree_irreps)
+    shape_1tree = (shape_input..., Sectors.quantum_dimension(irrep))
+    shape_thick_tree = (shape_1tree..., length(sector_indices))
+    sector_tree = Array{Float64,N + 2}(undef, shape_thick_tree)
+    for (i, tree) in enumerate(tree_matrices[sector_indices])
+      sector_tree[ntuple(_ -> :, N + 1)..., i] = reshape(tree, shape_1tree)
+    end
+    push!(trees, sector_tree)
   end
   return trees, tree_irreps
 end
