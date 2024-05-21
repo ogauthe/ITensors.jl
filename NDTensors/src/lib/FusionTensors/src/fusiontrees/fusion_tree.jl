@@ -34,7 +34,7 @@ function fusion_trees(
   # compute kronecker product of fusion trees
   # more efficient with iterative construction instead of Iterators.product
   trees = first(last(category_trees_irreps))
-  for c in reverse(1:(n_cat - 1))  # F order loop
+  for c in 1:n_cat  # C order loop
     trees = collect(
       _tensor_kron(t, tc) for t in trees for tc in first(category_trees_irreps[c])
     )
@@ -42,9 +42,9 @@ function fusion_trees(
 
   # recover irreps for each tree
   # do not use previous loop as category type would change at each step
-  tree_irreps = [
-    recover_key(eltype(category_irreps), it) for it in Iterators.flatten((
-      Iterators.product(ntuple(c -> category_trees_irreps[c][2], n_cat)...),
+  tree_irreps = [  # keep sorted irreps with C-order loop
+    recover_key(eltype(category_irreps), reverse(it)) for it in Iterators.flatten((
+      Iterators.product((reverse(ntuple(c -> category_trees_irreps[c][2], n_cat)))...),
     ),)
   ]
 
