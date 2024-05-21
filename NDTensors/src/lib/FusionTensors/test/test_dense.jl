@@ -25,7 +25,7 @@ using NDTensors.TensorAlgebra: TensorAlgebra, BlockedPermutation, blockedperm, b
   g = GradedAxes.gradedrange([U1(0) => 1])
   gb = GradedAxes.dual(g)
   m = ones((1, 1))
-  ft = FusionTensor((gb,), (g,), m)
+  ft = FusionTensor(m, (gb,), (g,))
   @test size(data_matrix(ft)) == (1, 1)
   @test BlockArrays.blocksize(data_matrix(ft)) == (1, 1)
   @test data_matrix(ft)[1, 1] ≈ 1.0
@@ -35,7 +35,7 @@ using NDTensors.TensorAlgebra: TensorAlgebra, BlockedPermutation, blockedperm, b
   g = GradedAxes.gradedrange([U1(1) => 2])
   gb = GradedAxes.dual(g)
   m = ones((2, 2))
-  ft = FusionTensor((gb,), (g,), m)
+  ft = FusionTensor(m, (gb,), (g,))
   @test size(data_matrix(ft)) == (2, 2)
   @test BlockArrays.blocksize(data_matrix(ft)) == (1, 1)
   @test data_matrix(ft)[BlockArrays.Block(1, 1)] ≈ m
@@ -49,7 +49,7 @@ using NDTensors.TensorAlgebra: TensorAlgebra, BlockedPermutation, blockedperm, b
   codomain_legs = GradedAxes.dual.((g1, g2))
   domain_legs = (g3, g4)
   m = convert.(Float64, reshape(collect(1:48), (2, 3, 4, 2)))
-  ft = FusionTensor(codomain_legs, domain_legs, m)
+  ft = FusionTensor(m, codomain_legs, domain_legs)
   @test size(data_matrix(ft)) == (6, 8)
   @test BlockArrays.blocksize(data_matrix(ft)) == (1, 1)
   @test data_matrix(ft)[BlockArrays.Block(1, 1)] ≈ reshape(m, (6, 8))
@@ -67,7 +67,7 @@ using NDTensors.TensorAlgebra: TensorAlgebra, BlockedPermutation, blockedperm, b
   dense[3:4, 1:3, 5:5, 1:2] .= 2.0
   dense[1:2, 4:5, 5:5, 1:2] .= 3.0
   dense[3:4, 4:5, 1:4, 3:3] .= 4.0
-  ft = FusionTensor(codomain_legs, domain_legs, dense)
+  ft = FusionTensor(dense, codomain_legs, domain_legs)
   @test size(data_matrix(ft)) == (20, 15)
   @test BlockArrays.blocksize(data_matrix(ft)) == (3, 4)
   @test Array(ft) ≈ dense
@@ -78,7 +78,7 @@ end
   g = GradedAxes.gradedrange([SU2(0) => 1])
   gb = GradedAxes.dual(g)
   m = ones((1, 1))
-  ft = FusionTensor((gb,), (g,), m)
+  ft = FusionTensor(m, (gb,), (g,))
   @test size(data_matrix(ft)) == (1, 1)
   @test BlockArrays.blocksize(data_matrix(ft)) == (1, 1)
   @test data_matrix(ft)[1, 1] ≈ 1.0
@@ -88,7 +88,7 @@ end
   g2b = GradedAxes.dual(g2)
 
   # spin 1/2 Id
-  ft = FusionTensor((g2b,), (g2,), LinearAlgebra.I((2)))
+  ft = FusionTensor(LinearAlgebra.I((2)), (g2b,), (g2,))
   @test norm(ft) ≈ √2
   @test Array(ft) ≈ LinearAlgebra.I((2))
 
@@ -102,8 +102,8 @@ end
     ],
     (2, 2, 2, 2),
   )
-  codomain_legs, domain_legs, dense = (g2b, g2b), (g2, g2), sds22
-  ft = FusionTensor(codomain_legs, domain_legs, dense)
+  dense, codomain_legs, domain_legs = sds22, (g2b, g2b), (g2, g2)
+  ft = FusionTensor(dense, codomain_legs, domain_legs)
   @test norm(ft) ≈ √3 / 2
   @test Array(ft) ≈ sds22
 
@@ -118,19 +118,19 @@ end
     (2, 2, 2, 2),
   )
   sds22b_domain_legs = (g2, g2b)
-  codomain_legs, domain_legs, dense = (g2, g2b), (g2b, g2), sds22b
-  ftb = FusionTensor(codomain_legs, domain_legs, dense)
+  dense, codomain_legs, domain_legs = sds22b, (g2, g2b), (g2b, g2)
+  ftb = FusionTensor(dense, codomain_legs, domain_legs)
   @test norm(ftb) ≈ √3 / 2
   @test Array(ftb) ≈ sds22b
 
   # no domain axis
-  codomain_legs, domain_legs, dense = (g2b, g2b, g2, g2), (), sds22
-  ft = FusionTensor(codomain_legs, domain_legs, dense)
+  dense, codomain_legs, domain_legs = sds22, (g2b, g2b, g2, g2), ()
+  ft = FusionTensor(dense, codomain_legs, domain_legs)
   @test Array(ft) ≈ sds22
 
   # no codomain axis
-  codomain_legs, domain_legs, dense = (), (g2b, g2b, g2, g2), sds22
-  ft = FusionTensor(codomain_legs, domain_legs, dense)
+  dense, codomain_legs, domain_legs = sds22, (), (g2b, g2b, g2, g2)
+  ft = FusionTensor(dense, codomain_legs, domain_legs)
   @test Array(ft) ≈ sds22
 
   # large identity
@@ -140,7 +140,7 @@ end
   codomain_legs = GradedAxes.dual.(domain_legs)
   d = quantum_dimension(g)
   dense = reshape(LinearAlgebra.I(d^N), ntuple(_ -> d, 2 * N))
-  ft = FusionTensor(codomain_legs, domain_legs, dense)
+  ft = FusionTensor(dense, codomain_legs, domain_legs)
   @test Array(ft) ≈ dense
 end
 
@@ -160,7 +160,7 @@ end
     codomain_legs = (GradedAxes.dual(gd),)
     gD = GradedAxes.gradedrange([sector(SU2(0), U1(1)) => 1, sector(s, U1(0)) => 1])
     domain_legs = (gD, gD, gD, gD)
-    ft = FusionTensor(codomain_legs, domain_legs, tRVB)
+    ft = FusionTensor(tRVB, codomain_legs, domain_legs)
     @test Array(ft) ≈ tRVB
   end
 end

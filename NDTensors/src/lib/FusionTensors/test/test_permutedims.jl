@@ -12,7 +12,7 @@ g4 = GradedAxes.gradedrange([U1(-1) => 1, U1(0) => 1, U1(1) => 1])
 gr = GradedAxes.fusion_product(g1, g2)
 gc = GradedAxes.fusion_product(g3, g4)
 m1 = BlockSparseArray{Float64}(gr, gc)
-ft1 = FusionTensor((g1, g2), (g3, g4), m1)
+ft1 = FusionTensor(m1, (g1, g2), (g3, g4))
 @test isnothing(sanity_check(ft1))
 
 # test permutedims

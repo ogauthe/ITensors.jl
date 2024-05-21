@@ -77,46 +77,45 @@ function prune_fusion_trees(
 end
 
 # no codomain leg
-function FusionTensor(::Tuple{}, domain_legs::Tuple, dense::AbstractArray)
+function FusionTensor(dense::AbstractArray, ::Tuple{}, domain_legs::Tuple)
   # add a dummy axis to compute data_matrix
   codomain_legs = (initialize_trivial_axis((), domain_legs),)
   dense_plus_1 = reshape(dense, (1, size(dense)...))
-  ft_plus1 = FusionTensor(codomain_legs, domain_legs, dense_plus_1)
+  ft_plus1 = FusionTensor(dense_plus_1, codomain_legs, domain_legs)
   data_mat = data_matrix(ft_plus1)
   # remove dummy axis
-  return FusionTensor((), domain_legs, data_mat)
+  return FusionTensor(data_mat, (), domain_legs)
 end
 
 # no domain leg
-function FusionTensor(codomain_legs::Tuple, ::Tuple{}, dense::AbstractArray)
+function FusionTensor(dense::AbstractArray, codomain_legs::Tuple, ::Tuple{})
   # add a dummy axis to compute data_matrix
   domain_legs = (initialize_trivial_axis(codomain_legs, ()),)
   dense_plus_1 = reshape(dense, (size(dense)..., 1))
-  ft_plus1 = FusionTensor(codomain_legs, domain_legs, dense_plus_1)
+  ft_plus1 = FusionTensor(dense_plus_1, codomain_legs, domain_legs)
   data_mat = data_matrix(ft_plus1)
   # remove dummy axis
-  return FusionTensor(codomain_legs, (), data_mat)
+  return FusionTensor(data_mat, codomain_legs, ())
 end
 
 # no leg
-function FusionTensor(::Tuple{}, ::Tuple{}, dense::AbstractArray)
+function FusionTensor(dense::AbstractArray, ::Tuple{}, ::Tuple{})
   data_mat = initialize_data_matrix(eltype(dense), (), ())
   data_mat[1, 1] = dense[1]
-  return FusionTensor((), (), data_mat)
+  return FusionTensor(data_mat, (), ())
 end
 
 # constructor from dense array
-function FusionTensor(codomain_legs::Tuple, domain_legs::Tuple, dense::AbstractArray)
+function FusionTensor(dense::AbstractArray, codomain_legs::Tuple, domain_legs::Tuple)
   bounds = block_boundaries.((codomain_legs..., domain_legs...))
   blockarray = BlockArrays.PseudoBlockArray(dense, bounds...)
-  return FusionTensor(codomain_legs, domain_legs, blockarray)
+  return FusionTensor(blockarray, codomain_legs, domain_legs)
 end
 
 # TBD dual in codomain?
 function FusionTensor(
-  codomain_legs::Tuple, domain_legs::Tuple, blockarray::BlockArrays.AbstractBlockArray
+  blockarray::BlockArrays.AbstractBlockArray, codomain_legs::Tuple, domain_legs::Tuple
 )
-
   # compile time check
   N_CO = length(codomain_legs)
   N_DO = length(domain_legs)
@@ -306,14 +305,14 @@ function FusionTensor(
     end
   end
 
-  return FusionTensor(codomain_legs, domain_legs, data_mat)
+  return FusionTensor(data_mat, codomain_legs, domain_legs)
 end
 
 # constructor from dense array with norm check
 function FusionTensor(
-  codomain_legs::Tuple, domain_legs::Tuple, dense::AbstractArray, tol_check::Real
+  dense::AbstractArray, codomain_legs::Tuple, domain_legs::Tuple, tol_check::Real
 )
-  ft = FusionTensor(codomain_legs, domain_legs, dense)
+  ft = FusionTensor(dense, codomain_legs, domain_legs)
 
   # check that norm is the same in input and output
   dense_norm = LinearAlgebra.norm(dense)
@@ -327,7 +326,7 @@ end
 function Base.Array(ft::FusionTensor{<:Any,N,Tuple{}}) where {N}
   domain_legs = domain_axes(ft)
   codomain_legs = (initialize_trivial_axis((), domain_legs),)
-  ft_plus1 = FusionTensor(codomain_legs, domain_legs, data_matrix(ft))
+  ft_plus1 = FusionTensor(data_matrix(ft), codomain_legs, domain_legs)
   arr = Array(ft_plus1)
   return arr[1, ntuple(i -> :, N)...]
 end
@@ -336,7 +335,7 @@ end
 function Base.Array(ft::FusionTensor{<:Any,N,<:Any,Tuple{}}) where {N}
   codomain_legs = codomain_axes(ft)
   domain_legs = (initialize_trivial_axis(codomain_legs, ()),)
-  ft_plus1 = FusionTensor(codomain_legs, domain_legs, data_matrix(ft))
+  ft_plus1 = FusionTensor(data_matrix(ft), codomain_legs, domain_legs)
   arr = Array(ft_plus1)
   return arr[ntuple(i -> :, N)..., 1]
 end

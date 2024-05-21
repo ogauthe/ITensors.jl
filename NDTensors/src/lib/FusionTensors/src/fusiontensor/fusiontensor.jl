@@ -1,15 +1,15 @@
 # This file defines struct FusionTensor and constructors
 
 struct FusionTensor{T,N,CoDomainAxes,DomainAxes,Mat} <: AbstractArray{T,N}
+  data_matrix::Mat
   codomain_axes::CoDomainAxes
   domain_axes::DomainAxes
-  data_matrix::Mat
 
   # inner constructor to impose constraints on types
   function FusionTensor(
+    mat::BlockSparseArrays.BlockSparseMatrix,
     codomain_legs::Tuple{Vararg{AbstractUnitRange}},
     domain_legs::Tuple{Vararg{AbstractUnitRange}},
-    mat::BlockSparseArrays.BlockSparseMatrix,
   )
     return new{
       eltype(mat),
@@ -19,33 +19,33 @@ struct FusionTensor{T,N,CoDomainAxes,DomainAxes,Mat} <: AbstractArray{T,N}
       typeof(mat),
     }(
       # TBD enforce mat arrow direction to be dual, nondual?
+      mat,
       codomain_legs,
       domain_legs,
-      mat,
     )
   end
 
   # needed to remove ambiguity
   function FusionTensor(
+    mat::BlockSparseArrays.BlockSparseMatrix,
     ::Tuple{},
     domain_legs::Tuple{Vararg{AbstractUnitRange}},
-    mat::BlockSparseArrays.BlockSparseMatrix,
   )
     return new{eltype(mat),length(domain_legs),Tuple{},typeof(domain_legs),typeof(mat)}(
-      (), domain_legs, mat
+      mat, (), domain_legs
     )
   end
   function FusionTensor(
+    mat::BlockSparseArrays.BlockSparseMatrix,
     codomain_legs::Tuple{Vararg{AbstractUnitRange}},
     ::Tuple{},
-    mat::BlockSparseArrays.BlockSparseMatrix,
   )
     return new{eltype(mat),length(codomain_legs),typeof(codomain_legs),Tuple{},typeof(mat)}(
-      codomain_legs, (), mat
+      mat, codomain_legs, ()
     )
   end
-  function FusionTensor(::Tuple{}, ::Tuple{}, mat::BlockSparseArrays.BlockSparseMatrix)
-    return new{eltype(mat),0,Tuple{},Tuple{},typeof(mat)}((), (), mat)
+  function FusionTensor(mat::BlockSparseArrays.BlockSparseMatrix, ::Tuple{}, ::Tuple{})
+    return new{eltype(mat),0,Tuple{},Tuple{},typeof(mat)}(mat, (), ())
   end
 end
 

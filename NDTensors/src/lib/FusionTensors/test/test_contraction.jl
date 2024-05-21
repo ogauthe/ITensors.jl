@@ -15,13 +15,13 @@ g4 = GradedAxes.gradedrange([U1(-1) => 1, U1(0) => 1, U1(1) => 1])
 gr1 = GradedAxes.fusion_product(g1, g2)
 gc1 = GradedAxes.fusion_product(g3, g4)
 m1 = BlockSparseArray{Float64}(gr1, gc1)
-ft1 = FusionTensor((g1, g2), (g3, g4), m1)
+ft1 = FusionTensor(m1, (g1, g2), (g3, g4))
 @test isnothing(sanity_check(ft1))
 
 gr2 = reduce(GradedAxes.fusion_product, GradedAxes.dual.((g3, g4)))
 gc2 = g1
 m2 = BlockSparseArray{Float64}(gr2, gc2)
-ft2 = FusionTensor(GradedAxes.dual.((g3, g4)), (g1,), m2)
+ft2 = FusionTensor(m2, GradedAxes.dual.((g3, g4)), (g1,))
 @test isnothing(sanity_check(ft2))
 
 ft3 = ft1 * ft2  # tensor contraction

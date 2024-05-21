@@ -21,7 +21,7 @@ g1 = gradedrange([U1(0) => 1, U1(1) => 2, U1(2) => 3])
 g2 = gradedrange([U1(0) => 2, U1(1) => 2, U1(3) => 1])
 m = BlockSparseArray{Float64}(g1, g2);
 
-ft1 = FusionTensor((g1,), (g2,), m)  # constructor from split axes
+ft1 = FusionTensor(m, (g1,), (g2,))
 
 # getters
 @test data_matrix(ft1) === m
@@ -66,7 +66,7 @@ g4 = gradedrange([U1(-1) => 1, U1(0) => 1, U1(1) => 1])
 gr = fusion_product(g1, g2)
 gc = fusion_product(g3, g4)
 m2 = BlockSparseArray{Float64}(gr, gc)
-ft3 = FusionTensor((g1, g2), (g3, g4), m2)
+ft3 = FusionTensor(m2, (g1, g2), (g3, g4))
 
 @test data_matrix(ft3) === m2
 @test matching_axes(codomain_axes(ft3), (g1, g2))
@@ -137,14 +137,3 @@ ft6 = conj(ft5)
 
 # ft7 = adjoint(ft3) # currently unimplemented
 # @test isnothing(sanity_check(ft7))
-
-# test cast from and to dense
-arr = zeros((6, 5, 4, 3))
-#TODO fill with data
-ft8 = FusionTensor((g1, g2), (g3, g4), arr)
-@test matching_axes(axes(ft8), (g1, g2, g3, g4))
-@test ndims_codomain(ft8) == 2
-@test isnothing(sanity_check(ft8))
-
-arr2 = Array(ft8)
-@test arr2 ≈ arr

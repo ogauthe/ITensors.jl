@@ -17,7 +17,7 @@ gr1 = GradedAxes.fusion_product(g1, g2)
 gc1 = GradedAxes.fusion_product(g3, g4)
 m1 = BlockSparseArray{Float64}(gr1, gc1)
 m1[Block(1, 3)] = ones((2, 4))
-ft1 = FusionTensor((g1, g2), (g3, g4), m1)
+ft1 = FusionTensor(m1, (g1, g2), (g3, g4))
 @test isnothing(sanity_check(ft1))
 
 @test norm(ft1) ≈ sqrt(8)

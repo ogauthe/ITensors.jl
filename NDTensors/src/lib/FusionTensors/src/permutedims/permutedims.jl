@@ -38,7 +38,7 @@ function Base.permutedims(
 
   codomain_axes_out = (i -> axes(ft)[i]).(perm[BlockArrays.Block(1)])
   domain_axes_out = (i -> axes(ft)[i]).(perm[BlockArrays.Block(2)])
-  out = FusionTensor(codomain_axes_out, domain_axes_out, permuted_data_matrix)
+  out = FusionTensor(permuted_data_matrix, codomain_axes_out, domain_axes_out)
   return out
 end
 
@@ -52,7 +52,7 @@ function permute_data(ft::FusionTensor, structural_data::StructuralData)
   arr = Array(ft)
   permuted_arr = permutedims(arr, Tuple(perm))
 
-  ftp = FusionTensor(codomain_axes_out, domain_axes_out, permuted_arr)
+  ftp = FusionTensor(permuted_arr, codomain_axes_out, domain_axes_out)
   permuted_data_matrix = data_matrix(ftp)
   return permuted_data_matrix
 end

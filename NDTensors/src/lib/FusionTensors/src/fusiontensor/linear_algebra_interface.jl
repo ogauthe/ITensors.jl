@@ -51,15 +51,15 @@ end
 
 function LinearAlgebra.qr(ft::FusionTensor)
   qmat, rmat = BlockSparseArrays.block_qr(data_matrix(ft))
-  qtens = FusionTensor(codomain_axes(ft), (axes(qmat)[1],), qmat)
-  rtens = FusionTensor((axes(rmat)[0],), domain_axes(ft), rmat)
+  qtens = FusionTensor(qmat, codomain_axes(ft), (axes(qmat)[1],))
+  rtens = FusionTensor(rmat, (axes(rmat)[0],), domain_axes(ft))
   return qtens, rtens
 end
 
 function LinearAlgebra.svd(ft::FusionTensor)
   umat, s, vmat = BlockSparseArrays.block_svd(data_matrix(ft))
-  utens = FusionTensor(codomain_axes(ft), (axes(umat)[1],), umat)
-  stens = FusionTensor((axes(umat)[1],), (axes(vmat)[0],), s)
-  vtens = FusionTensor((axes(vmat)[0],), domain_axes(ft), vmat)
+  utens = FusionTensor(umat, codomain_axes(ft), (axes(umat)[1],))
+  stens = FusionTensor(s, (axes(umat)[1],), (axes(vmat)[0],))
+  vtens = FusionTensor(vmat, (axes(vmat)[0],), domain_axes(ft))
   return utens, stens, vtens
 end
