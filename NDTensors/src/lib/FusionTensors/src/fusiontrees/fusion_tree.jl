@@ -102,7 +102,7 @@ function fusion_trees(::Sectors.NonAbelianGroup, irreps_arrow::NTuple{N}, isdual
     shape_thick_tree = (shape_1tree..., length(sector_indices))
     sector_tree = Array{Float64,N + 2}(undef, shape_thick_tree)
     for (i, tree) in enumerate(tree_matrices[sector_indices])
-      sector_tree[ntuple(_ -> :, N + 1)..., i] = reshape(tree, shape_1tree)
+      sector_tree[.., i] = reshape(tree, shape_1tree)
     end
     push!(trees, sector_tree)
   end
