@@ -1,19 +1,12 @@
 # This file defines interface to cast from and to dense array
 
-function decompose_axis(leg::AbstractUnitRange)
-  irrep_configuration = GradedAxes.blocklabels(leg)
-  sector_dims = Sectors.quantum_dimension.(irrep_configuration)
-  sector_degens = GradedAxes.unlabel.(BlockArrays.blocklengths(leg))
-  block_boundaries = [0, cumsum(sector_degens .* sector_dims)...]
-  shifts = range.(block_boundaries[begin:(end - 1)] .+ 1, block_boundaries[2:end])
-  return irrep_configuration, sector_degens, shifts
+# TODO move to Sectors / GradedUnitRange
+function block_boundaries(g::GradedAxes.GradedUnitRange)
+  return Sectors.quantum_dimension.(GradedAxes.blocklabels(g)) .*
+         BlockArrays.blocklengths(g)
 end
 
-function transpose_tuple_ntuple(t::Tuple{Vararg{<:NTuple{N,Any}}}) where {N}
-  return ntuple(i -> ntuple(j -> t[j][i], length(t)), N)
-end
-
-decompose_axes(legs) = transpose_tuple_ntuple(decompose_axis.(legs))
+block_boundaries(g::GradedAxes.UnitRangeDual) = block_boundaries(GradedAxes.nondual(g))
 
 function shape_split_degen_dims(legs, it)
   config_sectors = getindex.(GradedAxes.blocklabels.(legs), it)
@@ -113,24 +106,32 @@ function FusionTensor(::Tuple{}, ::Tuple{}, dense::AbstractArray)
 end
 
 # constructor from dense array
-# TBD dual in codomain?
 function FusionTensor(codomain_legs::Tuple, domain_legs::Tuple, dense::AbstractArray)
+  bounds = block_boundaries.((codomain_legs..., domain_legs...))
+  blockarray = BlockArrays.PseudoBlockArray(dense, bounds...)
+  return FusionTensor(codomain_legs, domain_legs, blockarray)
+end
+
+# TBD dual in codomain?
+function FusionTensor(
+  codomain_legs::Tuple, domain_legs::Tuple, blockarray::BlockArrays.AbstractBlockArray
+)
 
   # compile time check
   N_CO = length(codomain_legs)
   N_DO = length(domain_legs)
-  N = ndims(dense)
+  N = ndims(blockarray)
   if N_CO + N_DO != N
     throw(DomainError("legs are incompatible with array ndims"))
   end
 
   # input validation
-  if Sectors.quantum_dimension.((codomain_legs..., domain_legs...)) != size(dense)
-    throw(DomainError("legs dimensions are incompatible with dense array"))
+  if Sectors.quantum_dimension.((codomain_legs..., domain_legs...)) != size(blockarray)
+    throw(DomainError("legs dimensions are incompatible with array"))
   end
 
   # initialize data_matrix
-  data_mat = initialize_data_matrix(eltype(dense), codomain_legs, domain_legs)
+  data_mat = initialize_data_matrix(eltype(blockarray), codomain_legs, domain_legs)
 
   # find sectors
   # TODO ADAPT ONCE ROW_AXIS IS DUAL
@@ -150,8 +151,9 @@ function FusionTensor(codomain_legs::Tuple, domain_legs::Tuple, dense::AbstractA
   end
 
   # split axes into irrep configuration blocks
-  codomain_irrep_configurations, _, codomain_shifts = decompose_axes(codomain_legs)
-  domain_irrep_configurations, domain_degens, domain_shifts = decompose_axes(domain_legs)
+  codomain_irrep_configurations = GradedAxes.blocklabels.(codomain_legs)
+  domain_irrep_configurations = GradedAxes.blocklabels.(domain_legs)
+  domain_degens = GradedAxes.unlabel.(BlockArrays.blocklengths.(domain_legs))
   codomain_isdual = .!GradedAxes.isdual.(codomain_legs)  # TBD: dual
   domain_isdual = GradedAxes.isdual.(domain_legs)
 
@@ -186,7 +188,6 @@ function FusionTensor(codomain_legs::Tuple, domain_legs::Tuple, dense::AbstractA
       domain_trees_config = prune_fusion_trees(
         domain_config_irreps, domain_isdual, allowed_sectors
       )
-      doslices = getindex.(domain_shifts, iter_do)
 
       # loop for each codomain irrep configuration
       block_shifts_rows = zeros(Int, n_sectors)
@@ -200,7 +201,6 @@ function FusionTensor(codomain_legs::Tuple, domain_legs::Tuple, dense::AbstractA
           domain_config_fused_irreps, codomain_config_fused_irreps
         )
         if !isempty(allowed_sectors_config)
-          coslices = getindex.(codomain_shifts, iter_co)
 
           # start from a dense tensor with N=4 axes divided into N_CO=2 ndims_codomain
           # and N_DO=2 ndims_domain. It may have several irrep configurations, select one
@@ -210,7 +210,7 @@ function FusionTensor(codomain_legs::Tuple, domain_legs::Tuple, dense::AbstractA
           #        |                  |                |             |
           #       degen1*dim1    degen2*dim2      degen3*dim3     degen4*dim4
           #
-          dense_block = @view dense[coslices..., doslices...]
+          dense_block = @view blockarray[BlockArrays.Block(iter_co..., iter_do...)]
 
           # each leg of this this dense block can now be opened to form a 2N-dim tensor.
           # note that this 2N-dim form is only defined at the level of the irrep configuration,
@@ -347,12 +347,16 @@ function Base.Array(ft::FusionTensor{<:Any,0,Tuple{},Tuple{}})
 end
 
 # cast to julia dense array with tensor size
-function Base.Array(ft::FusionTensor)
+Base.Array(ft::FusionTensor) = Array(BlockSparseArrays.BlockSparseArray(ft))
 
-  # initialize dense matrix
-  dense = zeros(eltype(ft), size(ft))
+function BlockSparseArrays.BlockSparseArray(ft::FusionTensor)
+  # initialize block array
   domain_legs = domain_axes(ft)
   codomain_legs = codomain_axes(ft)
+  bounds = block_boundaries.((codomain_legs..., domain_legs...))
+  blockarray = BlockSparseArrays.BlockSparseArray{eltype(ft)}(
+    BlockArrays.blockedrange.(bounds)
+  )
 
   col_sectors = GradedAxes.blocklabels(matrix_column_axis(ft))
   existing_blocks = BlockSparseArrays.block_stored_indices(data_matrix(ft))
@@ -361,10 +365,10 @@ function Base.Array(ft::FusionTensor)
   matrix_blocks = [data_matrix(ft)[it] for it in existing_blocks]
 
   # split axes into irrep configuration blocks
-  codomain_irrep_configurations, codomain_degens, codomain_shifts = decompose_axes(
-    codomain_legs
-  )
-  domain_irrep_configurations, domain_degens, domain_shifts = decompose_axes(domain_legs)
+  codomain_irrep_configurations = GradedAxes.blocklabels.(codomain_legs)
+  domain_irrep_configurations = GradedAxes.blocklabels.(domain_legs)
+  codomain_degens = GradedAxes.unlabel.(BlockArrays.blocklengths.(codomain_legs))
+  domain_degens = GradedAxes.unlabel.(BlockArrays.blocklengths.(domain_legs))
   codomain_isdual = .!GradedAxes.isdual.(codomain_legs)  # TBD dual
   domain_isdual = GradedAxes.isdual.(domain_legs)
 
@@ -399,7 +403,6 @@ function Base.Array(ft::FusionTensor)
       domain_trees_config = prune_fusion_trees(
         domain_config_irreps, domain_isdual, existing_sectors
       )
-      doslices = getindex.(domain_shifts, iter_do)
       block_shifts_row = zeros(Int, n_sectors)
       domain_config_size = prod(getindex.(domain_degens, iter_do))
 
@@ -483,7 +486,6 @@ function Base.Array(ft::FusionTensor)
 
             block_shifts_row[i_sec] = r2
           end
-          coslices = getindex.(codomain_shifts, iter_co)
           degen_dim_shape = (
             getindex.(codomain_degens, iter_co)...,
             getindex.(domain_degens, iter_do)...,
@@ -511,19 +513,13 @@ function Base.Array(ft::FusionTensor)
           #      /   \             /   \            /   \           /   \
           #  degen1  dim1      degen2  dim2     degen3  dim3    degen4  dim4
           #
-          dense_block_split_shape = size(dense_block_split_degen_dim)
-          dense_shape = ntuple(
-            i -> dense_block_split_shape[2 * i - 1] * dense_block_split_shape[2 * i],
-            ndims(ft),
-          )
-          dense[coslices..., doslices...] = reshape(
-            dense_block_split_degen_dim, dense_shape
-          )
+          b = BlockArrays.Block(iter_co..., iter_do...)
+          blockarray[b] = reshape(dense_block_split_degen_dim, size(blockarray[b]))
         end
       end
       block_shifts_column += domain_config_size * size.(domain_trees_config, 3)
     end
   end
 
-  return dense
+  return blockarray
 end
