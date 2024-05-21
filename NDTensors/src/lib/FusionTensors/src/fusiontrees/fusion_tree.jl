@@ -2,8 +2,6 @@
 
 # TBD
 # better way to contract tensors?
-# prune trees?
-# change tree structure / number of dof?
 # compatibility with TensorKit conventions
 
 # LinearAlgebra.kron does not allow input for ndims>2
@@ -12,6 +10,64 @@ function _tensor_kron(a, b)
   shb = ntuple(i -> Bool(i % 2) ? 1 : size(b, i ÷ 2), 2 * ndims(b))
   c = reshape(a, sha) .* reshape(b, shb)
   return reshape(c, size(a) .* size(b))
+end
+
+function prune_fusion_trees(
+  irreps_config::NTuple{N,C}, irreps_isdual::NTuple{N,Bool}, target_sectors::Vector{C}
+) where {N,C<:Sectors.AbstractCategory}
+  # A fusion tree fuses k irreps with quantum dimensions dim1, ..., dimk onto one
+  # irrep P with quantum dimension dimP. There may be several path that produce
+  # this irrep in the fusion ring and each of them correspond to a single "simple" fusion
+  # tree with one degree of freedom.
+  # We take the ndofP trees that fuse on irrep P and merge all of these into one thick
+  # fusion tree containing all degrees of freedom for irrep P.
+  # The result is a k+2 dimension fusion tree with size (dim1, dim2, ..., dimk, dimP, nof_P)
+  #
+  #
+  #      dimP  ndofP
+  #         \  /
+  #          \/
+  #          /
+  #         /
+  #        /\
+  #       /  \
+  #      /\   \
+  #     /  \   \
+  #   dim1 dim1 dim3
+  #
+  # It is convenient to merge together the dimension legs to yield a 3-dim tensor
+  #
+  #  dim1*dim2*dim3-------------dimP
+  #                     |
+  #                   ndofP
+
+  @assert issorted(target_sectors)
+  target_sectors_dims = Sectors.quantum_dimension.(target_sectors)
+  irreps_dims_prod = prod(Sectors.quantum_dimension.(irreps_config))
+  n_sectors = length(target_sectors)
+  rep = reduce(GradedAxes.fusion_product, irreps_config; init=Sectors.trivial(C))
+  trees, tree_irreps = fusion_trees(irreps_config, irreps_isdual)
+  trees_sector = [
+    zeros((irreps_dims_prod, target_sectors_dims[i_sec], 0)) for i_sec in 1:n_sectors
+  ]
+  i_sec, j = 1, 1
+  while i_sec <= n_sectors && j <= lastindex(tree_irreps)
+    if target_sectors[i_sec] < tree_irreps[j]
+      i_sec += 1
+    elseif tree_irreps[j] < target_sectors[i_sec]
+      j += 1
+    else
+      shape_3legs = (
+        irreps_dims_prod,
+        target_sectors_dims[i_sec],
+        GradedAxes.unlabel.(GradedAxes.blocklengths(rep)[j]),
+      )
+      trees_sector[i_sec] = reshape(trees[j], shape_3legs)
+      i_sec += 1
+      j += 1
+    end
+  end
+  return trees_sector
 end
 
 function fusion_trees(::Tuple{}, ::Tuple{})
