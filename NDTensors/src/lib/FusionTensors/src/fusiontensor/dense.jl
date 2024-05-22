@@ -1,13 +1,5 @@
 # This file defines interface to cast from and to dense array
 
-# TODO move to Sectors / GradedUnitRange
-function block_boundaries(g::GradedAxes.GradedUnitRange)
-  return Sectors.quantum_dimension.(GradedAxes.blocklabels(g)) .*
-         BlockArrays.blocklengths(g)
-end
-
-block_boundaries(g::GradedAxes.UnitRangeDual) = block_boundaries(GradedAxes.nondual(g))
-
 function shape_split_degen_dims(legs, it)
   config_sectors = getindex.(GradedAxes.blocklabels.(legs), it)
   config_degens = GradedAxes.unlabel.(getindex.(GradedAxes.blocklengths.(legs), it))
@@ -49,7 +41,7 @@ end
 
 # constructor from dense array
 function FusionTensor(dense::AbstractArray, codomain_legs::Tuple, domain_legs::Tuple)
-  bounds = block_boundaries.((codomain_legs..., domain_legs...))
+  bounds = Sectors.block_boundaries.((codomain_legs..., domain_legs...))
   blockarray = BlockArrays.PseudoBlockArray(dense, bounds...)
   return FusionTensor(blockarray, codomain_legs, domain_legs)
 end
@@ -294,7 +286,7 @@ function BlockSparseArrays.BlockSparseArray(ft::FusionTensor)
   # initialize block array
   domain_legs = domain_axes(ft)
   codomain_legs = codomain_axes(ft)
-  bounds = block_boundaries.((codomain_legs..., domain_legs...))
+  bounds = Sectors.block_boundaries.((codomain_legs..., domain_legs...))
   blockarray = BlockSparseArrays.BlockSparseArray{eltype(ft)}(
     BlockArrays.blockedrange.(bounds)
   )
