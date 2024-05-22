@@ -90,7 +90,7 @@ end
 # empty matrix
 function FusionTensor{T}(codomain_legs::Tuple, domain_legs::Tuple) where {T}
   mat = initialize_data_matrix(T, codomain_legs, domain_legs)
-  return FusionTensor(codomain_legs, domain_legs, mat)
+  return FusionTensor(mat, codomain_legs, domain_legs)
 end
 
 # sanity check
