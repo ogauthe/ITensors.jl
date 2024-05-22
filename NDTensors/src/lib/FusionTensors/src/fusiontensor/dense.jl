@@ -10,6 +10,14 @@ function shape_split_degen_dims(legs, it)
   return shape
 end
 
+function get_fused_sectors(irrep_configurations, it)
+  config_irreps = getindex.(irrep_configurations, it)
+  init = Sectors.trivial(first(config_irreps))
+  fused_rep = reduce(GradedAxes.fusion_product, config_irreps; init=init)
+  config_fused_sectors = GradedAxes.blocklabels(fused_rep)
+  return config_fused_sectors
+end
+
 # no codomain leg
 function FusionTensor(dense::AbstractArray, ::Tuple{}, domain_legs::Tuple)
   # add a dummy axis to compute data_matrix
@@ -96,30 +104,25 @@ function FusionTensor(
 
   # prepare contraction
   perm_dense_data = (ntuple(i -> 2 * i - 1, N)..., ntuple(i -> 2 * i, N)...)
-  init = Sectors.trivial(eltype(col_sectors))
 
   # loop for each domain irrep configuration
   block_shifts_columns = zeros(Int, n_sectors)
   for iter_do in Iterators.product(eachindex.(domain_irrep_configurations)...)
-    domain_config_irreps = getindex.(domain_irrep_configurations, iter_do)
-    domain_fused_rep = reduce(GradedAxes.fusion_product, domain_config_irreps; init=init)
-    domain_config_fused_irreps = GradedAxes.blocklabels(domain_fused_rep)
+    domain_config_fused_sectors = get_fused_sectors(domain_irrep_configurations, iter_do)
 
-    if !isempty(intersect(allowed_sectors, domain_config_fused_irreps))
+    if !isempty(intersect(allowed_sectors, domain_config_fused_sectors))
       domain_trees_config = prune_fusion_trees(
-        domain_config_irreps, domain_isdual, allowed_sectors
+        getindex.(domain_irrep_configurations, iter_do), domain_isdual, allowed_sectors
       )
 
       # loop for each codomain irrep configuration
       block_shifts_rows = zeros(Int, n_sectors)
       for (i_co, iter_co) in enumerate(allowed_codomain_configs)
-        codomain_config_irreps = getindex.(codomain_irrep_configurations, iter_co)
-        codomain_fused_rep = reduce(
-          GradedAxes.fusion_product, codomain_config_irreps; init=init
+        codomain_config_fused_sectors = get_fused_sectors(
+          codomain_irrep_configurations, iter_co
         )
-        codomain_config_fused_irreps = GradedAxes.blocklabels(codomain_fused_rep)
         allowed_sectors_config = intersect(
-          domain_config_fused_irreps, codomain_config_fused_irreps
+          domain_config_fused_sectors, codomain_config_fused_sectors
         )
         if !isempty(allowed_sectors_config)
 
@@ -282,7 +285,11 @@ function BlockSparseArrays.BlockSparseArray(ft::FusionTensor)
 
   # split axes into irrep configuration blocks
   codomain_irrep_configurations = GradedAxes.blocklabels.(codomain_legs)
+  codomain_irrep_dimensions =
+    broadcast.(Sectors.quantum_dimension, codomain_irrep_configurations)
   domain_irrep_configurations = GradedAxes.blocklabels.(domain_legs)
+  domain_irrep_dimensions =
+    broadcast.(Sectors.quantum_dimension, domain_irrep_configurations)
   codomain_degens = GradedAxes.unlabel.(BlockArrays.blocklengths.(codomain_legs))
   domain_degens = GradedAxes.unlabel.(BlockArrays.blocklengths.(domain_legs))
   domain_isdual = GradedAxes.isdual.(domain_legs)
@@ -294,39 +301,34 @@ function BlockSparseArrays.BlockSparseArray(ft::FusionTensor)
 
   # prepare contraction
   inverse_perm_dense_data = ntuple(i -> fld1(i, 2) + (1 - i % 2) * ndims(ft), 2 * ndims(ft))
-  init = Sectors.trivial(eltype(col_sectors))
 
   # loop for each domain irrep configuration
   block_shifts_column = zeros(Int, n_sectors)
   for iter_do in Iterators.product(eachindex.(domain_irrep_configurations)...)
-    domain_config_irreps = getindex.(domain_irrep_configurations, iter_do)
-    domain_fused_rep = reduce(GradedAxes.fusion_product, domain_config_irreps; init=init)
-    domain_config_fused_irreps = GradedAxes.blocklabels(domain_fused_rep)
+    domain_config_fused_sectors = get_fused_sectors(domain_irrep_configurations, iter_do)
 
-    if !isempty(intersect(existing_sectors, domain_config_fused_irreps))
+    if !isempty(intersect(existing_sectors, domain_config_fused_sectors))
       domain_trees_config = prune_fusion_trees(
-        domain_config_irreps, domain_isdual, existing_sectors
+        getindex.(domain_irrep_configurations, iter_do), domain_isdual, existing_sectors
       )
       block_shifts_row = zeros(Int, n_sectors)
       domain_config_size = prod(getindex.(domain_degens, iter_do))
 
       # loop for each codomain irrep configuration
       for (i_co, iter_co) in enumerate(existing_codomain_configs)
-        codomain_config_irreps = getindex.(codomain_irrep_configurations, iter_co)
-        codomain_fused_rep = reduce(
-          GradedAxes.fusion_product, codomain_config_irreps; init=init
+        codomain_config_fused_sectors = get_fused_sectors(
+          codomain_irrep_configurations, iter_co
         )
-        codomain_config_fused_irreps = GradedAxes.blocklabels(codomain_fused_rep)
         existing_sectors_config = intersect(
-          domain_config_fused_irreps, codomain_config_fused_irreps, existing_sectors
+          domain_config_fused_sectors, codomain_config_fused_sectors, existing_sectors
         )
         if !isempty(existing_sectors_config)
           codomain_config_size = prod(getindex.(codomain_degens, iter_co))
           dense_shape_mat = (
             codomain_config_size,
             domain_config_size,
-            prod(Sectors.quantum_dimension.(codomain_config_irreps)),
-            prod(Sectors.quantum_dimension.(domain_config_irreps)),
+            prod(getindex.(codomain_irrep_dimensions, iter_co)),
+            prod(getindex.(domain_irrep_dimensions, iter_do)),
           )
 
           #        -----------------dense_block_config--------------
@@ -393,8 +395,8 @@ function BlockSparseArrays.BlockSparseArray(ft::FusionTensor)
           degen_dim_shape = (
             getindex.(codomain_degens, iter_co)...,
             getindex.(domain_degens, iter_do)...,
-            Sectors.quantum_dimension.(codomain_config_irreps)...,
-            Sectors.quantum_dimension.(domain_config_irreps)...,
+            getindex.(codomain_irrep_dimensions, iter_co)...,
+            getindex.(domain_irrep_dimensions, iter_do)...,
           )
 
           #        -------------------dense_block_permuted----------------
