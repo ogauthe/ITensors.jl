@@ -31,7 +31,7 @@
 #       dim1*dim2*dim3   dim_sec    ndof_sec
 #
 
-################################  utility tools  ###############################
+###################################  utility tools  ########################################
 # LinearAlgebra.kron does not allow input for ndims>2
 function _tensor_kron(a, b)
   sha = ntuple(i -> Bool(i % 2) ? size(a, i ÷ 2 + 1) : 1, 2 * ndims(a))
@@ -46,7 +46,7 @@ function recover_key(::Type{<:NamedTuple{Keys}}, cats::Tuple) where {Keys}
   return Sectors.sector(ntuple(c -> Keys[c] => cats[c], length(cats))...)
 end
 
-##############################   High level interface  ###############################
+#################################   High level interface  ##################################
 function precompute_allowed_trees(
   irrep_configurations::NTuple{N,Vector{C}},
   irreps_isdual::NTuple{N,Bool},
@@ -102,7 +102,7 @@ function prune_fusion_trees(
   return trees_sector
 end
 
-##############################   Low level interface  ###############################
+##################################  low level interface  ###################################
 function fusion_trees(::Tuple{}, ::Tuple{})
   return [ones((1, 1))], [Sectors.sector(())]
 end

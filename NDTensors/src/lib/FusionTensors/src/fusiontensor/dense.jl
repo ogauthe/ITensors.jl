@@ -1,5 +1,10 @@
 # This file defines interface to cast from and to dense array
 
+# TBD dual in codomain?
+# TODO rewrite once matrix_row_axis is dual
+# TODO remove BlockSparseArray block initialization once writing is fixed
+
+##################################  utility tools  #########################################
 function shape_split_degen_dims(legs, it)
   config_sectors = getindex.(GradedAxes.blocklabels.(legs), it)
   config_degens = GradedAxes.unlabel.(getindex.(GradedAxes.blocklengths.(legs), it))
@@ -18,6 +23,7 @@ function get_fused_sectors(irrep_configurations, it)
   return config_fused_sectors
 end
 
+############################  cast from dense: zero leg cases  #############################
 # no codomain leg
 function FusionTensor(dense::AbstractArray, ::Tuple{}, domain_legs::Tuple)
   # add a dummy axis to compute data_matrix
@@ -47,14 +53,13 @@ function FusionTensor(dense::AbstractArray, ::Tuple{}, ::Tuple{})
   return FusionTensor(data_mat, (), ())
 end
 
-# constructor from dense array
+#################################  cast from dense array  ##################################
 function FusionTensor(dense::AbstractArray, codomain_legs::Tuple, domain_legs::Tuple)
   bounds = Sectors.block_boundaries.((codomain_legs..., domain_legs...))
   blockarray = BlockArrays.PseudoBlockArray(dense, bounds...)
   return FusionTensor(blockarray, codomain_legs, domain_legs)
 end
 
-# TBD dual in codomain?
 function FusionTensor(
   blockarray::BlockArrays.AbstractBlockArray, codomain_legs::Tuple, domain_legs::Tuple
 )
@@ -126,7 +131,7 @@ function FusionTensor(
         )
         if !isempty(allowed_sectors_config)
 
-          # start from a dense tensor with N=4 axes divided into N_CO=2 ndims_codomain
+          # start from a dense tensor with e.g. N=4 axes divided into N_CO=2 ndims_codomain
           # and N_DO=2 ndims_domain. It may have several irrep configurations, select one
           # of them. The associated dense block has shape
           #
@@ -136,9 +141,9 @@ function FusionTensor(
           #
           dense_block = @view blockarray[BlockArrays.Block(iter_co..., iter_do...)]
 
-          # each leg of this this dense block can now be opened to form a 2N-dim tensor.
-          # note that this 2N-dim form is only defined at the level of the irrep configuration,
-          # not for a larger dense block.
+          # each leg of this this dense block can now be opened to form a 2N-dims tensor.
+          # note that this 2N-dims form is only defined at the level of the irrep
+          # configuration, not for a larger dense block.
           #
           #        -------------dense_block_split_degen_dim------------
           #        |                 |                |               |
@@ -162,7 +167,7 @@ function FusionTensor(
           dense_block_permuted = permutedims(dense_block_split_degen_dim, perm_dense_data)
 
           # Finally, it is convenient to merge together legs corresponding to codomain or
-          # to codomain and produce a rank-4 tensor
+          # to codomain and produce a 4-dims tensor
           #
           #        -----------------dense_block_config--------------
           #        |                 |               |             |
@@ -242,6 +247,7 @@ function FusionTensor(
   return ft
 end
 
+############################  cast to dense: zero leg cases  ###############################
 # no codomain leg
 function Base.Array(ft::FusionTensor{<:Any,N,Tuple{}}) where {N}
   domain_legs = domain_axes(ft)
@@ -265,7 +271,7 @@ function Base.Array(ft::FusionTensor{<:Any,0,Tuple{},Tuple{}})
   return reshape([first(data_matrix(ft))], ())
 end
 
-# cast to julia dense array with tensor size
+##################################  cast to dense array  ###################################
 Base.Array(ft::FusionTensor) = Array(BlockSparseArrays.BlockSparseArray(ft))
 
 function BlockSparseArrays.BlockSparseArray(ft::FusionTensor)
@@ -280,7 +286,7 @@ function BlockSparseArrays.BlockSparseArray(ft::FusionTensor)
   col_sectors = GradedAxes.blocklabels(matrix_column_axis(ft))
   existing_blocks = BlockSparseArrays.block_stored_indices(data_matrix(ft))
   n_sectors = length(existing_blocks)
-  existing_sectors = [col_sectors[it[2]] for it in eachindex(existing_blocks)]   # subset of allowed_sectors
+  existing_sectors = [col_sectors[it[2]] for it in eachindex(existing_blocks)]  # subset of allowed_sectors
   matrix_blocks = [data_matrix(ft)[it] for it in existing_blocks]
 
   # split axes into irrep configuration blocks
