@@ -1,3 +1,4 @@
+using LinearAlgebra: ⋅
 export
   # dmrg.jl
   dmrg,
@@ -41,7 +42,7 @@ export
   orthogonalize!,
   outer,
   projector,
-  randomMPO,
+  random_mpo,
   truncate,
   truncate!,
   unique_siteind,
@@ -51,6 +52,7 @@ export
   MPS,
   # Methods
   ⋅,
+  dot,
   correlation_matrix,
   expect,
   inner,
@@ -60,7 +62,7 @@ export
   linkind,
   linkinds,
   productMPS,
-  randomMPS,
+  random_mps,
   replacebond,
   replacebond!,
   sample,

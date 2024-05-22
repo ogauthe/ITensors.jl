@@ -18,7 +18,7 @@ end
   #O = MPO(sites)
   O = MPO(N)
   for i in 1:length(O)
-    O[i] = randomITensor(QN(), sites[i], sites[i]')
+    O[i] = random_itensor(QN(), sites[i], sites[i]')
   end
   @test length(O) == N
 
@@ -31,42 +31,42 @@ end
   # test constructor from Vector{ITensor}
 
   K = MPO(N)
-  K[1] = randomITensor(QN(), dag(sites[1]), sites[1]', links[1])
+  K[1] = random_itensor(QN(), dag(sites[1]), sites[1]', links[1])
   for i in 2:(N - 1)
-    K[i] = randomITensor(QN(), dag(sites[i]), sites[i]', dag(links[i - 1]), links[i])
+    K[i] = random_itensor(QN(), dag(sites[i]), sites[i]', dag(links[i - 1]), links[i])
   end
-  K[N] = randomITensor(QN(), dag(sites[N]), sites[N]', dag(links[N - 1]))
+  K[N] = random_itensor(QN(), dag(sites[N]), sites[N]', dag(links[N - 1]))
 
   J = MPO(N)
-  J[1] = randomITensor(QN(), dag(sites[1]), sites[1]', links[1])
+  J[1] = random_itensor(QN(), dag(sites[1]), sites[1]', links[1])
   for i in 2:(N - 1)
-    J[i] = randomITensor(QN(), dag(sites[i]), sites[i]', dag(links[i - 1]), links[i])
+    J[i] = random_itensor(QN(), dag(sites[i]), sites[i]', dag(links[i - 1]), links[i])
   end
-  J[N] = randomITensor(QN(), dag(sites[N]), sites[N]', dag(links[N - 1]))
+  J[N] = random_itensor(QN(), dag(sites[N]), sites[N]', dag(links[N - 1]))
 
   L = MPO(N)
-  L[1] = randomITensor(QN(), dag(sites[1]), sites[1]', links[1])
+  L[1] = random_itensor(QN(), dag(sites[1]), sites[1]', links[1])
   for i in 2:(N - 1)
-    L[i] = randomITensor(QN(), dag(sites[i]), sites[i]', dag(links[i - 1]), links[i])
+    L[i] = random_itensor(QN(), dag(sites[i]), sites[i]', dag(links[i - 1]), links[i])
   end
-  L[N] = randomITensor(QN(), dag(sites[N]), sites[N]', dag(links[N - 1]))
+  L[N] = random_itensor(QN(), dag(sites[N]), sites[N]', dag(links[N - 1]))
 
   @test length(K) == N
   @test ITensors.data(MPO(copy(ITensors.data(K)))) == ITensors.data(K)
 
   phi = MPS(N)
-  phi[1] = randomITensor(QN(-1), sites[1], links[1])
+  phi[1] = random_itensor(QN(-1), sites[1], links[1])
   for i in 2:(N - 1)
-    phi[i] = randomITensor(QN(-1), sites[i], dag(links[i - 1]), links[i])
+    phi[i] = random_itensor(QN(-1), sites[i], dag(links[i - 1]), links[i])
   end
-  phi[N] = randomITensor(QN(-1), sites[N], dag(links[N - 1]))
+  phi[N] = random_itensor(QN(-1), sites[N], dag(links[N - 1]))
 
   psi = MPS(N)
-  psi[1] = randomITensor(QN(-1), sites[1], links[1])
+  psi[1] = random_itensor(QN(-1), sites[1], links[1])
   for i in 2:(N - 1)
-    psi[i] = randomITensor(QN(-1), sites[i], dag(links[i - 1]), links[i])
+    psi[i] = random_itensor(QN(-1), sites[i], dag(links[i - 1]), links[i])
   end
-  psi[N] = randomITensor(QN(-1), sites[N], dag(links[N - 1]))
+  psi[N] = random_itensor(QN(-1), sites[N], dag(links[N - 1]))
 
   @testset "orthogonalize!" begin
     orthogonalize!(phi, 1)
@@ -107,7 +107,7 @@ end
     @test phiJdagKpsi[] ≈ inner(J, phi, K, psi)
 
     badsites = [Index(2, "Site") for n in 1:(N + 1)]
-    badpsi = randomMPS(badsites)
+    badpsi = random_mps(badsites)
     @test_throws DimensionMismatch inner(J, phi, K, badpsi)
   end
 
@@ -140,12 +140,12 @@ end
   #    L = basicRandomMPO(N, shsites; dim=dim)
   #    M = K + L
   #    @test length(M) == N
-  #    psi = randomMPS(shsites)
+  #    psi = random_mps(shsites)
   #    k_psi = contract(K, psi)
   #    l_psi = contract(L, psi)
   #    @test inner(psi, k_psi + l_psi) ≈ dot(psi, M, psi) atol=5e-3
   #    @test inner(psi, sum([k_psi, l_psi])) ≈ inner(psi, M, psi) atol=5e-3
-  #    psi = randomMPS(shsites)
+  #    psi = random_mps(shsites)
   #    M = add(K, L; cutoff=1E-9)
   #    k_psi = contract(K, psi)
   #    l_psi = contract(L, psi)
@@ -190,7 +190,7 @@ end
   O = MPO(sites, "Sz")
   @test length(O) == N # just make sure this works
 
-  @test_throws ArgumentError randomMPO(sites, 2)
+  @test_throws ArgumentError random_mpo(sites, 2)
   @test isnothing(linkind(MPO(fill(ITensor(), N), 0, N + 1), 1))
 end
 
@@ -250,16 +250,16 @@ end
     a = OpSum()
     h = 0.5
     for j in 1:(N - 1)
-      a .+= -1, "Sx", j, "Sx", j + 1
+      a .-= 1, "Sx", j, "Sx", j + 1
     end
     for j in 1:N
       a .+= h, "Sz", j
     end
     H = MPO(a, s)
     if conserve_szparity
-      ψ = randomMPS(s, n -> isodd(n) ? "↑" : "↓")
+      ψ = random_mps(s, n -> isodd(n) ? "↑" : "↓")
     else
-      ψ = randomMPS(s)
+      ψ = random_mps(s)
     end
 
     # MPO * MPS
@@ -296,7 +296,7 @@ end
 #
 #  Build up Hamiltonians with non trival QN spaces in the link indices and further neighbour interactions.
 #
-function make_Heisenberg_AutoMPO(sites, NNN::Int64; J::Float64=1.0, kwargs...)::MPO
+function make_heisenberg_opsum(sites, NNN::Int64; J::Float64=1.0, kwargs...)::MPO
   N = length(sites)
   @assert N >= NNN
   opsum = OpSum()
@@ -311,7 +311,7 @@ function make_Heisenberg_AutoMPO(sites, NNN::Int64; J::Float64=1.0, kwargs...)::
   return MPO(opsum, sites; kwargs...)
 end
 
-function make_Hubbard_AutoMPO(
+function make_hubbard_opsum(
   sites, NNN::Int64; U::Float64=1.0, t::Float64=1.0, V::Float64=0.5, kwargs...
 )::MPO
   N = length(sites)
@@ -323,17 +323,17 @@ function make_Hubbard_AutoMPO(
   for dn in 1:NNN
     tj, Vj = t / dn, V / dn
     for n in 1:(N - dn)
-      os += -tj, "Cdagup", n, "Cup", n + dn
-      os += -tj, "Cdagup", n + dn, "Cup", n
-      os += -tj, "Cdagdn", n, "Cdn", n + dn
-      os += -tj, "Cdagdn", n + dn, "Cdn", n
+      os -= tj, "Cdagup", n, "Cup", n + dn
+      os -= tj, "Cdagup", n + dn, "Cup", n
+      os -= tj, "Cdagdn", n, "Cdn", n + dn
+      os -= tj, "Cdagdn", n + dn, "Cdn", n
       os += Vj, "Ntot", n, "Ntot", n + dn
     end
   end
   return MPO(os, sites; kwargs...)
 end
 
-test_combos = [(make_Heisenberg_AutoMPO, "S=1/2"), (make_Hubbard_AutoMPO, "Electron")]
+test_combos = [(make_heisenberg_opsum, "S=1/2"), (make_hubbard_opsum, "Electron")]
 
 @testset "QR/QL MPO tensors with complex block structures, H=$(test_combo[1])" for test_combo in
                                                                                    test_combos

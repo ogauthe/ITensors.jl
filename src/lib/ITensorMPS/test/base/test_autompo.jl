@@ -1,3 +1,4 @@
+@eval module $(gensym())
 using ITensors, Test, Random, JLD2
 using NDTensors: scalartype
 
@@ -864,7 +865,7 @@ end
       Ha = MPO(os, sites)
 
       He = NNheisenbergMPO(sites, J1, J2)
-      psi = randomMPS(sites, [isodd(n) ? "Up" : "Dn" for n in 1:N])
+      psi = random_mps(sites, [isodd(n) ? "Up" : "Dn" for n in 1:N])
       Oa = inner(psi', Ha, psi)
       Oe = inner(psi', He, psi)
       @test Oa ≈ Oe
@@ -904,22 +905,22 @@ end
     M1 = MPO(a1, s)
 
     a2 = OpSum()
-    a2 += -1, "C", 3, "Cdag", 1
+    a2 -= 1, "C", 3, "Cdag", 1
     M2 = MPO(a2, s)
 
     a3 = OpSum()
     a3 += "Cdag", 1, "N", 2, "C", 3
     M3 = MPO(a3, s)
 
-    p011 = productMPS(s, [1, 2, 2, 1, 1])
-    p110 = productMPS(s, [2, 2, 1, 1, 1])
+    p011 = MPS(s, [1, 2, 2, 1, 1])
+    p110 = MPS(s, [2, 2, 1, 1, 1])
 
     @test inner(p110', M1, p011) ≈ -1.0
     @test inner(p110', M2, p011) ≈ -1.0
     @test inner(p110', M3, p011) ≈ -1.0
 
-    p001 = productMPS(s, [1, 1, 2, 1, 1])
-    p100 = productMPS(s, [2, 1, 1, 1, 1])
+    p001 = MPS(s, [1, 1, 2, 1, 1])
+    p100 = MPS(s, [2, 1, 1, 1, 1])
 
     @test inner(p100', M1, p001) ≈ +1.0
     @test inner(p100', M2, p001) ≈ +1.0
@@ -937,17 +938,17 @@ end
     M1 = MPO(a1, s)
 
     a2 = OpSum()
-    a2 += -1, "Cdn", 3, "Cdagdn", 1
+    a2 -= 1, "Cdn", 3, "Cdagdn", 1
     M2 = MPO(a2, s)
 
-    p0uu = productMPS(s, [1, 2, 2, 1, 1])
-    puu0 = productMPS(s, [2, 2, 1, 1, 1])
-    p0ud = productMPS(s, [1, 2, 3, 1, 1])
-    pdu0 = productMPS(s, [3, 2, 1, 1, 1])
-    p00u = productMPS(s, [1, 1, 2, 1, 1])
-    pu00 = productMPS(s, [2, 1, 1, 1, 1])
-    p00d = productMPS(s, [1, 1, 3, 1, 1])
-    pd00 = productMPS(s, [3, 1, 1, 1, 1])
+    p0uu = MPS(s, [1, 2, 2, 1, 1])
+    puu0 = MPS(s, [2, 2, 1, 1, 1])
+    p0ud = MPS(s, [1, 2, 3, 1, 1])
+    pdu0 = MPS(s, [3, 2, 1, 1, 1])
+    p00u = MPS(s, [1, 1, 2, 1, 1])
+    pu00 = MPS(s, [2, 1, 1, 1, 1])
+    p00d = MPS(s, [1, 1, 3, 1, 1])
+    pd00 = MPS(s, [3, 1, 1, 1, 1])
 
     @test inner(puu0', M1, p0uu) ≈ -1.0
     @test inner(pdu0', M2, p0ud) ≈ -1.0
@@ -1012,9 +1013,9 @@ end
           if m == i && n == j && p == l && q == k
             exact_val += V[i, j, l, k]
           elseif m == i && n == j && p == k && q == l
-            exact_val += -V[i, j, k, l]
+            exact_val -= V[i, j, k, l]
           elseif m == j && n == i && p == l && q == k
-            exact_val += -V[j, i, l, k]
+            exact_val -= V[j, i, l, k]
           elseif m == j && n == i && p == k && q == l
             exact_val += V[j, i, k, l]
           end
@@ -1035,11 +1036,11 @@ end
       os = OpSum()
       for i in 1:(N - 1)
         os += +1im, "S+", i, "S-", i + 1
-        os += -1im, "S-", i, "S+", i + 1
+        os -= 1im, "S-", i, "S+", i + 1
       end
       H = MPO(os, sites)
-      psiud = productMPS(sites, [1, 2, 1, 2])
-      psidu = productMPS(sites, [2, 1, 1, 2])
+      psiud = MPS(sites, [1, 2, 1, 2])
+      psidu = MPS(sites, [2, 1, 1, 2])
       @test inner(psiud', H, psidu) ≈ +1im
       @test inner(psidu', H, psiud) ≈ -1im
     end
@@ -1070,7 +1071,7 @@ end
 
     @test norm(prod(W) - prod(M)) < 1E-10
 
-    psi = randomMPS(s, [isodd(n) ? "1" : "0" for n in 1:length(s)]; linkdims=4)
+    psi = random_mps(s, [isodd(n) ? "1" : "0" for n in 1:length(s)]; linkdims=4)
     Mpsi = apply(M, psi; alg="naive")
     Wpsi = apply(M, psi; alg="naive")
     @test abs(inner(Mpsi, Wpsi) / inner(Mpsi, Mpsi) - 1.0) < 1E-10
@@ -1099,8 +1100,8 @@ end
     t = 1.0
     os = OpSum()
     for n in 1:(N - 1)
-      os .+= -t, "Cdag", n, "C", n + 1
-      os .+= -t, "Cdag", n + 1, "C", n
+      os .-= t, "Cdag", n, "C", n + 1
+      os .-= t, "Cdag", n + 1, "C", n
     end
     s = siteinds("Fermion", N; conserve_qns=true)
     os_original = deepcopy(os)
@@ -1137,15 +1138,15 @@ end
 
     os = OpSum()
     for j in 1:(N - 1)
-      os += -t, "Adag", j, "A", j + 1
-      os += -t, "A", j, "Adag", j + 1
+      os -= t, "Adag", j, "A", j + 1
+      os -= t, "A", j, "Adag", j + 1
       os += V1, "N", j, "N", j + 1
     end
     for j in 1:(N - 2)
       os += V2, "N", j, "N", j + 2
     end
     H = MPO(os, sites)
-    psi0 = productMPS(sites, n -> isodd(n) ? "0" : "1")
+    psi0 = MPS(sites, n -> isodd(n) ? "0" : "1")
     @test abs(inner(psi0', H, psi0) - 0.00018) < 1E-10
   end
 
@@ -1248,4 +1249,5 @@ end
     os += (5.555, "Cdag", 4, "Cdag", 4, "C", 2, "C", 2)
     @test_nowarn H = MPO(os, sites)
   end
+end
 end

@@ -17,7 +17,7 @@ include(joinpath(@__DIR__, "utils", "circuit.jl"))
       os .+= "Sz", n, "Sz", n + 1
     end
     Hmpo = MPO(os, s)
-    ψ₀mps = randomMPS(s, n -> isodd(n) ? "↑" : "↓")
+    ψ₀mps = random_mps(s, n -> isodd(n) ? "↑" : "↓")
     H = prod(Hmpo)
     ψ₀ = prod(ψ₀mps)
     # The Rayleigh quotient to minimize
@@ -51,7 +51,7 @@ include(joinpath(@__DIR__, "utils", "circuit.jl"))
     Hmpo = MPO(os, s)
 
     Random.seed!(1234)
-    ψ₀mps = randomMPS(s, n -> isodd(n) ? "↑" : "↓"; linkdims=χ)
+    ψ₀mps = random_mps(s, n -> isodd(n) ? "↑" : "↓"; linkdims=χ)
 
     H = ITensors.data(Hmpo)
     ψ₀ = ITensors.data(ψ₀mps)
@@ -198,7 +198,7 @@ include(joinpath(@__DIR__, "utils", "circuit.jl"))
     function ising_hamiltonian(nsites; h)
       ℋ = OpSum()
       for j in 1:(nsites - 1)
-        ℋ += -1, "Z", j, "Z", j + 1
+        ℋ -= 1, "Z", j, "Z", j + 1
       end
       for j in 1:nsites
         ℋ += h, "X", j

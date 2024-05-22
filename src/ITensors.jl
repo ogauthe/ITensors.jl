@@ -26,7 +26,7 @@ Set the i==2,j==1 element to -2.6
 
 Make an ITensor with random elements
 
-    B = randomITensor(j,i)
+    B = random_itensor(j,i)
 
 Add ITensors A and B together (ok that indices in different order)
 
@@ -158,13 +158,21 @@ include("lib/ITensorsOpsExt/src/ITensorsOpsExt.jl")
 include("fermions/fermions.jl")
 export fparity, isfermionic
 include("lib/ITensorMPS/src/ITensorMPS.jl")
-# TODO: `using .ITensorMPS: ITensorMPS, ...` and
-# explicit export list.
-@reexport using .ITensorMPS
+using .ITensorMPS: ITensorMPS
+# Reexport everything exported by `ITensors.ITensorMPS`
+# except for `ITensorMPS` itself. Ideally we would use
+# `Reexport.jl` but that is not supported right now:
+# https://github.com/simonster/Reexport.jl/issues/27
+# https://github.com/simonster/Reexport.jl/issues/39
+for name in names(ITensorMPS)
+  if name ≠ :ITensorMPS
+    @eval using .ITensorMPS: $name
+    @eval export $name
+  end
+end
 include("lib/ITensorsNamedDimsArraysExt/src/ITensorsNamedDimsArraysExt.jl")
 using .ITensorsNamedDimsArraysExt: ITensorsNamedDimsArraysExt
 include("../ext/ITensorsChainRulesCoreExt/ITensorsChainRulesCoreExt.jl")
-include("lib/ITensorNetworkMaps/src/ITensorNetworkMaps.jl")
 include("lib/ITensorVisualizationCore/src/ITensorVisualizationCore.jl")
 # TODO: `using .ITensorVisualizationCore: ITensorVisualizationCore, ...`.
 using .ITensorVisualizationCore
