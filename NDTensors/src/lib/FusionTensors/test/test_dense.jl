@@ -1,24 +1,12 @@
-using LinearAlgebra: LinearAlgebra, norm
+@eval module $(gensym())
+using LinearAlgebra: LinearAlgebra
 using Test: @test, @testset
 
 using BlockArrays: BlockArrays
 
-using NDTensors.BlockSparseArrays: BlockSparseArrays, BlockSparseArray
-using NDTensors.FusionTensors:
-  FusionTensor,
-  FusionTensors,
-  ndims_codomain,
-  ndims_domain,
-  codomain_axes,
-  domain_axes,
-  data_matrix,
-  sanity_check,
-  fusion_trees,
-  initialize_data_matrix,
-  initialize_trivial_axis
+using NDTensors.FusionTensors: FusionTensor, data_matrix
 using NDTensors.GradedAxes: GradedAxes
-using NDTensors.Sectors: Sectors, SU2, U1, sector, quantum_dimension
-using NDTensors.TensorAlgebra: TensorAlgebra, BlockedPermutation, blockedperm, blocklengths
+using NDTensors.Sectors: SU2, U1, sector
 
 @testset "Abelian FusionTensor" begin
   # trivial  matrix
@@ -89,7 +77,7 @@ end
 
   # spin 1/2 Id
   ft = FusionTensor(LinearAlgebra.I((2)), (g2b,), (g2,))
-  @test norm(ft) ≈ √2
+  @test LinearAlgebra.norm(ft) ≈ √2
   @test Array(ft) ≈ LinearAlgebra.I((2))
 
   # S⋅S
@@ -104,7 +92,7 @@ end
   )
   dense, codomain_legs, domain_legs = sds22, (g2b, g2b), (g2, g2)
   ft = FusionTensor(dense, codomain_legs, domain_legs)
-  @test norm(ft) ≈ √3 / 2
+  @test LinearAlgebra.norm(ft) ≈ √3 / 2
   @test Array(ft) ≈ sds22
 
   # dual over one spin. This changes the dense coefficients but not the FusionTensor ones
@@ -120,7 +108,7 @@ end
   sds22b_domain_legs = (g2, g2b)
   dense, codomain_legs, domain_legs = sds22b, (g2, g2b), (g2b, g2)
   ftb = FusionTensor(dense, codomain_legs, domain_legs)
-  @test norm(ftb) ≈ √3 / 2
+  @test LinearAlgebra.norm(ftb) ≈ √3 / 2
   @test Array(ftb) ≈ sds22b
 
   # no domain axis
@@ -138,7 +126,7 @@ end
   N = 3
   domain_legs = ntuple(_ -> g, N)
   codomain_legs = GradedAxes.dual.(domain_legs)
-  d = quantum_dimension(g)
+  d = 8
   dense = reshape(LinearAlgebra.I(d^N), ntuple(_ -> d, 2 * N))
   ft = FusionTensor(dense, codomain_legs, domain_legs)
   @test Array(ft) ≈ dense
@@ -162,5 +150,16 @@ end
     domain_legs = (gD, gD, gD, gD)
     ft = FusionTensor(tRVB, codomain_legs, domain_legs)
     @test Array(ft) ≈ tRVB
+
+    # same with NamedTuples
+    gd_nt = GradedAxes.gradedrange([sector(; S=s, N=U1(3)) => 1])
+    codomain_legs_nt = (GradedAxes.dual(gd_nt),)
+    gD_nt = GradedAxes.gradedrange([
+      sector(; S=SU2(0), N=U1(1)) => 1, sector(; S=s, N=U1(0)) => 1
+    ])
+    domain_legs_nt = (gD_nt, gD_nt, gD_nt, gD_nt)
+    ft_nt = FusionTensor(tRVB, codomain_legs_nt, domain_legs_nt)
+    @test Array(ft_nt) ≈ tRVB
   end
+end
 end

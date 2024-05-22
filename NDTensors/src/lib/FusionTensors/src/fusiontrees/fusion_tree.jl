@@ -89,8 +89,8 @@ function fusion_trees(
 
   # compute kronecker product of fusion trees
   # more efficient with iterative construction instead of Iterators.product
-  trees = first(last(category_trees_irreps))
-  for c in 1:n_cat  # C order loop
+  trees = first(first(category_trees_irreps))
+  for c in 2:n_cat  # C order loop
     trees = collect(
       _tensor_kron(t, tc) for t in trees for tc in first(category_trees_irreps[c])
     )
