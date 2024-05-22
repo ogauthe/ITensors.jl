@@ -35,7 +35,7 @@ end
 # no leg
 function FusionTensor(dense::AbstractArray, ::Tuple{}, ::Tuple{})
   data_mat = initialize_data_matrix(eltype(dense), (), ())
-  data_mat[1, 1] = dense[1]
+  data_mat[firstindex(data_mat)] = first(dense)
   return FusionTensor(data_mat, (), ())
 end
 
@@ -276,7 +276,7 @@ end
 
 # no leg
 function Base.Array(ft::FusionTensor{<:Any,0,Tuple{},Tuple{}})
-  return reshape([data_matrix(ft)[1, 1]], ())
+  return reshape([first(data_matrix(ft))], ())
 end
 
 # cast to julia dense array with tensor size
