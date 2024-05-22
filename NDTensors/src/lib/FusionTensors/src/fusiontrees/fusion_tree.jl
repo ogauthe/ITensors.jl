@@ -4,6 +4,34 @@
 # better way to contract tensors?
 # compatibility with TensorKit conventions
 
+#
+# A fusion tree fuses k irreps with quantum dimensions dim1, ..., dimk onto one
+# irrep P with quantum dimension dimP. There may be several path that produce
+# this irrep in the fusion ring and each of them correspond to a single "simple" fusion
+# tree with one degree of freedom.
+# We take the ndof_sec trees that fuse on sector sec and merge all of these into one thick
+# fusion tree containing all degrees of freedom for irrep sec.
+# The result is a k+2 dimension fusion tree with size (dim1, dim2, ..., dimk, dim_sec, ndof_sec)
+#
+#
+#      dim_sec  ndof_sec
+#           \  /
+#            \/
+#            /
+#           /
+#          /\
+#         /  \
+#        /\   \
+#       /  \   \
+#     dim1 dim1 dim3
+#
+# It is convenient to merge together the dimension legs to yield a 3-dim tensor
+#             ---------------------------
+#             |             |           |
+#       dim1*dim2*dim3   dim_sec    ndof_sec
+#
+
+################################  utility tools  ###############################
 # LinearAlgebra.kron does not allow input for ndims>2
 function _tensor_kron(a, b)
   sha = ntuple(i -> Bool(i % 2) ? size(a, i ÷ 2 + 1) : 1, 2 * ndims(a))
@@ -12,35 +40,39 @@ function _tensor_kron(a, b)
   return reshape(c, size(a) .* size(b))
 end
 
+recover_key(::Type{<:Tuple}, cats::Tuple) = Sectors.sector(cats)
+
+function recover_key(::Type{<:NamedTuple{Keys}}, cats::Tuple) where {Keys}
+  return Sectors.sector(ntuple(c -> Keys[c] => cats[c], length(cats))...)
+end
+
+##############################   High level interface  ###############################
+function precompute_allowed_trees(
+  irrep_configurations::NTuple{N,Vector{C}},
+  irreps_isdual::NTuple{N,Bool},
+  allowed_sectors::Vector{C},
+) where {N,C<:Sectors.AbstractCategory}
+  n_sectors = length(allowed_sectors)
+  trees = Matrix{Array{Float64,3}}(undef, (n_sectors, 0))
+  allowed_configs = Vector{NTuple{N,Int}}()
+  init = Sectors.trivial(eltype(allowed_sectors))
+  for it in Iterators.product(eachindex.(irrep_configurations)...)
+    irreps_config = getindex.(irrep_configurations, it)
+    rep = reduce(GradedAxes.fusion_product, irreps_config; init=init)
+    if !isempty(intersect(GradedAxes.blocklabels(rep), allowed_sectors))
+      trees_config_sector = prune_fusion_trees(
+        irreps_config, irreps_isdual, allowed_sectors
+      )
+      trees = hcat(trees, trees_config_sector)
+      push!(allowed_configs, it)
+    end
+  end
+  return trees, allowed_configs
+end
+
 function prune_fusion_trees(
   irreps_config::NTuple{N,C}, irreps_isdual::NTuple{N,Bool}, target_sectors::Vector{C}
 ) where {N,C<:Sectors.AbstractCategory}
-  # A fusion tree fuses k irreps with quantum dimensions dim1, ..., dimk onto one
-  # irrep P with quantum dimension dimP. There may be several path that produce
-  # this irrep in the fusion ring and each of them correspond to a single "simple" fusion
-  # tree with one degree of freedom.
-  # We take the ndofP trees that fuse on irrep P and merge all of these into one thick
-  # fusion tree containing all degrees of freedom for irrep P.
-  # The result is a k+2 dimension fusion tree with size (dim1, dim2, ..., dimk, dimP, nof_P)
-  #
-  #
-  #      dimP  ndofP
-  #         \  /
-  #          \/
-  #          /
-  #         /
-  #        /\
-  #       /  \
-  #      /\   \
-  #     /  \   \
-  #   dim1 dim1 dim3
-  #
-  # It is convenient to merge together the dimension legs to yield a 3-dim tensor
-  #
-  #  dim1*dim2*dim3-------------dimP
-  #                     |
-  #                   ndofP
-
   @assert issorted(target_sectors)
   target_sectors_dims = Sectors.quantum_dimension.(target_sectors)
   irreps_dims_prod = prod(Sectors.quantum_dimension.(irreps_config))
@@ -70,8 +102,9 @@ function prune_fusion_trees(
   return trees_sector
 end
 
+##############################   Low level interface  ###############################
 function fusion_trees(::Tuple{}, ::Tuple{})
-  return [ones((1,))], [Sectors.sector(())]
+  return [ones((1, 1))], [Sectors.sector(())]
 end
 
 function fusion_trees(
@@ -105,11 +138,6 @@ function fusion_trees(
   ]
 
   return trees, tree_irreps
-end
-
-recover_key(::Type{<:Tuple}, cats::Tuple) = Sectors.sector(cats)
-function recover_key(::Type{<:NamedTuple{Keys}}, cats::Tuple) where {Keys}
-  return Sectors.sector(ntuple(c -> Keys[c] => cats[c], length(cats))...)
 end
 
 function fusion_trees(
@@ -165,24 +193,23 @@ function fusion_trees(::Sectors.NonAbelianGroup, irreps_arrow::NTuple{N}, isdual
   return trees, tree_irreps
 end
 
-function add_cg_layer(trees, tree_irreps, layer_irrep, isdual)
+function add_cg_layer(trees, tree_irreps, layer_irrep, isdual_layer)
   new_irreps = Vector{typeof(layer_irrep)}()
   new_trees = Vector{Array{Float64,2}}()
-  for i in eachindex(tree_irreps)
-    dim_i = Sectors.quantum_dimension(tree_irreps[i])
-    shcg = (dim_i, :)
-    rep = GradedAxes.fusion_product(tree_irreps[i], layer_irrep)
-    for (degen, s) in zip(BlockArrays.blocklengths(rep), GradedAxes.blocklabels(rep))
-      dim_s = Sectors.quantum_dimension(s)
-      shnt = (:, dim_s)
-      for internal_mult in 1:degen
-        cgt = clebsch_gordan_tensor(
-          tree_irreps[i], layer_irrep, s, false, isdual, internal_mult
+  for (old_tree, old_irrep) in zip(trees, tree_irreps)
+    sh_cg_dof = (size(old_tree, 2), :)
+    rep = GradedAxes.fusion_product(old_irrep, layer_irrep)
+    for (ndof_sec, sec) in zip(BlockArrays.blocklengths(rep), GradedAxes.blocklabels(rep))
+      dim_sec = Sectors.quantum_dimension(sec)
+      shnt = (:, dim_sec)
+      for inner_multiplicity in 1:ndof_sec
+        cgt_layer_dof = clebsch_gordan_tensor(
+          old_irrep, layer_irrep, sec, false, isdual_layer, inner_multiplicity
         )
-        nt = trees[i] * reshape(cgt, shcg)
+        nt = old_tree * reshape(cgt_layer_dof, sh_cg_dof)
         nt = reshape(nt, shnt)
         push!(new_trees, nt)
-        push!(new_irreps, s)
+        push!(new_irreps, sec)
       end
     end
   end

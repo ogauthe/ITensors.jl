@@ -5,11 +5,12 @@ using LinearAlgebra: LinearAlgebra
 using BlockArrays: BlockArrays
 using EllipsisNotation: var".."
 using HalfIntegers: HalfIntegers
+using WignerSymbols: WignerSymbols
 
-import NDTensors.BlockSparseArrays
-import NDTensors.GradedAxes
-import NDTensors.Sectors: Sectors, ⊗
-import NDTensors.TensorAlgebra
+using NDTensors.BlockSparseArrays: BlockSparseArrays
+using NDTensors.GradedAxes: GradedAxes
+using NDTensors.Sectors: Sectors, ⊗
+using NDTensors.TensorAlgebra: TensorAlgebra
 
 include("fusiontrees/clebsch_gordan.jl")
 include("fusiontrees/fusion_tree.jl")

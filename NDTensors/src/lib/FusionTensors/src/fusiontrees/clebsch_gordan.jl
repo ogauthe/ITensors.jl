@@ -2,8 +2,6 @@
 # one tensor is defined from 3 simple objects s1, s2 and s3
 # and contains the coefficients fusing s1 ⊗ s2 -> s3
 
-using WignerSymbols: clebschgordan
-
 clebsch_gordan_tensor(s1, s2, s3) = clebsch_gordan_tensor(s1, s2, s3, false, false, 1)
 
 function clebsch_gordan_tensor(
@@ -27,7 +25,7 @@ function clebsch_gordan_tensor(
       m2 = j2 - j + 1
       for k in 1:d3
         m3 = j3 - k + 1
-        cgtensor[i, j, k] = clebschgordan(j1, m1, j2, m2, j3, m3)
+        cgtensor[i, j, k] = WignerSymbols.clebschgordan(j1, m1, j2, m2, j3, m3)
       end
     end
   end
