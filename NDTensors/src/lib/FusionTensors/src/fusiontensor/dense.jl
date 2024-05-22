@@ -262,7 +262,7 @@ function Base.Array(ft::FusionTensor{<:Any,N,Tuple{}}) where {N}
   codomain_legs = (initialize_trivial_axis((), domain_legs),)
   ft_plus1 = FusionTensor(data_matrix(ft), codomain_legs, domain_legs)
   arr = Array(ft_plus1)
-  return arr[1, ntuple(i -> :, N)...]
+  return arr[1, ..]
 end
 
 # no domain leg
@@ -271,7 +271,7 @@ function Base.Array(ft::FusionTensor{<:Any,N,<:Any,Tuple{}}) where {N}
   domain_legs = (initialize_trivial_axis(codomain_legs, ()),)
   ft_plus1 = FusionTensor(data_matrix(ft), codomain_legs, domain_legs)
   arr = Array(ft_plus1)
-  return arr[ntuple(i -> :, N)..., 1]
+  return arr[.., 1]
 end
 
 # no leg
