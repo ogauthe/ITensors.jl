@@ -25,7 +25,12 @@ function Base.permutedims(
     end
   end
 
-  structural_data = StructuralData(codomain_axes(ft), domain_axes(ft), perm)
+  structural_data = StructuralData(
+    perm,
+    GradedAxes.blocklabels.(codomain_axes(ft)),
+    GradedAxes.blocklabels.(domain_axes(ft)),
+    GradedAxes.isdual.(axes(ft)),
+  )
   permuted_data_matrix = permute_data(ft, structural_data)
 
   codomain_axes_out = getindex.(Ref(axes(ft)), perm[BlockArrays.Block(1)])

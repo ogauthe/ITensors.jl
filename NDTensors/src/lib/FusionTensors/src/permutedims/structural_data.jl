@@ -1,31 +1,37 @@
-struct StructuralData{NCoAxesIn,NDoAxesIn,P<:TensorAlgebra.BlockedPermutation}
+struct StructuralData{P,NCoAxesIn,NDoAxesIn,C}
   permutation::P
-end
 
-# constructors
-function StructuralData(
-  codomain_axes_in::Tuple, domain_axes_in::Tuple, perm::TensorAlgebra.BlockedPermutation
-)
-  # TODO impose constraint NCoAxesIn + NDoAxesIn = N
-  # perm imposes it for Out
-  return StructuralData{length(codomain_axes_in),length(domain_axes_in),typeof(perm)}(perm)
+  # inner constructor to impose constraints on types
+  function StructuralData(
+    perm::TensorAlgebra.BlockedPermutation{2,N},
+    codomain_sectors_in::NTuple{NCoAxesIn,Vector{C}},
+    domain_sectors_in::NTuple{NDoAxesIn,Vector{C}},
+    arrow_directions::NTuple{N,Bool},
+  ) where {N,NCoAxesIn,NDoAxesIn,C<:Sectors.AbstractCategory}
+    if NCoAxesIn + NDoAxesIn != N
+      return error("permutation incompatible with axes")
+    end
+    return new{typeof(perm),NCoAxesIn,NCoAxesIn,C}(perm)
+  end
 end
 
 # getters
 permutation(sd::StructuralData) = sd.permutation
-function Base.ndims(::StructuralData{NCoAxesIn,NDoAxesIn}) where {NCoAxesIn,NDoAxesIn}
+
+function Base.ndims(::StructuralData{P,NCoAxesIn,NDoAxesIn}) where {P,NCoAxesIn,NDoAxesIn}
   return NCoAxesIn + NDoAxesIn
 end
-ndims_codomain_in(::StructuralData{NCoAxesIn}) where {NCoAxesIn} = NCoAxesIn
-
-function ndims_codomain_out(sd::StructuralData)
-  return length(permutation(sd)[1])
-end
-
-function ndims_domain_in(::StructuralData{NCoAxesIn,NDoAxesIn}) where {NCoAxesIn,NDoAxesIn}
+ndims_codomain_in(::StructuralData{P,NCoAxesIn}) where {P,NCoAxesIn} = NCoAxesIn
+function ndims_domain_in(
+  ::StructuralData{P,NCoAxesIn,NDoAxesIn}
+) where {P,NCoAxesIn,NDoAxesIn}
   return NDoAxesIn
 end
 
-function ndimsodomain_out(sd::StructuralData)
-  return length(permutation(sd)[2])
+function ndims_codomain_out(sd::StructuralData)
+  return BlockArrays.blocklengths(permutation(sd))[1]
+end
+
+function ndims_domain_out(sd::StructuralData)
+  return BlockArrays.blocklengths(permutation(sd))[2]
 end
