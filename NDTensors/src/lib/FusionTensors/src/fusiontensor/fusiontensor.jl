@@ -70,21 +70,10 @@ function initialize_data_matrix(
   promoted = promote_type(data_type, Float64)
 
   # TODO anyway to avoid type hint below?
-  init = initialize_trivial_axis(codomain_legs::Tuple, domain_legs::Tuple)
+  init = Sectors.trivial(first((codomain_legs..., domain_legs...)))
   mat_row_axis::typeof(init) = reduce(GradedAxes.fusion_product, codomain_legs; init=init) # TODO take dual
   mat_col_axis::typeof(init) = reduce(GradedAxes.fusion_product, domain_legs; init=init)
   return BlockSparseArrays.BlockSparseArray{promoted}(mat_row_axis, mat_col_axis)
-end
-function initialize_trivial_axis(codomain_legs::Tuple, ::Tuple)
-  return Sectors.trivial(first(codomain_legs))
-end
-
-function initialize_trivial_axis(::Tuple{}, domain_legs::Tuple)
-  return Sectors.trivial(first(domain_legs))
-end
-
-function initialize_trivial_axis(::Tuple{}, ::Tuple{})
-  return error("At lease one axis must be provided")
 end
 
 # empty matrix

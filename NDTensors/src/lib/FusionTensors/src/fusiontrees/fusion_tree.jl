@@ -60,11 +60,9 @@ function precompute_allowed_trees(
   n_sectors = length(allowed_sectors)
   trees = Matrix{Array{Float64,3}}(undef, (n_sectors, 0))
   allowed_configs = Vector{NTuple{N,Int}}()
-  init = Sectors.trivial(eltype(allowed_sectors))
   for it in Iterators.product(eachindex.(irrep_configurations)...)
     irreps_config = getindex.(irrep_configurations, it)
-    rep = reduce(GradedAxes.fusion_product, irreps_config; init=init)
-    if !isempty(intersect(GradedAxes.blocklabels(rep), allowed_sectors))
+    if !isempty(intersect_sectors(irreps_config, allowed_sectors))
       trees_config_sector = prune_fusion_trees_compressed(
         irreps_config, irreps_isdual, allowed_sectors
       )
@@ -84,7 +82,7 @@ function prune_fusion_trees(
 )
   @assert issorted(target_sectors)
   trees_sector = [zeros((Sectors.quantum_dimension(sec), 0)) for sec in target_sectors]
-  i0 = findfirst(==(Sectors.trivial(eltype(target_sectors))), trees_sectors)
+  i0 = findfirst(==(Sectors.trivial(eltype(target_sectors))), target_sectors)
   if !isnothing(i0)
     trees_sector[i0] = ones((1, 1))
   end

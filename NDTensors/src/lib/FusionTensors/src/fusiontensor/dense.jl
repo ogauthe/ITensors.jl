@@ -75,36 +75,6 @@ function intersect_sectors(
   return sec ∈ codomain_sectors ? [sec] : Vector{C}()
 end
 
-############################  cast from dense: zero leg cases  #############################
-# no codomain leg
-function FusionTensor(dense::AbstractArray, ::Tuple{}, domain_legs::Tuple)
-  # add a dummy axis to compute data_matrix
-  codomain_legs = (initialize_trivial_axis((), domain_legs),)
-  dense_plus_1 = reshape(dense, (1, size(dense)...))
-  ft_plus1 = FusionTensor(dense_plus_1, codomain_legs, domain_legs)
-  data_mat = data_matrix(ft_plus1)
-  # remove dummy axis
-  return FusionTensor(data_mat, (), domain_legs)
-end
-
-# no domain leg
-function FusionTensor(dense::AbstractArray, codomain_legs::Tuple, ::Tuple{})
-  # add a dummy axis to compute data_matrix
-  domain_legs = (initialize_trivial_axis(codomain_legs, ()),)
-  dense_plus_1 = reshape(dense, (size(dense)..., 1))
-  ft_plus1 = FusionTensor(dense_plus_1, codomain_legs, domain_legs)
-  data_mat = data_matrix(ft_plus1)
-  # remove dummy axis
-  return FusionTensor(data_mat, codomain_legs, ())
-end
-
-# no leg
-function FusionTensor(dense::AbstractArray, ::Tuple{}, ::Tuple{})
-  data_mat = initialize_data_matrix(eltype(dense), (), ())
-  data_mat[firstindex(data_mat)] = first(dense)
-  return FusionTensor(data_mat, (), ())
-end
-
 #################################  cast from dense array  ##################################
 function FusionTensor(dense::AbstractArray, codomain_legs::Tuple, domain_legs::Tuple)
   bounds = Sectors.block_boundaries.((codomain_legs..., domain_legs...))
@@ -295,30 +265,6 @@ function FusionTensor(
     throw(DomainError("Dense tensor norm is not preserved in FusionTensor cast"))
   end
   return ft
-end
-
-############################  cast to dense: zero leg cases  ###############################
-# no codomain leg
-function Base.Array(ft::FusionTensor{<:Any,N,Tuple{}}) where {N}
-  domain_legs = domain_axes(ft)
-  codomain_legs = (initialize_trivial_axis((), domain_legs),)
-  ft_plus1 = FusionTensor(data_matrix(ft), codomain_legs, domain_legs)
-  arr = Array(ft_plus1)
-  return arr[1, ..]
-end
-
-# no domain leg
-function Base.Array(ft::FusionTensor{<:Any,N,<:Any,Tuple{}}) where {N}
-  codomain_legs = codomain_axes(ft)
-  domain_legs = (initialize_trivial_axis(codomain_legs, ()),)
-  ft_plus1 = FusionTensor(data_matrix(ft), codomain_legs, domain_legs)
-  arr = Array(ft_plus1)
-  return arr[.., 1]
-end
-
-# no leg
-function Base.Array(ft::FusionTensor{<:Any,0,Tuple{},Tuple{}})
-  return reshape([first(data_matrix(ft))], ())
 end
 
 ##################################  cast to dense array  ###################################
