@@ -15,12 +15,64 @@ function shape_split_degen_dims(legs, it)
   return shape
 end
 
-function get_fused_sectors(irrep_configurations, it)
-  config_irreps = getindex.(irrep_configurations, it)
-  init = Sectors.trivial(first(config_irreps))
-  fused_rep = reduce(GradedAxes.fusion_product, config_irreps; init=init)
-  config_fused_sectors = GradedAxes.blocklabels(fused_rep)
-  return config_fused_sectors
+function fused_sectors(secs::NTuple{<:Any,<:Sectors.AbstractCategory})
+  return GradedAxes.blocklabels(reduce(GradedAxes.fusion_product, secs))
+end
+fused_sectors(secs::Tuple{<:Sectors.AbstractCategory}) = only(secs)
+fused_sectors(::Tuple{}) = Sectors.sector(())
+
+function intersect_sectors(
+  codomain_sectors::NTuple{<:Any,C}, domain_sectors::NTuple{<:Any,C}
+) where {C<:Sectors.AbstractCategory}
+  return intersect_sectors(fused_sectors(codomain_sectors), fused_sectors(domain_sectors))
+end
+
+function intersect_sectors(
+  config_irreps::NTuple{<:Any,C}, allowed::Vector{C}
+) where {C<:Sectors.AbstractCategory}
+  return intersect_sectors(fused_sectors(config_irreps), allowed)
+end
+
+function intersect_sectors(
+  allowed::Vector{C}, config_irreps::NTuple{<:Any,C}
+) where {C<:Sectors.AbstractCategory}
+  return intersect_sectors(allowed, fused_sectors(config_irreps))
+end
+
+function intersect_sectors(
+  ::Sectors.CategoryProduct{Tuple{}}, allowed::Vector{<:Sectors.AbstractCategory}
+)
+  return intersect_sectors(Sectors.trivial(eltype(allowed)), allowed)
+end
+
+function intersect_sectors(
+  allowed::Vector{<:Sectors.AbstractCategory}, ::Sectors.CategoryProduct{Tuple{}}
+)
+  return intersect_sectors(allowed, Sectors.trivial(eltype(allowed)))
+end
+
+function intersect_sectors(
+  ::Sectors.CategoryProduct{Tuple{}}, ::Sectors.CategoryProduct{Tuple{}}
+)
+  return Sectors.sector(())
+end
+
+function intersect_sectors(
+  codomain_sectors::Vector{C}, domain_sectors::Vector{C}
+) where {C<:Sectors.AbstractCategory}
+  return intersect(codomain_sectors, domain_sectors)
+end
+
+function intersect_sectors(
+  sec::C, domain_sectors::Vector{C}
+) where {C<:Sectors.AbstractCategory}
+  return sec ∈ domain_sectors ? [sec] : Vector{C}()
+end
+
+function intersect_sectors(
+  codomain_sectors::Vector{C}, sec::C
+) where {C<:Sectors.AbstractCategory}
+  return sec ∈ codomain_sectors ? [sec] : Vector{C}()
 end
 
 ############################  cast from dense: zero leg cases  #############################
@@ -113,21 +165,19 @@ function FusionTensor(
   # loop for each domain irrep configuration
   block_shifts_columns = zeros(Int, n_sectors)
   for iter_do in Iterators.product(eachindex.(domain_irrep_configurations)...)
-    domain_config_fused_sectors = get_fused_sectors(domain_irrep_configurations, iter_do)
-
-    if !isempty(intersect(allowed_sectors, domain_config_fused_sectors))
-      domain_trees_config = prune_fusion_trees(
-        getindex.(domain_irrep_configurations, iter_do), domain_isdual, allowed_sectors
+    domain_irreps_config = getindex.(domain_irrep_configurations, iter_do)
+    allowed_sectors_domain = intersect_sectors(domain_irreps_config, allowed_sectors)
+    if !isempty(allowed_sectors_domain)
+      domain_trees_config = prune_fusion_trees_compressed(
+        domain_irreps_config, domain_isdual, allowed_sectors
       )
 
       # loop for each codomain irrep configuration
       block_shifts_rows = zeros(Int, n_sectors)
       for (i_co, iter_co) in enumerate(allowed_codomain_configs)
-        codomain_config_fused_sectors = get_fused_sectors(
-          codomain_irrep_configurations, iter_co
-        )
-        allowed_sectors_config = intersect(
-          domain_config_fused_sectors, codomain_config_fused_sectors
+        codomain_irreps_config = getindex.(codomain_irrep_configurations, iter_co)
+        allowed_sectors_config = intersect_sectors(
+          codomain_irreps_config, allowed_sectors_domain
         )
         if !isempty(allowed_sectors_config)
 
@@ -311,10 +361,10 @@ function BlockSparseArrays.BlockSparseArray(ft::FusionTensor)
   # loop for each domain irrep configuration
   block_shifts_column = zeros(Int, n_sectors)
   for iter_do in Iterators.product(eachindex.(domain_irrep_configurations)...)
-    domain_config_fused_sectors = get_fused_sectors(domain_irrep_configurations, iter_do)
-
-    if !isempty(intersect(existing_sectors, domain_config_fused_sectors))
-      domain_trees_config = prune_fusion_trees(
+    domain_irreps_config = getindex.(domain_irrep_configurations, iter_do)
+    existing_sectors_domain = intersect_sectors(domain_irreps_config, existing_sectors)
+    if !isempty(existing_sectors_domain)
+      domain_trees_config = prune_fusion_trees_compressed(
         getindex.(domain_irrep_configurations, iter_do), domain_isdual, existing_sectors
       )
       block_shifts_row = zeros(Int, n_sectors)
@@ -322,11 +372,9 @@ function BlockSparseArrays.BlockSparseArray(ft::FusionTensor)
 
       # loop for each codomain irrep configuration
       for (i_co, iter_co) in enumerate(existing_codomain_configs)
-        codomain_config_fused_sectors = get_fused_sectors(
-          codomain_irrep_configurations, iter_co
-        )
-        existing_sectors_config = intersect(
-          domain_config_fused_sectors, codomain_config_fused_sectors, existing_sectors
+        codomain_irreps_config = getindex.(codomain_irrep_configurations, iter_co)
+        existing_sectors_config = intersect_sectors(
+          codomain_irreps_config, existing_sectors_domain
         )
         if !isempty(existing_sectors_config)
           codomain_config_size = prod(getindex.(codomain_degens, iter_co))

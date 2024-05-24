@@ -46,6 +46,11 @@ function recover_key(::Type{<:NamedTuple{Keys}}, cats::Tuple) where {Keys}
   return Sectors.sector(ntuple(c -> Keys[c] => cats[c], length(cats))...)
 end
 
+function reshape_3legs(a::AbstractArray)
+  shape_3leg = (prod(size(a)[begin:(end - 2)]), size(a, ndims(a) - 1), size(a, ndims(a)))
+  return reshape(a, shape_3leg)
+end
+
 #################################   High level interface  ##################################
 function precompute_allowed_trees(
   irrep_configurations::NTuple{N,Vector{C}},
@@ -60,7 +65,7 @@ function precompute_allowed_trees(
     irreps_config = getindex.(irrep_configurations, it)
     rep = reduce(GradedAxes.fusion_product, irreps_config; init=init)
     if !isempty(intersect(GradedAxes.blocklabels(rep), allowed_sectors))
-      trees_config_sector = prune_fusion_trees(
+      trees_config_sector = prune_fusion_trees_compressed(
         irreps_config, irreps_isdual, allowed_sectors
       )
       trees = hcat(trees, trees_config_sector)
@@ -70,31 +75,39 @@ function precompute_allowed_trees(
   return trees, allowed_configs
 end
 
+function prune_fusion_trees_compressed(irreps_config, irreps_isdual, target_sectors)
+  return reshape_3legs.(prune_fusion_trees(irreps_config, irreps_isdual, target_sectors))
+end
+
+function prune_fusion_trees(
+  ::Tuple{}, ::Tuple{}, target_sectors::Vector{<:Sectors.AbstractCategory}
+)
+  @assert issorted(target_sectors)
+  trees_sector = [zeros((Sectors.quantum_dimension(sec), 0)) for sec in target_sectors]
+  i0 = findfirst(==(Sectors.trivial(eltype(target_sectors))), trees_sectors)
+  if !isnothing(i0)
+    trees_sector[i0] = ones((1, 1))
+  end
+  return trees_sector
+end
+
 function prune_fusion_trees(
   irreps_config::NTuple{N,C}, irreps_isdual::NTuple{N,Bool}, target_sectors::Vector{C}
 ) where {N,C<:Sectors.AbstractCategory}
   @assert issorted(target_sectors)
-  target_sectors_dims = Sectors.quantum_dimension.(target_sectors)
-  irreps_dims_prod = prod(Sectors.quantum_dimension.(irreps_config))
-  n_sectors = length(target_sectors)
-  rep = reduce(GradedAxes.fusion_product, irreps_config; init=Sectors.trivial(C))
+  irreps_dims = Sectors.quantum_dimension.(irreps_config)
   trees, tree_irreps = fusion_trees(irreps_config, irreps_isdual)
   trees_sector = [
-    zeros((irreps_dims_prod, target_sectors_dims[i_sec], 0)) for i_sec in 1:n_sectors
+    zeros((irreps_dims..., Sectors.quantum_dimension(sec), 0)) for sec in target_sectors
   ]
   i_sec, j = 1, 1
-  while i_sec <= n_sectors && j <= lastindex(tree_irreps)
+  while i_sec <= lastindex(target_sectors) && j <= lastindex(tree_irreps)
     if target_sectors[i_sec] < tree_irreps[j]
       i_sec += 1
     elseif tree_irreps[j] < target_sectors[i_sec]
       j += 1
     else
-      shape_3legs = (
-        irreps_dims_prod,
-        target_sectors_dims[i_sec],
-        GradedAxes.unlabel.(GradedAxes.blocklengths(rep)[j]),
-      )
-      trees_sector[i_sec] = reshape(trees[j], shape_3legs)
+      trees_sector[i_sec] = trees[j]
       i_sec += 1
       j += 1
     end
