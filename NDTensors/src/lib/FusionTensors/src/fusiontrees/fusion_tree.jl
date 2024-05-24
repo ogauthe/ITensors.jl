@@ -80,7 +80,7 @@ end
 function prune_fusion_trees(
   ::Tuple{}, ::Tuple{}, target_sectors::Vector{<:Sectors.AbstractCategory}
 )
-  @assert issorted(target_sectors)
+  @assert issorted(target_sectors, lt=!isless, rev=true)  # strict
   trees_sector = [zeros((Sectors.quantum_dimension(sec), 0)) for sec in target_sectors]
   i0 = findfirst(==(Sectors.trivial(eltype(target_sectors))), target_sectors)
   if !isnothing(i0)
@@ -92,7 +92,7 @@ end
 function prune_fusion_trees(
   irreps_config::NTuple{N,C}, irreps_isdual::NTuple{N,Bool}, target_sectors::Vector{C}
 ) where {N,C<:Sectors.AbstractCategory}
-  @assert issorted(target_sectors)
+  @assert issorted(target_sectors, lt=!isless, rev=true)  # strict
   irreps_dims = Sectors.quantum_dimension.(irreps_config)
   trees, tree_irreps = fusion_trees(irreps_config, irreps_isdual)
   trees_sector = [
