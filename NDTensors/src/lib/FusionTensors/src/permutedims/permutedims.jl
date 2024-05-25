@@ -14,9 +14,12 @@ function Base.permutedims(
   return permutedims(ft, perm)
 end
 
+# 0-dim case
+Base.permutedims(ft::FusionTensor{<:Any,0}, ::TensorAlgebra.BlockedPermutation{2,0}) = ft
+
 function Base.permutedims(
-  ft::FusionTensor{T,N}, perm::TensorAlgebra.BlockedPermutation{2,N}
-) where {T,N}
+  ft::FusionTensor{<:Any,N}, perm::TensorAlgebra.BlockedPermutation{2,N}
+) where {N}
 
   # early return for identity operation. Do not copy.
   if ndims_codomain(ft) == first(BlockArrays.blocklengths(perm))  # compile time
