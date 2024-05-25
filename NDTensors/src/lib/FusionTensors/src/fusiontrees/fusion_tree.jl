@@ -52,28 +52,33 @@ function reshape_3legs(a::AbstractArray)
 end
 
 #################################   High level interface  ##################################
-function precompute_allowed_trees(
-  irrep_configurations::NTuple{N,Vector{C}},
-  irreps_isdual::NTuple{N,Bool},
+function get_tree!(
+  dic::Dict{NTuple{N,Int},Vector{Array{Float64,3}}},
+  it::NTuple{N,Int},
+  sectors_all::NTuple{N,Vector{C}},
+  isdual::NTuple{N,Bool},
   allowed_sectors::Vector{C},
 ) where {N,C<:Sectors.AbstractCategory}
-  n_sectors = length(allowed_sectors)
-  trees = Matrix{Array{Float64,3}}(undef, (n_sectors, 0))
-  allowed_configs = Vector{NTuple{N,Int}}()
-  for it in Iterators.product(eachindex.(irrep_configurations)...)
-    irreps_config = getindex.(irrep_configurations, it)
-    if !isempty(intersect_sectors(irreps_config, allowed_sectors))
-      trees_config_sector = prune_fusion_trees_compressed(
-        irreps_config, irreps_isdual, allowed_sectors
-      )
-      trees = hcat(trees, trees_config_sector)
-      push!(allowed_configs, it)
-    end
+  get!(dic, it) do
+    prune_fusion_trees_compressed(getindex.(sectors_all, it), isdual, allowed_sectors)
   end
-  return trees, allowed_configs
 end
 
-function prune_fusion_trees_compressed(irreps_config, irreps_isdual, target_sectors)
+function get_tree!(
+  dic::Dict{NTuple{N,Int},Vector{Array{Float64}}},
+  it::NTuple{N,Int},
+  sectors_all::NTuple{N,Vector{C}},
+  isdual::NTuple{N,Bool},
+  allowed_sectors::Vector{C},
+) where {N,C<:Sectors.AbstractCategory}
+  get!(dic, it) do
+    prune_fusion_trees(getindex.(sectors_all, it), isdual, allowed_sectors)
+  end
+end
+
+function prune_fusion_trees_compressed(
+  irreps_config::NTuple{N,C}, irreps_isdual::NTuple{N,Bool}, target_sectors::Vector{C}
+) where {N,C<:Sectors.AbstractCategory}
   return reshape_3legs.(prune_fusion_trees(irreps_config, irreps_isdual, target_sectors))
 end
 
