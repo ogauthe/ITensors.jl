@@ -65,7 +65,7 @@ function get_tree!(
 end
 
 function get_tree!(
-  dic::Dict{NTuple{N,Int},Vector{Array{Float64}}},
+  dic::Dict{NTuple{N,Int},<:Vector{<:Array{Float64}}},
   it::NTuple{N,Int},
   sectors_all::NTuple{N,Vector{C}},
   isdual::NTuple{N,Bool},

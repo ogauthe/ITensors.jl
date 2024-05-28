@@ -2,6 +2,10 @@
 # StructuralData only depends on Fusion Category, symmetry sectors and permutation
 # it does not depend on tensor coefficients or degeneracies
 
+# TBD
+# * dual in codomain
+# * BlockArray?
+
 struct StructuralData{P,NCoAxesIn,NDoAxesIn,C}
   permutation::P
 
@@ -84,21 +88,106 @@ function intersect_sectors(
   )
 end
 
-function get_tree!(dic, it, sectors_all, isdual, allowed_sectors)
-  get!(dic, it) do
-    prune_fusion_trees(getindex.(sectors_all, it), isdual, allowed_sectors)
+########################  Constructor from Clebsch-Gordan trees ############################
+function contract_projectors(
+  trees_codomain_config::Vector{<:Array{Float64}},
+  trees_domain_config::Vector{<:Array{Float64}},
+  labels_dest::Tuple{Vararg{Int}},
+)
+  NCoAxes = ndims(eltype(trees_codomain_config)) - 2
+  NDoAxes = ndims(eltype(trees_domain_config)) - 2
+  N = NDoAxes + NCoAxes
+  @assert length(labels_dest) == N + 2
+
+  dims_prod = prod((
+    size(first(trees_codomain_config))[begin:NCoAxes]...,
+    size(first(trees_domain_config))[begin:NDoAxes]...,
+  ))
+  projectors = [zeros((dims_prod, 0)) for _ in trees_codomain_config]
+  labels_codomain = (ntuple(identity, NCoAxes)..., N + 3, N + 1)
+  labels_domain = (ntuple(i -> i + NCoAxes, NDoAxes)..., N + 3, N + 2)
+  for (i, (cotree, dotree)) in enumerate(zip(trees_codomain_config, trees_domain_config))
+    if length(cotree) > 0 && length(dotree) > 0  # some trees are empty
+
+      #          ----------------dim_sec---------
+      #          |                              |
+      #          |   ndof_codomain_sec          |  ndof_domain_sec
+      #           \  /                           \  /
+      #            \/                             \/
+      #            /                              /
+      #           /                              /
+      #          /\                             /\
+      #         /  \                           /  \
+      #        /\   \                         /\   \
+      #       /  \   \                       /  \   \
+      #     dim1 dim1 dim3                 dim4 dim5 dim6
+      p = TensorAlgebra.contract(
+        labels_dest, cotree, labels_codomain, dotree, labels_domain
+      )
+      projectors[i] = reshape(p, (dims_prod, :))
+    end
   end
+  return projectors
 end
 
-########################  Constructor from Clebsch-Gordan trees ############################
+function overlap_cg_trees(
+  trees_codomain_in_config::Vector{<:Array{Float64}},
+  trees_domain_in_config::Vector{<:Array{Float64}},
+  trees_codomain_out_config::Vector{<:Array{Float64}},
+  trees_domain_out_config::Vector{<:Array{Float64}},
+  perm::TensorAlgebra.BlockedPermutation{2},
+)
+  # compile time
+  NCoAxesIn = ndims(eltype(trees_codomain_in_config)) - 2
+  NDoAxesIn = ndims(eltype(trees_domain_in_config)) - 2
+  NCoAxesOut = ndims(eltype(trees_codomain_out_config)) - 2
+  NDoAxesOut = ndims(eltype(trees_domain_out_config)) - 2
+  N = length(perm)
+  @assert NCoAxesIn + NDoAxesIn == N
+  @assert NCoAxesOut + NDoAxesOut == N
+  @assert N > 0
+
+  # initialize output as a BlockArray with
+  # blocksize: (n_sectors_out, n_sectors_in)
+  # blocksizes: (ndof_config_sectors_out, ndof_config_sectors_in)
+  block_rows =
+    size.(trees_codomain_out_config, NCoAxesOut + 2) .*
+    size.(trees_domain_out_config, NDoAxesOut + 2)
+  block_cols =
+    size.(trees_codomain_in_config, NCoAxesIn + 2) .*
+    size.(trees_domain_in_config, NDoAxesIn + 2)
+  isometry = BlockArrays.BlockArray{Float64}(undef, block_rows, block_cols)
+
+  projectors_out = FusionTensors.contract_projectors(
+    trees_codomain_out_config, trees_domain_out_config, ntuple(identity, N + 2)
+  )
+  projectors_in = FusionTensors.contract_projectors(
+    trees_codomain_in_config, trees_domain_in_config, (Tuple(perm)..., N + 1, N + 2)
+  )
+
+  for (j, proj_in) in enumerate(projectors_in)
+    for (i, proj_out) in enumerate(projectors_out)
+      isometry[BlockArrays.Block(i, j)] =
+        (proj_out'proj_in) / size(trees_codomain_out_config[i], NCoAxesOut + 1)
+    end
+  end
+
+  return isometry
+end
+
 function compute_isometries_CG(
   perm::TensorAlgebra.BlockedPermutation{2,N},
   sectors_codomain_in::NTuple{NCoAxesIn,Vector{C}},
   sectors_domain_in::NTuple{NDoAxesIn,Vector{C}},
   arrow_directions_in::NTuple{N,Bool},
 ) where {N,NCoAxesIn,NDoAxesIn,C<:Sectors.AbstractCategory}
+
+  # compile time
   @assert N > 0
   @assert NCoAxesIn + NDoAxesIn == N
+  NCoAxesOut, NDoAxesOut = BlockArrays.blocklengths(perm)
+
+  # define axes, isdual and allowed sectors
   allowed_sectors_in = intersect_sectors(
     sectors_codomain_in, sectors_domain_in, arrow_directions_in
   )
@@ -106,14 +195,15 @@ function compute_isometries_CG(
   sectors_codomain_out = getindex.(Ref(sectors_in), perm[BlockArrays.Block(1)])
   sectors_domain_out = getindex.(Ref(sectors_in), perm[BlockArrays.Block(2)])
   arrow_directions_out = getindex.(Ref(arrow_directions_in), Tuple(perm))
-  isdual_codomain_in = arrow_directions_in[begin:NCoAxesIn]
+  isdual_codomain_in = .!arrow_directions_in[begin:NCoAxesIn]  # TBD
   isdual_domain_in = arrow_directions_in[(NCoAxesIn + 1):end]
-  isdual_codomain_out = getindex.(Ref(arrow_directions_in), perm[BlockArrays.Block(1)])
+  isdual_codomain_out = .!getindex.(Ref(arrow_directions_in), perm[BlockArrays.Block(1)])  # TBD
   isdual_domain_out = getindex.(Ref(arrow_directions_in), perm[BlockArrays.Block(2)])
   allowed_sectors_out = intersect_sectors(
     sectors_codomain_out, sectors_domain_out, arrow_directions_out
   )
 
+  # initialize output
   isometries = Vector{
     BlockArrays.BlockMatrix{  # TBD use BlockSparseArray 4-dim?
       Float64,
@@ -124,15 +214,21 @@ function compute_isometries_CG(
       },
     },
   }()
-  # avoid precomputing all trees, but cache computed ones
+
+  # cache computed Clebsch-Gordan trees
   trees_codomain_in = Dict{NTuple{NCoAxesIn,Int},Vector{Array{Float64,NCoAxesIn + 2}}}()
   trees_domain_in = Dict{NTuple{NDoAxesIn,Int},Vector{Array{Float64,NDoAxesIn + 2}}}()
   trees_codomain_out = Dict{NTuple{NCoAxesOut,Int},Vector{Array{Float64,NCoAxesOut + 2}}}()
   trees_domain_out = Dict{NTuple{NDoAxesOut,Int},Vector{Array{Float64,NDoAxesOut + 2}}}()
+
+  # loop over all sector configuration
   for it in Iterators.product(eachindex.(sectors_in)...)
-    sectors_codomain_in_config = getindex.(sectors_codomain_in, it[begin:NCoAxesIn])
-    sectors_domain_in_config = getindex.(sectors_domain_in, it[(NCoAxesIn + 1):end])
-    if !isempty(intersect_sectors(sectors_codomain_in_config, sectors_domain_in_config))
+    if !isempty(
+      intersect_sectors(
+        getindex.(sectors_codomain_in, it[begin:NCoAxesIn]),
+        getindex.(sectors_domain_in, it[(NCoAxesIn + 1):end]),
+      ),
+    )
       trees_codomain_in_config = get_tree!(
         trees_codomain_in,
         it[begin:NCoAxesIn],
@@ -173,77 +269,6 @@ function compute_isometries_CG(
     end
   end
   return isometries
-end
-
-function overlap_cg_trees(
-  trees_config_codomain_in,
-  trees_config_domain_in,
-  trees_config_codomain_out,
-  trees_config_domain_out,
-  perm,
-)
-  # compile time
-  NCoAxesIn = ndims(eltype(trees_config_codomain_in)) - 2
-  NDoAxesIn = ndims(eltype(trees_config_domain_in)) - 2
-  NCoAxesOut = ndims(eltype(trees_config_codomain_out)) - 2
-  NDoAxesOut = ndims(eltype(trees_config_domain_out)) - 2
-  N = length(perm)
-  @assert NCoAxesIn + NDoAxesIn == N
-  @assert NCoAxesOut + NDoAxesOut == N
-  @assert N > 0
-
-  n_sectors_in = length(trees_config_domain_in)
-  n_sectors_out = length(trees_config_domain_out)
-
-  block_rows =
-    size.(trees_config_codomain_in, NCoAxesIn + 2) .*
-    size.(trees_config_domain_in, NDoAxesIn + 2)
-  block_cols =
-    size.(trees_config_codomain_out, NCoAxesOut + 2) .*
-    size.(trees_config_domain_out, NDoAxesOut + 2)
-
-  # blocksize = (n_sectors_in, n_sectors_out)
-  # blocksizes = (ndof_config_sectors_in, ndof_config_sectors_out)
-  isometry = BlockArrays.BlockArray{Float64}(undef, block_rows, block_cols)
-
-  config_dims_prod =
-    prod(size(first(trees_config_codomain_in))[begin:(end - 2)]) *
-    prod(size(first(trees_config_domain_in))[begin:(end - 2)])
-  projectors_out = [ones((config_dims_prod, 0)) for _ in 1:n_sectors_out]
-  labels_out = ntuple(identity, N + 2)
-  labels_co_out = (ntuple(identity, NCoAxesOut)..., N + 3, N + 1)
-  labels_do_out = (ntuple(i -> i + NCoAxesOut, NDoAxesOut)..., N + 3, N + 2)
-  for j in 1:n_sectors_out
-    cotree = trees_config_codomain_out[j]
-    dotree = trees_config_domain_out[j]
-    if length(cotree) > 0 && length(dotree) > 0
-      proj_out_tensor::Array{Float64,N + 2} = TensorAlgebra.contract(
-        labels_out, cotree, labels_co_out, dotree, labels_do_out
-      )
-      projectors_out[j] = reshape(proj_out_tensor, (config_dims_prod, :))
-    end
-  end
-
-  labels_in = (N + 1, N + 2, Tuple(perm)...)
-  labels_co_in = (ntuple(identity, NCoAxesIn)..., N + 3, N + 1)
-  labels_do_in = (ntuple(i -> i + NCoAxesIn, NDoAxesIn)..., N + 3, N + 2)
-  for i in 1:n_sectors_in
-    cotree = trees_config_codomain_in[i]
-    dotree = trees_config_domain_in[i]
-    if length(cotree) > 0 && length(dotree) > 0
-      proj_in_tensor::Array{Float64,N + 2} = TensorAlgebra.contract(
-        labels_in, cotree, labels_co_in, dotree, labels_do_in
-      )
-      proj_in_mat = reshape(proj_in_tensor, (:, config_dims_prod))
-      for j in 1:n_sectors_out
-        unitary = proj_in_mat * projectors_out[j]
-        isometry[BlockArrays.Block(i, j)] =
-          unitary / size(trees_config_codomain_out[j], NCoAxesOut + 1)
-      end
-    end
-  end
-
-  return isometry
 end
 
 ###################################  Constructor from 6j  ##################################
