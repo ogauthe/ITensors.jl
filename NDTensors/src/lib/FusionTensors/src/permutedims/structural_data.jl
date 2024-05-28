@@ -41,53 +41,6 @@ function ndims_domain_out(sd::StructuralData)
   return BlockArrays.blocklengths(permutation(sd))[2]
 end
 
-###################################  utility tools  ########################################
-function sectors_to_reducible(sectors_vec::Vector{<:Sectors.AbstractCategory}, isdual::Bool)
-  g = GradedAxes.gradedrange(collect(sec => 1 for sec in sectors_vec))
-  return isdual ? GradedAxes.label_dual(g) : g
-end
-
-function fused_sectors(
-  sectors_vec::NTuple{N,Vector{<:Sectors.AbstractCategory}},
-  arrow_directions::NTuple{N,Bool},
-) where {N}
-  reducible = sectors_to_reducible.(sectors_vec, arrow_directions)
-  return GradedAxes.blocklabels(reduce(GradedAxes.fusion_product, reducible))
-end
-
-function intersect_sectors(
-  sectors_codomain::NTuple{NCoAxes,Vector{C}},
-  sectors_domain::NTuple{NDoAxes,Vector{C}},
-  arrow_directions::NTuple{N,Bool},
-) where {NCoAxes,NDoAxes,N,C<:Sectors.AbstractCategory}
-  @assert NCoAxes + NDoAxes == N
-  codomain_fused_sectors = fused_sectors(sectors_codomain, arrow_directions[begin:NCoAxes])
-  domain_fused_sectors = fused_sectors(sectors_domain, arrow_directions[(NCoAxes + 1):end])
-  return intersect_sectors(codomain_fused_sectors, domain_fused_sectors)
-end
-
-function intersect_sectors(
-  ::Tuple{},
-  sectors_domain::NTuple{N,Vector{<:Sectors.AbstractCategory}},
-  arrow_directions::NTuple{N,Bool},
-) where {N}
-  domain_fused_sectors = fused_sectors(sectors_domain, arrow_directions)
-  return intersect_sectors(
-    Sectors.trivial(eltype(domain_fused_sectors)), domain_fused_sectors
-  )
-end
-
-function intersect_sectors(
-  sectors_codomain::NTuple{N,Vector{<:Sectors.AbstractCategory}},
-  ::Tuple{},
-  arrow_directions::NTuple{N,Bool},
-) where {N}
-  codomain_fused_sectors = fused_sectors(sectors_codomain, arrow_directions)
-  return intersect_sectors(
-    codomain_fused_sectors, Sectors.trivial(eltype(codomain_fused_sectors))
-  )
-end
-
 ########################  Constructor from Clebsch-Gordan trees ############################
 function contract_projectors(
   trees_codomain_config::Vector{<:Array{Float64}},

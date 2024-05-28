@@ -15,74 +15,6 @@ function shape_split_degen_dims(legs, it)
   return shape
 end
 
-function fused_sectors(sector_tuple::NTuple{<:Any,<:Sectors.AbstractCategory})
-  return GradedAxes.blocklabels(reduce(GradedAxes.fusion_product, sector_tuple))
-end
-fused_sectors(sector_tuple::Tuple{<:Sectors.AbstractCategory}) = only(sector_tuple)
-fused_sectors(::Tuple{}) = Sectors.sector(())
-
-function intersect_sectors(
-  codomain_sectors::NTuple{<:Any,C}, domain_sectors::NTuple{<:Any,C}
-) where {C<:Sectors.AbstractCategory}
-  return intersect_sectors(fused_sectors(codomain_sectors), domain_sectors)
-end
-
-function intersect_sectors(
-  allowed::Vector{C}, sector_tuple::NTuple{<:Any,C}
-) where {C<:Sectors.AbstractCategory}
-  return intersect_sectors(sector_tuple, allowed)
-end
-
-function intersect_sectors(
-  c::Sectors.AbstractCategory, sector_tuple::NTuple{<:Any,<:Sectors.AbstractCategory}
-)
-  return intersect_sectors(c, fused_sectors(sector_tuple))
-end
-
-function intersect_sectors(
-  sector_tuple::NTuple{<:Any,C}, allowed::Vector{C}
-) where {C<:Sectors.AbstractCategory}
-  return intersect_sectors(fused_sectors(sector_tuple), allowed)
-end
-
-function intersect_sectors(other, c::Sectors.AbstractCategory)
-  return intersect_sectors(c, other)
-end
-
-function intersect_sectors(
-  ::Sectors.CategoryProduct{Tuple{}}, allowed::Vector{<:Sectors.AbstractCategory}
-)
-  return intersect_sectors(Sectors.trivial(eltype(allowed)), allowed)
-end
-
-function intersect_sectors(::Sectors.CategoryProduct{Tuple{}}, c::Sectors.AbstractCategory)
-  return intersect_sectors(Sectors.trivial(c), c)
-end
-
-function intersect_sectors(c::Sectors.AbstractCategory, ::Sectors.CategoryProduct{Tuple{}})
-  return intersect_sectors(Sectors.trivial(c), c)
-end
-
-function intersect_sectors(
-  ::Sectors.CategoryProduct{Tuple{}}, ::Sectors.CategoryProduct{Tuple{}}
-)
-  return [Sectors.sector(())]
-end
-
-function intersect_sectors(sec1::C, sec2::C) where {C<:Sectors.AbstractCategory}
-  return sec1 == sec2 ? [sec1] : Vector{C}()
-end
-
-function intersect_sectors(sec::C, allowed::Vector{C}) where {C<:Sectors.AbstractCategory}
-  return sec ∈ allowed ? [sec] : Vector{C}()
-end
-
-function intersect_sectors(
-  codomain_allowed::Vector{C}, domain_allowed::Vector{C}
-) where {C<:Sectors.AbstractCategory}
-  return intersect(codomain_allowed, domain_allowed)
-end
-
 #################################  cast from dense array  ##################################
 function FusionTensor(dense::AbstractArray, codomain_legs::Tuple, domain_legs::Tuple)
   bounds = Sectors.block_boundaries.((codomain_legs..., domain_legs...))
@@ -151,9 +83,8 @@ function FusionTensor(
       # loop for each codomain irrep configuration
       block_shifts_rows = zeros(Int, n_sectors)
       for iter_co in Iterators.product(eachindex.(codomain_irreps)...)
-        codomain_irreps_config = getindex.(codomain_irreps, iter_co)
         allowed_sectors_config = intersect_sectors(
-          codomain_irreps_config, allowed_sectors_domain
+          getindex.(codomain_irreps, iter_co), allowed_sectors_domain
         )
         if !isempty(allowed_sectors_config)
           trees_codomain_config = get_tree!(
@@ -323,9 +254,8 @@ function BlockSparseArrays.BlockSparseArray(ft::FusionTensor)
 
       # loop for each codomain irrep configuration
       for iter_co in Iterators.product(eachindex.(codomain_irreps)...)
-        codomain_irreps_config = getindex.(codomain_irreps, iter_co)
         existing_sectors_config = intersect_sectors(
-          codomain_irreps_config, existing_sectors_domain
+          getindex.(codomain_irreps, iter_co), existing_sectors_domain
         )
         if !isempty(existing_sectors_config)
           trees_codomain_config = get_tree!(

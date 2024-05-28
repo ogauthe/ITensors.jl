@@ -14,6 +14,7 @@ using NDTensors.TensorAlgebra: TensorAlgebra
 
 include("fusiontrees/clebsch_gordan.jl")
 include("fusiontrees/fusion_tree.jl")
+include("fusiontrees/intersect_sectors.jl")
 
 include("fusiontensor/fusiontensor.jl")
 include("fusiontensor/base_interface.jl")
