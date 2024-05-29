@@ -167,6 +167,7 @@ function compute_isometries_CG(
       },
     },
   }()
+  configurations_in = Vector{NTuple{N,Int}}()
 
   # cache computed Clebsch-Gordan trees
   trees_codomain_in = Dict{NTuple{NCoAxesIn,Int},Vector{Array{Float64,NCoAxesIn + 2}}}()
@@ -219,9 +220,10 @@ function compute_isometries_CG(
         perm,
       )
       push!(isometries, isometry)
+      push!(configurations_in, it)
     end
   end
-  return isometries
+  return isometries, configurations_in
 end
 
 ###################################  Constructor from 6j  ##################################
