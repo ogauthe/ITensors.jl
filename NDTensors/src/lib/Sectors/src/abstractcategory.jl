@@ -26,13 +26,9 @@ function category_label(c::AbstractCategory)
   return error("method `category_label` not defined for type $(typeof(c))")
 end
 
-function GradedAxes.dual(category_type::Type{<:AbstractCategory})
-  return error("`dual` not defined for type $(category_type).")
-end
-
-block_boundaries(g::AbstractUnitRange) = block_boundaries(SymmetryStyle(g), g)
-block_boundaries(::AbelianGroup, g) = GradedAxes.unlabel.(BlockArrays.blocklengths(g))
-function block_boundaries(::NonAbelianGroup, g)
+block_dimensions(g::AbstractUnitRange) = block_dimensions(SymmetryStyle(g), g)
+block_dimensions(::AbelianGroup, g) = GradedAxes.unlabel.(BlockArrays.blocklengths(g))
+function block_dimensions(::SymmetryStyle, g)
   return Sectors.quantum_dimension.(GradedAxes.blocklabels(g)) .*
          BlockArrays.blocklengths(g)
 end
@@ -44,18 +40,9 @@ function quantum_dimension(::SymmetryStyle, c::AbstractCategory)
 end
 
 quantum_dimension(::AbelianGroup, ::AbstractCategory) = 1
-quantum_dimension(::EmptyCategory, ::AbstractCategory) = 0
-
-function quantum_dimension(::SymmetryStyle, g::AbstractUnitRange)
-  gblocks = BlockArrays.blocklengths(g)
-  return sum(gblocks .* quantum_dimension.(LabelledNumbers.label.(gblocks)))
-end
-
+quantum_dimension(::EmptyCategory, ::AbstractCategory) = 1
+quantum_dimension(::SymmetryStyle, g::AbstractUnitRange) = sum(block_dimensions(g))
 quantum_dimension(::AbelianGroup, g::AbstractUnitRange) = length(g)
-function quantum_dimension(::SymmetryStyle, g::GradedAxes.UnitRangeDual)
-  return quantum_dimension(GradedAxes.dual(g))
-end
-quantum_dimension(::AbelianGroup, g::GradedAxes.UnitRangeDual) = length(g)  # resolves ambiguity
 
 # ================  fusion rule interface ====================
 ⊗(c1::AbstractCategory, c2::AbstractCategory) = fusion_rule(c1, c2)
