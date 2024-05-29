@@ -23,7 +23,7 @@
 #         /  \
 #        /\   \
 #       /  \   \
-#     dim1 dim1 dim3
+#     dim1 dim2 dim3
 #
 # It is convenient to merge together the dimension legs to yield a 3-dim tensor
 #             ---------------------------
