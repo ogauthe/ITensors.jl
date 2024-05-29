@@ -17,7 +17,7 @@ end
 
 #################################  cast from dense array  ##################################
 function FusionTensor(dense::AbstractArray, codomain_legs::Tuple, domain_legs::Tuple)
-  bounds = Sectors.block_boundaries.((codomain_legs..., domain_legs...))
+  bounds = Sectors.block_dimensions.((codomain_legs..., domain_legs...))
   blockarray = BlockArrays.PseudoBlockArray(dense, bounds...)
   return FusionTensor(blockarray, codomain_legs, domain_legs)
 end
@@ -213,7 +213,7 @@ function BlockSparseArrays.BlockSparseArray(ft::FusionTensor)
   # initialize block array
   domain_legs = domain_axes(ft)
   codomain_legs = codomain_axes(ft)
-  bounds = Sectors.block_boundaries.((codomain_legs..., domain_legs...))
+  bounds = Sectors.block_dimensions.((codomain_legs..., domain_legs...))
   blockarray = BlockSparseArrays.BlockSparseArray{eltype(ft)}(
     BlockArrays.blockedrange.(bounds)
   )
