@@ -1,6 +1,6 @@
 # This files implemets intersect_sectors to find allowed sectors from codomain and domain
 
-# TBD move to Sectors?
+# TBD move to Sectors? define as gradedrange(::Vector{<:Sectors.AbstractCategory})?
 function sectors_to_reducible(sectors_vec::Vector{<:Sectors.AbstractCategory}, isdual::Bool)
   g = GradedAxes.gradedrange(collect(sec => 1 for sec in sectors_vec))
   return isdual ? GradedAxes.label_dual(g) : g
@@ -12,11 +12,11 @@ function fused_sectors(
   arrow_directions::NTuple{N,Bool},
 ) where {N}
   reducible = sectors_to_reducible.(sectors_vec, arrow_directions)
-  return GradedAxes.blocklabels(reduce(GradedAxes.fusion_product, reducible))
+  return GradedAxes.blocklabels(GradedAxes.fusion_product(reducible...))
 end
 
 function fused_sectors(sector_tuple::NTuple{<:Any,<:Sectors.AbstractCategory})
-  return GradedAxes.blocklabels(reduce(GradedAxes.fusion_product, sector_tuple))
+  return GradedAxes.blocklabels(GradedAxes.fusion_product(sector_tuple...))
 end
 
 fused_sectors(sector_tuple::Tuple{<:Sectors.AbstractCategory}) = only(sector_tuple)

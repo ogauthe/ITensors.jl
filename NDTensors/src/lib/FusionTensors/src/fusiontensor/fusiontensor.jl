@@ -69,10 +69,9 @@ function initialize_data_matrix(
   # fusion trees have Float64 eltype: need compatible type
   promoted = promote_type(data_type, Float64)
 
-  # TODO anyway to avoid type hint below?
   init = Sectors.trivial(first((codomain_legs..., domain_legs...)))
-  mat_row_axis::typeof(init) = reduce(GradedAxes.fusion_product, codomain_legs; init=init) # TODO take dual
-  mat_col_axis::typeof(init) = reduce(GradedAxes.fusion_product, domain_legs; init=init)
+  mat_row_axis = GradedAxes.fusion_product(init, codomain_legs...) # TODO take dual
+  mat_col_axis = GradedAxes.fusion_product(init, domain_legs...)
   return BlockSparseArrays.BlockSparseArray{promoted}(mat_row_axis, mat_col_axis)
 end
 
