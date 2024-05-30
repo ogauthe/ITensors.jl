@@ -45,20 +45,22 @@ end
 function contract_projectors(
   trees_codomain_config::Vector{<:Array{Float64}},
   trees_domain_config::Vector{<:Array{Float64}},
-  labels_dest::Tuple{Vararg{Int}},
+  irreps_perm::Tuple{Vararg{Int}},
 )
+  # compile time values
   NCoAxes = ndims(eltype(trees_codomain_config)) - 2
   NDoAxes = ndims(eltype(trees_domain_config)) - 2
   N = NDoAxes + NCoAxes
-  @assert length(labels_dest) == N + 2
+  @assert length(irreps_perm) == N
 
-  dims_prod = prod((
+  irrep_dims_prod = prod((
     size(first(trees_codomain_config))[begin:NCoAxes]...,
     size(first(trees_domain_config))[begin:NDoAxes]...,
   ))
   projectors = [zeros((dims_prod, 0)) for _ in trees_codomain_config]
   labels_codomain = (ntuple(identity, NCoAxes)..., N + 3, N + 1)
   labels_domain = (ntuple(i -> i + NCoAxes, NDoAxes)..., N + 3, N + 2)
+  labels_dest = (irreps_perm..., N + 1, N + 2)
   for (i, (cotree, dotree)) in enumerate(zip(trees_codomain_config, trees_domain_config))
     if length(cotree) > 0 && length(dotree) > 0  # some trees are empty
 
@@ -73,11 +75,18 @@ function contract_projectors(
       #         /  \                           /  \
       #        /\   \                         /\   \
       #       /  \   \                       /  \   \
-      #     dim1 dim1 dim3                 dim4 dim5 dim6
+      #     dim1 dim2 dim3                 dim4 dim5 dim6
+      #
       p = TensorAlgebra.contract(
         labels_dest, cotree, labels_codomain, dotree, labels_domain
       )
-      projectors[i] = reshape(p, (dims_prod, :))
+
+      # reshape as a matrix
+      #           ---------------projector_sector_i-------
+      #           |                                      |
+      #   dim1*dim2*...*dim6               ndof_codomain_sec*ndof_domain_sec
+      #
+      projectors[i] = reshape(p, (irrep_dims_prod, :))
     end
   end
   return projectors
@@ -111,18 +120,55 @@ function overlap_cg_trees(
     size.(trees_domain_in_config, NDoAxesIn + 2)
   isometry = BlockArrays.BlockArray{Float64}(undef, block_rows, block_cols)
 
+  # contract codomain and domain CG trees to construct projector on each allowed sector
   projectors_out = FusionTensors.contract_projectors(
-    trees_codomain_out_config, trees_domain_out_config, ntuple(identity, N + 2)
+    trees_codomain_out_config, trees_domain_out_config, ntuple(identity, N)
   )
   projectors_in = FusionTensors.contract_projectors(
-    trees_codomain_in_config, trees_domain_in_config, (Tuple(perm)..., N + 1, N + 2)
+    trees_codomain_in_config, trees_domain_in_config, perm
   )
 
-  for (j, proj_in) in enumerate(projectors_in)
-    for (i, proj_out) in enumerate(projectors_out)
-      isometry[BlockArrays.Block(i, j)] =
-        (proj_out'proj_in) / size(trees_codomain_out_config[i], NCoAxesOut + 1)
-    end
+  for (i, j) in Iterators.product(eachindex.((projectors_out, projectors_in))...)
+    # contract projectors in and out to construct singlet space base change matrix
+    # construction is made blockwise. One block (i,j) corresponds to fusing incoming axes
+    # over sector sec_j and outcoming axes over sector sec_i. It has a 4-dim tensor
+    # internal structure which is compressed into a matrix.
+    #
+    #          --------------dim_sec_j---------
+    #          |                              |
+    #          |   ndof_codomain_sec_in       |  ndof_domain_sec_in
+    #           \  /                           \  /
+    #            \/                             \/
+    #            /                              /
+    #           /                              /
+    #          /\                             /\
+    #         /  \                           /  \
+    #        /\   \                         /\   \
+    #       /  \   \                       /  \   \
+    #     dim1 dim2 dim3                 dim4 dim5 dim6
+    #      |    |   |                      |   |   |
+    #     -------------------------------------------
+    #     ------------------- perm ------------------
+    #     -------------------------------------------
+    #      |    |    |    |              |     |
+    #     dim4 dim1 dim2 dim6           dim3  dim5
+    #       \   /   /    /                \   /
+    #        \ /   /    /                  \ /
+    #         \   /    /                    \
+    #          \ /    /                      \
+    #           \    /                        \
+    #            \  /                          \
+    #             \/                            \
+    #              \                             \
+    #               \                             \
+    #               /\                            /\
+    #              /  \                          /  \
+    #             |   ndof_codomain_sec_out     |  ndof_domain_sec_out
+    #             |                             |
+    #             -------------dim_sec_i---------
+    #
+    dim_sec_i = size(trees_codomain_out_config[i], NCoAxesOut + 1)
+    isometry[BlockArrays.Block(i, j)] = (projectors_out[i]'projectors_in[j]) / dim_sec_i
   end
 
   return isometry
@@ -235,4 +281,5 @@ function compute_isometries_6j(
 ) where {N,NCoAxesIn,NDoAxesIn,C<:Sectors.AbstractCategory}
   @assert N > 0
   @assert NCoAxesIn + NDoAxesIn == N
+  # this function has the same inputs and the same outputs as compute_isometries_CG
 end
