@@ -33,7 +33,7 @@ GradedAxes.dual(s::CategoryProduct) = CategoryProduct(map(GradedAxes.dual, categ
 
 # ==============  Base interface  =================
 function Base.:(==)(A::CategoryProduct, B::CategoryProduct)
-  return categories_equal(categories(A), categories(B))
+  return categories_isequal(categories(A), categories(B))
 end
 
 function Base.show(io::IO, s::CategoryProduct)
@@ -70,12 +70,11 @@ function categories_product(l1::NamedTuple, l2::NamedTuple)
   end
   return union_keys(l1, l2)
 end
+categories_product(l1::Tuple, l2::Tuple) = (l1..., l2...)
 
 # edge cases
-categories_product(l1::NamedTuple, l2::Tuple{}) = l1
-categories_product(l1::Tuple{}, l2::NamedTuple) = l2
-
-categories_product(l1::Tuple, l2::Tuple) = (l1..., l2...)
+categories_product(l1::NamedTuple, ::Tuple{}) = l1
+categories_product(::Tuple{}, l2::NamedTuple) = l2
 
 ×(a, g::AbstractUnitRange) = ×(to_graded_axis(a), g)
 ×(g::AbstractUnitRange, b) = ×(g, to_graded_axis(b))
@@ -90,10 +89,12 @@ function ×(l1::LabelledNumbers.LabelledInteger, l2::LabelledNumbers.LabelledInt
 end
 
 function ×(g1::AbstractUnitRange, g2::AbstractUnitRange)
-  # keep F convention in loop order
-  v = [
-    l1 × l2 for l2 in BlockArrays.blocklengths(g2) for l1 in BlockArrays.blocklengths(g1)
-  ]
+  v = map(
+    ((l1, l2),) -> l1 × l2,
+    Iterators.flatten((
+      Iterators.product(BlockArrays.blocklengths(g1), BlockArrays.blocklengths(g2)),
+    ),),
+  )
   return GradedAxes.gradedrange(v)
 end
 
@@ -108,21 +109,67 @@ function fusion_rule(::AbelianGroup, s1::CategoryProduct, s2::CategoryProduct)
   return categories_fusion_rule(categories(s1), categories(s2))
 end
 
-# Empty case: use × cast conventions between NamedTupled and ordered implem
-function fusion_rule(::EmptyCategory, s1::CategoryProduct, s2::CategoryProduct)
-  return s1 × s2
+# Empty case
+function fusion_rule(
+  ::EmptyCategory, ::CategoryProduct{Tuple{}}, ::CategoryProduct{Tuple{}}
+)
+  return sector()
 end
+
+# EmptyCategory acts as trivial on any AbstractCategory, not just CategoryProduct
+function fusion_rule(::SymmetryStyle, ::CategoryProduct{Tuple{}}, c2::AbstractCategory)
+  return to_graded_axis(c2)
+end
+
+function fusion_rule(::SymmetryStyle, c1::AbstractCategory, ::CategoryProduct{Tuple{}})
+  return to_graded_axis(c1)
+end
+
+function fusion_rule(::SymmetryStyle, ::CategoryProduct{Tuple{}}, c2::CategoryProduct)
+  return to_graded_axis(c2)
+end
+
+function fusion_rule(::SymmetryStyle, c1::CategoryProduct, ::CategoryProduct{Tuple{}})
+  return to_graded_axis(c1)
+end
+
+# abelian case: return Category
+function fusion_rule(::AbelianGroup, ::CategoryProduct{Tuple{}}, c2::AbstractCategory)
+  return c2
+end
+
+function fusion_rule(::AbelianGroup, c1::AbstractCategory, ::CategoryProduct{Tuple{}})
+  return c1
+end
+
+function fusion_rule(::AbelianGroup, ::CategoryProduct{Tuple{}}, c2::CategoryProduct)
+  return c2
+end
+
+function fusion_rule(::AbelianGroup, c1::CategoryProduct, ::CategoryProduct{Tuple{}})
+  return c1
+end
+
+# ===================================  shared  =============================================
+# there are 2 implementations for CategoryProduct
+# - ordered-like with a Tuple
+# - dictionary-like with a NamedTuple
+categories_type(::Type{<:CategoryProduct{T}}) where {T} = T
+
+function trivial(type::Type{<:CategoryProduct})
+  return sector(categories_trivial(categories_type(type)))
+end
+
+sector(args...; kws...) = CategoryProduct(args...; kws...)
 
 # ==============  Ordered implementation  =================
 CategoryProduct(t::Tuple) = _CategoryProduct(t)
 CategoryProduct(cats::AbstractCategory...) = CategoryProduct((cats...,))
 
-categories_equal(o1::Tuple, o2::Tuple) = (o1 == o2)
+categories_isequal(o1::Tuple, o2::Tuple) = (o1 == o2)
 
-sector(args...; kws...) = CategoryProduct(args...; kws...)
-
-function trivial(::Type{<:CategoryProduct{T}}) where {T<:Tuple}
-  return sector(ntuple(i -> trivial(fieldtype(T, i)), fieldcount(T)))
+function categories_trivial(type::Type{<:Tuple})
+  return trivial.(fieldtypes(type))
 end
 
 # allow additional categories at one end
@@ -140,6 +187,9 @@ function CategoryProduct(nt::NamedTuple)
   return _CategoryProduct(categories)
 end
 
+# avoid having 2 different kinds of EmptyCategory: cast empty NamedTuple to Tuple{}
+CategoryProduct(::NamedTuple{()}) = CategoryProduct(())
+
 CategoryProduct(; kws...) = CategoryProduct((; kws...))
 
 function CategoryProduct(pairs::Pair...)
@@ -148,17 +198,16 @@ function CategoryProduct(pairs::Pair...)
   return CategoryProduct(NamedTuple{keys}(vals))
 end
 
-function categories_equal(A::NamedTuple, B::NamedTuple)
+function categories_isequal(A::NamedTuple, B::NamedTuple)
   common_categories = zip(pairs(intersect_keys(A, B)), pairs(intersect_keys(B, A)))
   common_categories_match = all(nl -> (nl[1] == nl[2]), common_categories)
   unique_categories_zero = all(l -> istrivial(l), symdiff_keys(A, B))
   return common_categories_match && unique_categories_zero
 end
 
-function trivial(::Type{<:CategoryProduct{NT}}) where {Keys,NT<:NamedTuple{Keys}}
-  return reduce(×, (ntuple(i -> (; Keys[i] => trivial(fieldtype(NT, i))), fieldcount(NT))))
+function categories_trivial(type::Type{<:NamedTuple{Keys}}) where {Keys}
+  return NamedTuple{Keys}(trivial.(fieldtypes(type)))
 end
-trivial(::Type{<:CategoryProduct{<:NamedTuple{()}}}) = sector()  # Empty NamedTuple
 
 # allow ⊗ for different types in NamedTuple
 function categories_fusion_rule(cats1::NamedTuple, cats2::NamedTuple)
