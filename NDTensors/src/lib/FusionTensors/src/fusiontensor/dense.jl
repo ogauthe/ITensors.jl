@@ -5,10 +5,123 @@
 # TODO remove BlockSparseArray block initialization once writing is fixed
 
 ##################################  utility tools  #########################################
-function shape_split_degen_dims(legs, it)
+function shape_split_degen_dims(legs::Tuple, it::Tuple)
   config_degens = GradedAxes.unlabel.(getindex.(GradedAxes.blocklengths.(legs), it))
   config_dims = Sectors.quantum_dimension.(getindex.(GradedAxes.blocklabels.(legs), it))
   return braid_tuples(config_degens, config_dims)
+end
+
+function process_dense_block(
+  blockarray::BlockArrays.AbstractBlockArray,
+  codomain_legs::Tuple,
+  domain_legs::Tuple,
+  iter_co::Tuple,
+  iter_do::Tuple,
+)
+  # compile time checks
+  N_CO = length(codomain_legs)
+  N_DO = length(domain_legs)
+  N = ndims(blockarray)
+  @assert length(iter_co) == N_CO
+  @assert length(iter_do) == N_DO
+  @assert N_CO + N_DO == N
+
+  # start from a dense tensor with e.g. N=4 axes divided into N_CO=2 ndims_codomain
+  # and N_DO=2 ndims_domain. It may have several irrep configurations, select one
+  # of them. The associated dense block has shape
+  #
+  #        ----------------------dense_block------------------
+  #        |                  |                |             |
+  #       degen1*dim1    degen2*dim2      degen3*dim3     degen4*dim4
+  #
+  dense_block = @view blockarray[BlockArrays.Block(iter_co..., iter_do...)]
+
+  # each leg of this this dense block can now be opened to form a 2N-dims tensor.
+  # note that this 2N-dims form is only defined at the level of the irrep
+  # configuration, not for a larger dense block.
+  #
+  #        -------------dense_block_split_degen_dim------------
+  #        |                 |                |               |
+  #       / \               / \              / \             / \
+  #      /   \             /   \            /   \           /   \
+  #  degen1  dim1      degen2  dim2     degen3  dim3    degen4  dim4
+  #
+  dense_block_split_shape = (
+    shape_split_degen_dims(codomain_legs, iter_co)...,
+    shape_split_degen_dims(domain_legs, iter_do)...,
+  )
+  dense_block_split_degen_dim = reshape(dense_block, dense_block_split_shape)
+
+  # Now we permute the axes to group together degenearacies on one side and irrep
+  # dimensions on the other side. This is the bottleneck.
+  #
+  #        ------------------dense_block_permuted-----------------
+  #        |        |       |       |       |      |      |      |
+  #       degen1  degen2  degen3  degen4   dim1   dim2   dim3   dim4
+  #
+  perm_dense_data = (
+    ntuple(i -> 2 * i - 1, ndims(blockarray))..., ntuple(i -> 2 * i, ndims(blockarray))...
+  )
+  dense_block_permuted = permutedims(dense_block_split_degen_dim, perm_dense_data)
+
+  # Finally, it is convenient to merge together legs corresponding to codomain or
+  # to codomain and produce a 4-dims tensor
+  #
+  #        -----------------dense_block_config--------------
+  #        |                 |               |             |
+  #       degen1*degen2   degen3*degen4    dim1*dim2    dim3*dim4
+  #
+  permuted_dense_shape = size(dense_block_permuted)
+  shape_config = (
+    prod(permuted_dense_shape[begin:N_CO]),
+    prod(permuted_dense_shape[(N_CO + 1):N]),
+    prod(permuted_dense_shape[(N + 1):(N + N_CO)]),
+    prod(permuted_dense_shape[(N + N_CO + 1):end]),
+  )
+  dense_block_config = reshape(dense_block_permuted, shape_config)
+  return dense_block_config
+end
+
+function contract_fusion_trees(
+  dense_block_config::Array{<:Any,4},
+  tree_codomain::Array{Float64,3},
+  tree_domain::Array{Float64,3},
+  sec_dim::Int,
+)
+  #        -----------------dense_block_config--------------
+  #        |                 |               |             |
+  #       degen1*degen2   degen3*degen4    dim1*dim2    dim3*dim4
+  #
+  # in this form, we can apply fusion trees on both the domain and the codomain.
+
+  # contract domain tree
+  #             -------------------------data_1tree----------------------
+  #             |               |              |           |            |
+  #       degen1*degen2   degen3*degen4    dim1*dim2    sec_dim    ndof_sec_domain
+  #
+  data_1tree = TensorAlgebra.contract(
+    (1, 2, 3, 5, 6), dense_block_config, (1, 2, 3, 4), tree_domain, (4, 5, 6)
+  )
+
+  # contract codomain tree
+  #             -----------------------sym_data-------------------
+  #             |              |                  |              |
+  #       degen1*degen2   ndof_sec_codomain    degen3*degen4   ndof_sec_domain
+  #
+  T = promote_type(eltype(dense_block_config), Float64)
+  data_2trees::Array{T,4} = TensorAlgebra.contract(
+    (1, 7, 2, 6),   # HERE WE SET INNER STRUCTURE FOR MATRIX BLOCKS
+    data_1tree,
+    (1, 2, 3, 5, 6),
+    tree_codomain,
+    (3, 5, 7),
+    1 / sec_dim,  # normalization factor
+  )
+  sym_shape = (
+    size(data_2trees, 1) * size(data_2trees, 2), size(data_2trees, 3) * size(data_2trees, 4)
+  )
+  sym_block = reshape(data_2trees, sym_shape)
+  return sym_block
 end
 
 #################################  cast from dense array  ##################################
@@ -21,15 +134,10 @@ end
 function FusionTensor(
   blockarray::BlockArrays.AbstractBlockArray, codomain_legs::Tuple, domain_legs::Tuple
 )
-  # compile time check
-  N_CO = length(codomain_legs)
-  N_DO = length(domain_legs)
-  N = ndims(blockarray)
-  if N_CO + N_DO != N
+  # input validation
+  if length(codomain_legs) + length(domain_legs) != ndims(blockarray)  # compile time
     throw(DomainError("legs are incompatible with array ndims"))
   end
-
-  # input validation
   if Sectors.quantum_dimension.((codomain_legs..., domain_legs...)) != size(blockarray)
     throw(DomainError("legs dimensions are incompatible with array"))
   end
@@ -61,8 +169,6 @@ function FusionTensor(
   domain_isdual = GradedAxes.isdual.(domain_legs)
   codomain_isdual = .!GradedAxes.isdual.(codomain_legs)  # TBD: dual
 
-  # prepare contraction
-  perm_dense_data = (ntuple(i -> 2 * i - 1, N)..., ntuple(i -> 2 * i, N)...)
   # cache computed trees
   codomain_trees = Dict{NTuple{length(codomain_legs),Int},Vector{Array{Float64,3}}}()
 
@@ -86,95 +192,28 @@ function FusionTensor(
           trees_codomain_config = get_tree!(
             codomain_trees, iter_co, codomain_irreps, codomain_isdual, allowed_sectors
           )
-          # start from a dense tensor with e.g. N=4 axes divided into N_CO=2 ndims_codomain
-          # and N_DO=2 ndims_domain. It may have several irrep configurations, select one
-          # of them. The associated dense block has shape
-          #
-          #        ----------------------dense_block------------------
-          #        |                  |                |             |
-          #       degen1*dim1    degen2*dim2      degen3*dim3     degen4*dim4
-          #
-          dense_block = @view blockarray[BlockArrays.Block(iter_co..., iter_do...)]
-
-          # each leg of this this dense block can now be opened to form a 2N-dims tensor.
-          # note that this 2N-dims form is only defined at the level of the irrep
-          # configuration, not for a larger dense block.
-          #
-          #        -------------dense_block_split_degen_dim------------
-          #        |                 |                |               |
-          #       / \               / \              / \             / \
-          #      /   \             /   \            /   \           /   \
-          #  degen1  dim1      degen2  dim2     degen3  dim3    degen4  dim4
-          #
-          dense_block_split_shape = (
-            shape_split_degen_dims(codomain_legs, iter_co)...,
-            shape_split_degen_dims(domain_legs, iter_do)...,
+          dense_block_config = process_dense_block(
+            blockarray, codomain_legs, domain_legs, iter_co, iter_do
           )
-          dense_block_split_degen_dim = reshape(dense_block, dense_block_split_shape)
 
-          # Now we permute the axes to group together degenearacies on one side and irrep
-          # dimensions on the other side. This is the bottleneck.
-          #
-          #        ------------------dense_block_permuted-----------------
-          #        |        |       |       |       |      |      |      |
-          #       degen1  degen2  degen3  degen4   dim1   dim2   dim3   dim4
-          #
-          dense_block_permuted = permutedims(dense_block_split_degen_dim, perm_dense_data)
-
-          # Finally, it is convenient to merge together legs corresponding to codomain or
-          # to codomain and produce a 4-dims tensor
-          #
-          #        -----------------dense_block_config--------------
-          #        |                 |               |             |
-          #       degen1*degen2   degen3*degen4    dim1*dim2    dim3*dim4
-          #
-          permuted_dense_shape = size(dense_block_permuted)
-          shape_config = (
-            prod(permuted_dense_shape[begin:N_CO]),
-            prod(permuted_dense_shape[(N_CO + 1):N]),
-            prod(permuted_dense_shape[(N + 1):(N + N_CO)]),
-            prod(permuted_dense_shape[(N + N_CO + 1):end]),
-          )
-          dense_block_config = reshape(dense_block_permuted, shape_config)
-          # in this form, we can apply fusion trees on both the domain and the codomain.
-
-          # loop for each symmetry sector inside this configuration
+          # loop for each symmetry sector allowed in this configuration
           for sec in allowed_sectors_config
             i_sec::Int = findfirst(==(sec), allowed_sectors)  # cannot be nothing
 
-            # contract domain tree
-            #             -------------------------data_1tree----------------------
-            #             |               |              |           |            |
-            #       degen1*degen2   degen3*degen4    dim1*dim2    sec_dim    ndof_sec_domain
-            #
-            data_1tree::Array{eltype(data_mat),5} = TensorAlgebra.contract(
-              (1, 2, 3, 5, 6),
+            # contract fusion trees and reshape symmetric block as a matrix
+            sym_block = contract_fusion_trees(
               dense_block_config,
-              (1, 2, 3, 4),
-              trees_domain_config[i_sec],
-              (4, 5, 6),
-            )
-
-            # contract codomain tree
-            #             -----------------------sym_data-------------------
-            #             |              |                  |              |
-            #       degen1*degen2   ndof_sec_codomain    degen3*degen4   ndof_sec_domain
-            #
-            sym_data::Array{eltype(data_mat),4} = TensorAlgebra.contract(
-              (1, 7, 2, 6),   # HERE WE SET INNER STRUCTURE FOR MATRIX BLOCKS
-              data_1tree,
-              (1, 2, 3, 5, 6),
               trees_codomain_config[i_sec],
-              (3, 5, 7),
+              trees_domain_config[i_sec],
+              allowed_sectors_dims[i_sec],
             )
 
-            # reshape sym_data as a matrix and write matrix block
+            # find position and write matrix block
             r1 = block_shifts_rows[i_sec]
-            r2 = r1 + shape_config[1] * size(trees_codomain_config[i_sec], 3)
+            r2 = r1 + size(dense_block_config, 1) * size(trees_codomain_config[i_sec], 3)
             c1 = block_shifts_columns[i_sec]
-            c2 = c1 + shape_config[2] * size(trees_domain_config[i_sec], 3)
-            data_mat[existing_blocks[i_sec]][(r1 + 1):r2, (c1 + 1):c2] =
-              reshape(sym_data, (r2 - r1, c2 - c1)) / allowed_sectors_dims[i_sec]
+            c2 = c1 + size(dense_block_config, 2) * size(trees_domain_config[i_sec], 3)
+            data_mat[existing_blocks[i_sec]][(r1 + 1):r2, (c1 + 1):c2] = sym_block
             block_shifts_rows[i_sec] = r2
           end
         end
@@ -186,20 +225,6 @@ function FusionTensor(
   end
 
   return FusionTensor(data_mat, codomain_legs, domain_legs)
-end
-
-# constructor from dense array with norm check
-function FusionTensor(
-  dense::AbstractArray, codomain_legs::Tuple, domain_legs::Tuple, tol_check::Real
-)
-  ft = FusionTensor(dense, codomain_legs, domain_legs)
-
-  # check that norm is the same in input and output
-  dense_norm = LinearAlgebra.norm(dense)
-  if abs(LinearAlgebra.norm(ft) - dense_norm) > tol_check * dense_norm
-    throw(DomainError("Dense tensor norm is not preserved in FusionTensor cast"))
-  end
-  return ft
 end
 
 ##################################  cast to dense array  ###################################
