@@ -57,11 +57,11 @@ end
   @test tree_irreps == [Sectors.sector(; N=U1(3), S=SU2(1 / 2))]
   @test trees == [reshape(LinearAlgebra.I(2), (1, 1, 1, 2, 2, 1))]
 
-  isdual = (false, false, false)
   s3 = Sectors.sector(Sectors.SU((1, 0)), Sectors.SU((1,)), Sectors.U1(1))
   irreps = (s3, s3, s3)
+  isdual = (false, false, false)
   trees, tree_irreps = fusion_trees(irreps, isdual)
-  rep = reduce(GradedAxes.fusion_product, irreps)
+  rep = GradedAxes.fusion_product(irreps...)
   @test GradedAxes.blocklabels(rep) == tree_irreps
   @test Sectors.quantum_dimension.(tree_irreps) == size.(trees, 4)
   @test GradedAxes.unlabel.(BlockArrays.blocklengths(rep)) == size.(trees, 5)

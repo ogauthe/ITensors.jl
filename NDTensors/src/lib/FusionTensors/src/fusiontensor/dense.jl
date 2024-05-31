@@ -6,13 +6,9 @@
 
 ##################################  utility tools  #########################################
 function shape_split_degen_dims(legs, it)
-  config_sectors = getindex.(GradedAxes.blocklabels.(legs), it)
   config_degens = GradedAxes.unlabel.(getindex.(GradedAxes.blocklengths.(legs), it))
-  config_dims = Sectors.quantum_dimension.(config_sectors)
-  shape = ntuple(
-    i -> Bool(i % 2) ? config_degens[fld1(i, 2)] : config_dims[fld1(i, 2)], 2 * length(legs)
-  )
-  return shape
+  config_dims = Sectors.quantum_dimension.(getindex.(GradedAxes.blocklabels.(legs), it))
+  return braid_tuples(config_degens, config_dims)
 end
 
 #################################  cast from dense array  ##################################
