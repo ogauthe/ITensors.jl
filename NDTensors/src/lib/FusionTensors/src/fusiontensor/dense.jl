@@ -11,7 +11,7 @@ function shape_split_degen_dims(legs::Tuple, it::Tuple)
   return braid_tuples(config_degens, config_dims)
 end
 
-function process_dense_block(
+function swap_dense_block(
   blockarray::BlockArrays.AbstractBlockArray,
   codomain_legs::Tuple,
   domain_legs::Tuple,
@@ -109,7 +109,7 @@ function contract_fusion_trees(
   #       degen1*degen2   ndof_sec_codomain    degen3*degen4   ndof_sec_domain
   #
   T = promote_type(eltype(dense_block_config), Float64)
-  data_2trees::Array{T,4} = TensorAlgebra.contract(
+  sym_data::Array{T,4} = TensorAlgebra.contract(
     (1, 7, 2, 6),   # HERE WE SET INNER STRUCTURE FOR MATRIX BLOCKS
     data_1tree,
     (1, 2, 3, 5, 6),
@@ -117,10 +117,8 @@ function contract_fusion_trees(
     (3, 5, 7),
     1 / sec_dim,  # normalization factor
   )
-  sym_shape = (
-    size(data_2trees, 1) * size(data_2trees, 2), size(data_2trees, 3) * size(data_2trees, 4)
-  )
-  sym_block = reshape(data_2trees, sym_shape)
+  sym_shape = (size(sym_data, 1) * size(sym_data, 2), size(sym_data, 3) * size(sym_data, 4))
+  sym_block = reshape(sym_data, sym_shape)
   return sym_block
 end
 
@@ -192,7 +190,7 @@ function FusionTensor(
           trees_codomain_config = get_tree!(
             codomain_trees, iter_co, codomain_irreps, codomain_isdual, allowed_sectors
           )
-          dense_block_config = process_dense_block(
+          dense_block_config = swap_dense_block(
             blockarray, codomain_legs, domain_legs, iter_co, iter_do
           )
 
@@ -228,6 +226,99 @@ function FusionTensor(
 end
 
 ##################################  cast to dense array  ###################################
+function add_sector_block!(dense_block_config, sym_block, tree_codomain, tree_domain)
+  codomain_ndof_config_sector = size(tree_codomain, 3)
+  domain_ndof_config_sector = size(tree_domain, 3)
+  #             ---------------------sym_block--------------------
+  #             |                                                |
+  #       degen1*degen2*ndof_sec_codomain    degen3*degen4*ndof_sec_domain
+  #
+  sym_data_shape = (
+    size(sym_block, 1) ÷ codomain_ndof_config_sector,
+    codomain_ndof_config_sector,
+    size(sym_block, 2) ÷ domain_ndof_config_sector,
+    domain_ndof_config_sector,
+  )
+
+  #             -----------------------sym_data-------------------
+  #             |              |                  |              |
+  #       degen1*degen2   ndof_sec_codomain    degen3*degen4   ndof_sec_domain
+  #
+  sym_data = reshape(sym_block, sym_data_shape)
+
+  # contract codomain tree
+  #             -------------------------data_1tree------------------------
+  #             |               |               |              |          |
+  #       degen1*degen2   degen3*degen4    ndof_sec_domain  dim1*dim2   sec_dim
+  #
+  data_1tree = TensorAlgebra.contract(
+    (1, 2, 6, 3, 5), sym_data, (1, 7, 2, 6), tree_codomain, (3, 5, 7)
+  )
+
+  #        -----------------dense_block_config--------------
+  #        |                 |               |             |
+  #       degen1*degen2   degen3*degen4    dim1*dim2    dim3*dim4
+  #
+  return TensorAlgebra.contract!(
+    dense_block_config,
+    (1, 2, 3, 4),
+    data_1tree,
+    (1, 2, 6, 3, 5),
+    tree_domain,
+    (4, 5, 6),
+    1.0,
+    1.0,
+  )
+end
+
+function unswap_dense_block(
+  dense_block_config::Array{<:Any,4},
+  codomain_degens_config::Tuple,
+  domain_degens_config::Tuple,
+  codomain_dims_config::Tuple,
+  domain_dims_config::Tuple,
+)
+  N = length(codomain_degens_config) + length(domain_degens_config)
+  @assert length(codomain_degens_config) == length(codomain_dims_config)
+  @assert length(domain_degens_config) == length(domain_dims_config)
+  #        -----------------dense_block_config--------------
+  #        |                 |               |             |
+  #       degen1*degen2   degen3*degen4    dim1*dim2    dim3*dim4
+  #
+
+  #        -------------------dense_block_permuted----------------
+  #        |        |       |       |       |      |      |      |
+  #       degen1  degen2  degen3  degen4   dim1   dim2   dim3   dim4
+  #
+  degen_dim_shape = (
+    codomain_degens_config...,
+    domain_degens_config...,
+    codomain_dims_config...,
+    domain_dims_config...,
+  )
+  dense_block_permuted = reshape(dense_block_config, degen_dim_shape)
+
+  #        -------------dense_block_split_degen_dim------------
+  #        |                 |                |               |
+  #       / \               / \              / \             / \
+  #      /   \             /   \            /   \           /   \
+  #  degen1  dim1      degen2  dim2     degen3  dim3    degen4  dim4
+  #
+  inverse_perm_dense_data = ntuple(i -> fld1(i, 2) + (1 - i % 2) * N, 2 * N)
+  dense_block_split_degen_dim = permutedims(dense_block_permuted, inverse_perm_dense_data)
+
+  #
+  #        ----------------------dense_block------------------
+  #        |                  |                |             |
+  #       degen1*dim1    degen2*dim2      degen3*dim3     degen4*dim4
+  #
+  dense_shape =
+    size(dense_block_split_degen_dim)[begin:2:end] .*
+    size(dense_block_split_degen_dim)[2:2:end]
+  dense_block = reshape(dense_block_split_degen_dim, dense_shape)
+  return dense_block
+end
+
 Base.Array(ft::FusionTensor) = Array(BlockSparseArrays.BlockSparseArray(ft))
 
 function BlockSparseArrays.BlockSparseArray(ft::FusionTensor)
@@ -251,13 +342,11 @@ function BlockSparseArrays.BlockSparseArray(ft::FusionTensor)
   domain_irrep_configurations = GradedAxes.blocklabels.(domain_legs)
   domain_irrep_dimensions =
     broadcast.(Sectors.quantum_dimension, domain_irrep_configurations)
-  codomain_degens = GradedAxes.unlabel.(BlockArrays.blocklengths.(codomain_legs))
-  domain_degens = GradedAxes.unlabel.(BlockArrays.blocklengths.(domain_legs))
+  codomain_degens = broadcast.(GradedAxes.unlabel, BlockArrays.blocklengths.(codomain_legs))
+  domain_degens = broadcast.(GradedAxes.unlabel, BlockArrays.blocklengths.(domain_legs))
   codomain_isdual = .!GradedAxes.isdual.(codomain_legs)  # TBD: dual
   domain_isdual = GradedAxes.isdual.(domain_legs)
 
-  # prepare contraction
-  inverse_perm_dense_data = ntuple(i -> fld1(i, 2) + (1 - i % 2) * ndims(ft), 2 * ndims(ft))
   # cache computed trees
   codomain_trees = Dict{NTuple{length(codomain_legs),Int},Vector{Array{Float64,3}}}()
 
@@ -272,6 +361,7 @@ function BlockSparseArrays.BlockSparseArray(ft::FusionTensor)
       )
       block_shifts_row = zeros(Int, n_sectors)
       domain_config_size = prod(getindex.(domain_degens, iter_do))
+      domain_dims_config = getindex.(domain_irrep_dimensions, iter_do)
 
       # loop for each codomain irrep configuration
       for iter_co in Iterators.product(eachindex.(codomain_irreps)...)
@@ -283,17 +373,17 @@ function BlockSparseArrays.BlockSparseArray(ft::FusionTensor)
             codomain_trees, iter_co, codomain_irreps, codomain_isdual, existing_sectors
           )
           codomain_config_size = prod(getindex.(codomain_degens, iter_co))
-          dense_shape_mat = (
-            codomain_config_size,
-            domain_config_size,
-            prod(getindex.(codomain_irrep_dimensions, iter_co)),
-            prod(getindex.(domain_irrep_dimensions, iter_do)),
-          )
-
+          codomain_dims_config = getindex.(codomain_irrep_dimensions, iter_co)
           #        -----------------dense_block_config--------------
           #        |                 |               |             |
           #       degen1*degen2   degen3*degen4    dim1*dim2    dim3*dim4
           #
+          dense_shape_mat = (
+            codomain_config_size,
+            domain_config_size,
+            prod(codomain_dims_config),
+            prod(domain_dims_config),
+          )
           dense_block_config = zeros(eltype(ft), dense_shape_mat)
 
           # loop for each symmetry sector inside this configuration
@@ -302,84 +392,28 @@ function BlockSparseArrays.BlockSparseArray(ft::FusionTensor)
 
             c1 = block_shifts_column[i_sec]
             r1 = block_shifts_row[i_sec]
-            domain_ndof_config_sector = size(trees_domain_config[i_sec], 3)
-            codomain_ndof_config_sector = size(trees_codomain_config[i_sec], 3)
-            r2 = r1 + codomain_ndof_config_sector * codomain_config_size
-            c2 = c1 + domain_ndof_config_sector * domain_config_size
+            r2 = r1 + size(trees_codomain_config[i_sec], 3) * codomain_config_size
+            c2 = c1 + size(trees_domain_config[i_sec], 3) * domain_config_size
+            sym_block = @view matrix_blocks[i_sec][(r1 + 1):r2, (c1 + 1):c2]
 
-            #             -----------------------sym_data-------------------
-            #             |              |                  |              |
-            #       degen1*degen2   ndof_sec_codomain    degen3*degen4   ndof_sec_domain
-            #
-            sym_data_shape = (
-              codomain_config_size,
-              codomain_ndof_config_sector,
-              domain_config_size,
-              domain_ndof_config_sector,
-            )
-            sym_data = reshape(
-              (@view matrix_blocks[i_sec][(r1 + 1):r2, (c1 + 1):c2]), sym_data_shape
-            )
-
-            # contract codomain tree
-            #             -------------------------data_1tree------------------------
-            #             |               |               |              |          |
-            #       degen1*degen2   degen3*degen4    ndof_sec_domain  dim1*dim2   sec_dim
-            #
-            data_1tree::Array{eltype(ft),5} = TensorAlgebra.contract(
-              (1, 2, 6, 3, 5),
-              sym_data,
-              (1, 7, 2, 6),
-              trees_codomain_config[i_sec],
-              (3, 5, 7),
-            )
-
-            #        -----------------dense_block_config--------------
-            #        |                 |               |             |
-            #       degen1*degen2   degen3*degen4    dim1*dim2    dim3*dim4
-            #
-            TensorAlgebra.contract!(
+            add_sector_block!(
               dense_block_config,
-              (1, 2, 3, 4),
-              data_1tree,
-              (1, 2, 6, 3, 5),
+              sym_block,
+              trees_codomain_config[i_sec],
               trees_domain_config[i_sec],
-              (4, 5, 6),
-              1.0,
-              1.0,
             )
 
             block_shifts_row[i_sec] = r2
           end
-          degen_dim_shape = (
-            getindex.(codomain_degens, iter_co)...,
-            getindex.(domain_degens, iter_do)...,
-            getindex.(codomain_irrep_dimensions, iter_co)...,
-            getindex.(domain_irrep_dimensions, iter_do)...,
-          )
 
-          #        -------------------dense_block_permuted----------------
-          #        |        |       |       |       |      |      |      |
-          #       degen1  degen2  degen3  degen4   dim1   dim2   dim3   dim4
-          #
-          dense_block_permuted = reshape(dense_block_config, degen_dim_shape)
-
-          #        --------------dense_block_split_degen_dim--------------
-          #        |        |       |       |       |      |      |      |
-          #       degen1  degen2  degen3  degen4   dim1   dim2   dim3   dim4
-          #
-          dense_block_split_degen_dim = permutedims(
-            dense_block_permuted, inverse_perm_dense_data
-          )
-
-          #        ----------------------------------------------------
-          #        |                 |                |               |
-          #       / \               / \              / \             / \
-          #      /   \             /   \            /   \           /   \
-          #  degen1  dim1      degen2  dim2     degen3  dim3    degen4  dim4
-          #
           b = BlockArrays.Block(iter_co..., iter_do...)
-          blockarray[b] = reshape(dense_block_split_degen_dim, size(blockarray[b]))
+          blockarray[b] = unswap_dense_block(
+            dense_block_config,
+            getindex.(codomain_degens, iter_co),
+            getindex.(domain_degens, iter_do),
+            codomain_dims_config,
+            domain_dims_config,
+          )
         end
       end
       block_shifts_column += domain_config_size * size.(trees_domain_config, 3)
