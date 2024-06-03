@@ -90,7 +90,12 @@ end
 function decompress_tree(
   tree::AbstractArray{<:Any,3}, irreps::NTuple{<:Any,<:Sectors.AbstractCategory}
 )
-  new_shape = (Sectors.quantum_dimension.(irreps)..., size(tree, 2), size(tree, 3))
+  irreps_shape = Sectors.quantum_dimension.(irreps)
+  return decompress_tree(tree, irreps_shape)
+end
+
+function decompress_tree(tree::AbstractArray{<:Any,3}, irreps_shape::NTuple{<:Any,Int})
+  new_shape = (irreps_shape..., size(tree, 2), size(tree, 3))
   return reshape(tree, new_shape)
 end
 
