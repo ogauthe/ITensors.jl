@@ -80,8 +80,6 @@ function _tensor_kron(a::AbstractArray{<:Any,N}, b::AbstractArray{<:Any,N}) wher
   return reshape(c, size(a) .* size(b))
 end
 
-reconstruct_sector(T::Type, cats::Tuple) = Sectors.sector(T(cats))  # recover NamedTuple
-
 function compress_tree(a::AbstractArray)
   shape_3leg = (prod(size(a)[begin:(end - 2)]), size(a, ndims(a) - 1), size(a, ndims(a)))
   return reshape(a, shape_3leg)
@@ -186,7 +184,7 @@ function fusion_trees(
 
   # reconstruct sector for each product tree
   tree_irreps = map(
-    cats -> reconstruct_sector(eltype(category_irreps), cats),  # recover NamedTuple key
+    cats -> Sectors.sector(eltype(category_irreps), cats),
     Iterators.flatten((Iterators.product((getindex.(category_trees_irreps, 2))...),),),
   )
 
