@@ -2,7 +2,6 @@
 
 # TBD dual in codomain?
 # TODO rewrite once matrix_row_axis is dual
-# TODO remove BlockSparseArray block initialization once writing is fixed
 
 ##################################  utility tools  #########################################
 function shape_split_degen_dims(legs::Tuple, it::Tuple)
@@ -83,9 +82,9 @@ function swap_dense_block(
 end
 
 function contract_fusion_trees(
-  dense_block_config::Array{<:Any,4},
-  tree_codomain::Array{Float64,3},
-  tree_domain::Array{Float64,3},
+  dense_block_config::AbstractArray{<:Any,4},
+  tree_codomain::AbstractArray{Float64,3},
+  tree_domain::AbstractArray{Float64,3},
   sec_dim::Int,
 )
   #        -----------------dense_block_config--------------
@@ -155,10 +154,6 @@ function FusionTensor(
   n_sectors = length(allowed_sectors)
 
   existing_blocks = BlockArrays.Block.(row_shared_indices, col_shared_indices)
-  # TBD can this be avoided? TODO remove debug NaN
-  for b in existing_blocks
-    data_mat[b] = NaN * similar(data_mat[b])
-  end
 
   # split axes into irrep configuration blocks
   codomain_irreps = GradedAxes.blocklabels.(codomain_legs)
@@ -211,7 +206,7 @@ function FusionTensor(
             r2 = r1 + size(dense_block_config, 1) * size(trees_codomain_config[i_sec], 3)
             c1 = block_shifts_columns[i_sec]
             c2 = c1 + size(dense_block_config, 2) * size(trees_domain_config[i_sec], 3)
-            data_mat[existing_blocks[i_sec]][(r1 + 1):r2, (c1 + 1):c2] = sym_block
+            @views data_mat[existing_blocks[i_sec]][(r1 + 1):r2, (c1 + 1):c2] = sym_block
             block_shifts_rows[i_sec] = r2
           end
         end
@@ -226,7 +221,12 @@ function FusionTensor(
 end
 
 ##################################  cast to dense array  ###################################
-function add_sector_block!(dense_block_config, sym_block, tree_codomain, tree_domain)
+function add_sector_block!(
+  dense_block_config::AbstractArray{<:Any,4},
+  sym_block::AbstractMatrix,
+  tree_codomain::AbstractArray{Float64,3},
+  tree_domain::AbstractArray{Float64,3},
+)
   codomain_ndof_config_sector = size(tree_codomain, 3)
   domain_ndof_config_sector = size(tree_domain, 3)
   #             ---------------------sym_block--------------------
@@ -272,7 +272,7 @@ function add_sector_block!(dense_block_config, sym_block, tree_codomain, tree_do
 end
 
 function unswap_dense_block(
-  dense_block_config::Array{<:Any,4},
+  dense_block_config::AbstractArray{<:Any,4},
   codomain_degens_config::Tuple,
   domain_degens_config::Tuple,
   codomain_dims_config::Tuple,
@@ -394,7 +394,7 @@ function BlockSparseArrays.BlockSparseArray(ft::FusionTensor)
             r1 = block_shifts_row[i_sec]
             r2 = r1 + size(trees_codomain_config[i_sec], 3) * codomain_config_size
             c2 = c1 + size(trees_domain_config[i_sec], 3) * domain_config_size
-            sym_block = @view matrix_blocks[i_sec][(r1 + 1):r2, (c1 + 1):c2]
+            sym_block = @views matrix_blocks[i_sec][(r1 + 1):r2, (c1 + 1):c2]
 
             add_sector_block!(
               dense_block_config,
