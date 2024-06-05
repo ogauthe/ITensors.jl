@@ -28,31 +28,24 @@ function Base.permutedims(
     end
   end
 
-  structural_data = StructuralData(
-    perm,
-    GradedAxes.blocklabels.(codomain_axes(ft)),
-    GradedAxes.blocklabels.(domain_axes(ft)),
-    GradedAxes.isdual.(axes(ft)),
-  )
-  permuted_data_matrix = permute_data(ft, structural_data)
+  # TODO
+  out = naive_permutedims(ft, perm)
 
-  codomain_axes_out = getindex.(Ref(axes(ft)), perm[BlockArrays.Block(1)])
-  domain_axes_out = getindex.(Ref(axes(ft)), perm[BlockArrays.Block(2)])
-  out = FusionTensor(permuted_data_matrix, codomain_axes_out, domain_axes_out)
+  #structural_data = StructuralData(
+  #  perm,
+  #  GradedAxes.blocklabels.(codomain_axes(ft)),
+  #  GradedAxes.blocklabels.(domain_axes(ft)),
+  #  GradedAxes.isdual.(axes(ft)),
+  #)
+  #permuted_data_matrix = permute_data(ft, structural_data)
+
+  #codomain_axes_out = getindex.(Ref(axes(ft)), perm[BlockArrays.Block(1)])
+  #domain_axes_out = getindex.(Ref(axes(ft)), perm[BlockArrays.Block(2)])
+  #out = FusionTensor(permuted_data_matrix, codomain_axes_out, domain_axes_out)
   return out
 end
 
-##################################  Low level interface  ###################################
-function permute_data(ft::FusionTensor, structural_data::StructuralData)
-  perm = permutation(structural_data)
-
-  # TODO replace with correct implementation
-  permuted_data_matrix = naive_permute_data(ft, perm)
-
-  return permuted_data_matrix
-end
-
-function naive_permute_data(ft::FusionTensor, perm)
+function naive_permutedims(ft::FusionTensor, perm::TensorAlgebra.BlockedPermutation)
   codomain_axes_out = getindex.(Ref(axes(ft)), perm[BlockArrays.Block(1)])
   domain_axes_out = getindex.(Ref(axes(ft)), perm[BlockArrays.Block(2)])
 
@@ -61,5 +54,14 @@ function naive_permute_data(ft::FusionTensor, perm)
   permuted_arr = permutedims(arr, Tuple(perm))
   ftp = FusionTensor(permuted_arr, codomain_axes_out, domain_axes_out)
 
-  return data_matrix(ftp)
+  return ftp
+end
+
+##################################  Low level interface  ###################################
+function permute_data(ft::FusionTensor, structural_data::StructuralData)
+  perm = permutation(structural_data)
+
+  # TODO replace with correct implementation
+
+  return permuted_data_matrix
 end

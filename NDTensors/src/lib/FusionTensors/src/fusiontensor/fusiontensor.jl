@@ -59,8 +59,8 @@ ndims_codomain(ft::FusionTensor) = length(codomain_axes(ft))
 ndims_domain(ft::FusionTensor) = length(domain_axes(ft))
 
 matrix_size(ft::FusionTensor) = Sectors.quantum_dimension.(axes(data_matrix(ft)))
-matrix_row_axis(ft::FusionTensor) = axes(data_matrix(ft))[1]
-matrix_column_axis(ft::FusionTensor) = axes(data_matrix(ft))[2]
+matrix_row_axis(ft::FusionTensor) = first(axes(data_matrix(ft)))
+matrix_column_axis(ft::FusionTensor) = last(axes(data_matrix(ft)))
 
 # init data_matrix
 function initialize_data_matrix(
@@ -70,54 +70,66 @@ function initialize_data_matrix(
   promoted = promote_type(data_type, Float64)
 
   init = Sectors.trivial(first((codomain_legs..., domain_legs...)))
-  mat_row_axis = GradedAxes.fusion_product(init, codomain_legs...) # TODO take dual
+  mat_row_axis = GradedAxes.dual(
+    GradedAxes.fusion_product(init, GradedAxes.dual.(codomain_legs)...)
+  )
   mat_col_axis = GradedAxes.fusion_product(init, domain_legs...)
   return BlockSparseArrays.BlockSparseArray{promoted}(mat_row_axis, mat_col_axis)
 end
 
 # empty matrix
-function FusionTensor{T}(codomain_legs::Tuple, domain_legs::Tuple) where {T}
-  mat = initialize_data_matrix(T, codomain_legs, domain_legs)
+function FusionTensor(data_type::Type, codomain_legs::Tuple, domain_legs::Tuple)
+  mat = initialize_data_matrix(data_type, codomain_legs, domain_legs)
   return FusionTensor(mat, codomain_legs, domain_legs)
 end
 
-# sanity check
 function sanity_check(ft::FusionTensor)
   # TODO replace @assert with @check when JuliaLang PR 41342 is merged
   nca = ndims_codomain(ft)
   @assert nca == length(codomain_axes(ft)) "ndims_codomain does not match codomain_axes"
-  @assert nca < ndims(ft) "invalid ndims_codomain"
+  @assert nca <= ndims(ft) "invalid ndims_codomain"
 
   nda = ndims_domain(ft)
   @assert nda == length(domain_axes(ft)) "ndims_domain does not match domain_axes"
-  @assert nda < ndims(ft) "invalid ndims_domain"
+  @assert nda <= ndims(ft) "invalid ndims_domain"
   @assert nca + nda == ndims(ft) "invalid ndims"
+
+  @assert length(axes(ft)) == ndims(ft) "ndims does not match axes"
+  @assert matching_axes(axes(ft)[begin:nca], codomain_axes(ft)) "axes do not match codomain_axes"
+  @assert matching_axes(axes(ft)[(nca + 1):end], domain_axes(ft)) "axes do not match domain_axes"
 
   m = data_matrix(ft)
   @assert ndims(m) == 2 "invalid data_matrix ndims"
   @assert size(m, 1) == prod(length.(codomain_axes(ft))) "invalid data_matrix row number"
   @assert size(m, 2) == prod(length.(domain_axes(ft))) "invalid data_matrix column number"
 
+  row_axis = matrix_row_axis(ft)
+  column_axis = matrix_column_axis(ft)
+  @assert row_axis === axes(m)[1] "invalid row_axis"
+  @assert column_axis === axes(m)[2] "invalid column_axis"
+  init = Sectors.trivial(row_axis)
   @assert GradedAxes.gradedisequal(
-    axes(m)[1],
-    # TODO set to dual once BlockSparseArray is fixed
-    #GradedAxes.dual(
-    reduce(GradedAxes.fusion_product, codomain_axes(ft); init=Sectors.trivial(axes(m)[1])),
-    # ),
+    row_axis,
+    GradedAxes.dual(
+      GradedAxes.fusion_product(init, GradedAxes.dual.(codomain_axes(ft))...)
+    ),
   ) "data_matrix row axis does not match codomain axes"
   @assert GradedAxes.gradedisequal(
-    axes(m)[2],
-    reduce(GradedAxes.fusion_product, domain_axes(ft); init=Sectors.trivial(axes(m)[2])),
+    column_axis, GradedAxes.fusion_product(init, domain_axes(ft)...)
   ) "data_matrix column axis does not match domain axes"
+
+  for it in eachindex(BlockSparseArrays.block_stored_indices(m))
+    @assert GradedAxes.dual(GradedAxes.blocklabels(row_axis)[it[1]]) ==
+      GradedAxes.blocklabels(column_axis)[it[2]] "forbidden block"
+  end
   return nothing
 end
 
+matching_dual(axes1::Tuple, axes2::Tuple) = matching_axes(GradedAxes.dual.(axes1), axes2)
+matching_axes(axes1::Tuple, axes2::Tuple) = false
 function matching_axes(axes1::T, axes2::T) where {T<:Tuple}
   if length(axes1) != length(axes2)
     return false
   end
   return all(GradedAxes.gradedisequal.(axes1, axes2))
-end
-function matching_dual(axes1, axes2)
-  return matching_axes(axes1, GradedAxes.dual.(axes2))
 end

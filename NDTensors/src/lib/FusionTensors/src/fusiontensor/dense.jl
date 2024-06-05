@@ -1,8 +1,5 @@
 # This file defines interface to cast from and to dense array
 
-# TBD dual in codomain?
-# TODO rewrite once matrix_row_axis is dual
-
 ##################################  utility tools  #########################################
 function shape_split_degen_dims(legs::Tuple, it::Tuple)
   config_degens = GradedAxes.unlabel.(getindex.(GradedAxes.blocklengths.(legs), it))
@@ -143,24 +140,24 @@ function FusionTensor(
   data_mat = initialize_data_matrix(eltype(blockarray), codomain_legs, domain_legs)
 
   # find sectors
-  # TODO ADAPT ONCE ROW_AXIS IS DUAL
-  row_sectors, col_sectors = GradedAxes.blocklabels.(axes(data_mat))
-  dual_row_sectors = GradedAxes.dual.(row_sectors)
-  col_shared_indices = findall(in(dual_row_sectors), col_sectors)
-  allowed_sectors = col_sectors[col_shared_indices]
-  allowed_sectors_dims = Sectors.quantum_dimension.(allowed_sectors)
-  # col_shared indices may have non-trivial order. TODO check with dual row
-  row_shared_indices::Vector{Int} = findfirst.(.==(allowed_sectors), Ref(dual_row_sectors))
+  col_sectors = GradedAxes.blocklabels(axes(data_mat, 2))
+  dual_row_sectors = GradedAxes.blocklabels(GradedAxes.dual(axes(data_mat, 1)))
+  allowed_sectors = intersect_sectors(dual_row_sectors, col_sectors)
   n_sectors = length(allowed_sectors)
-
+  allowed_sectors_dims = Sectors.quantum_dimension.(allowed_sectors)
+  col_shared_indices = findall(in(allowed_sectors), col_sectors)
+  row_shared_indices = findall(in(allowed_sectors), dual_row_sectors)
   existing_blocks = BlockArrays.Block.(row_shared_indices, col_shared_indices)
 
   # split axes into irrep configuration blocks
-  codomain_irreps = GradedAxes.blocklabels.(codomain_legs)
+  dual_codomain_legs = GradedAxes.dual.(codomain_legs)
+  codomain_irreps = GradedAxes.blocklabels.(dual_codomain_legs)
+  nondual_codomain_irreps = GradedAxes.blocklabels.(GradedAxes.nondual.(codomain_legs))
   domain_irreps = GradedAxes.blocklabels.(domain_legs)
+  nondual_domain_irreps = GradedAxes.blocklabels.(GradedAxes.nondual.(domain_legs))
   domain_degens = GradedAxes.unlabel.(BlockArrays.blocklengths.(domain_legs))
+  codomain_isdual = GradedAxes.isdual.(dual_codomain_legs)
   domain_isdual = GradedAxes.isdual.(domain_legs)
-  codomain_isdual = .!GradedAxes.isdual.(codomain_legs)  # TBD: dual
 
   # cache computed trees
   codomain_trees = Dict{NTuple{length(codomain_legs),Int},Vector{Array{Float64,3}}}()
@@ -172,7 +169,7 @@ function FusionTensor(
     allowed_sectors_domain = intersect_sectors(domain_irreps_config, allowed_sectors)
     if !isempty(allowed_sectors_domain)
       trees_domain_config = prune_fusion_trees_compressed(
-        domain_irreps_config, domain_isdual, allowed_sectors
+        getindex.(nondual_domain_irreps, iter_do), domain_isdual, allowed_sectors
       )
 
       # loop for each codomain irrep configuration
@@ -183,15 +180,18 @@ function FusionTensor(
         )
         if !isempty(allowed_sectors_config)
           trees_codomain_config = get_tree!(
-            codomain_trees, iter_co, codomain_irreps, codomain_isdual, allowed_sectors
+            codomain_trees,
+            iter_co,
+            nondual_codomain_irreps,
+            codomain_isdual,
+            allowed_sectors,
           )
           dense_block_config = swap_dense_block(
             blockarray, codomain_legs, domain_legs, iter_co, iter_do
           )
 
           # loop for each symmetry sector allowed in this configuration
-          for sec in allowed_sectors_config
-            i_sec::Int = findfirst(==(sec), allowed_sectors)  # cannot be nothing
+          for i_sec in findall(in(allowed_sectors_config), allowed_sectors)
 
             # contract fusion trees and reshape symmetric block as a matrix
             sym_block = contract_fusion_trees(
@@ -323,8 +323,8 @@ Base.Array(ft::FusionTensor) = Array(BlockSparseArrays.BlockSparseArray(ft))
 
 function BlockSparseArrays.BlockSparseArray(ft::FusionTensor)
   # initialize block array
+  codomain_legs = GradedAxes.dual.(codomain_axes(ft))
   domain_legs = domain_axes(ft)
-  codomain_legs = codomain_axes(ft)
   bounds = Sectors.block_dimensions.((codomain_legs..., domain_legs...))
   blockarray = BlockSparseArrays.BlockSparseArray{eltype(ft)}(
     BlockArrays.blockedrange.(bounds)
@@ -338,13 +338,14 @@ function BlockSparseArrays.BlockSparseArray(ft::FusionTensor)
 
   # split axes into irrep configuration blocks
   codomain_irreps = GradedAxes.blocklabels.(codomain_legs)
+  nondual_codomain_irreps = GradedAxes.blocklabels.(GradedAxes.nondual.(codomain_legs))
   codomain_irrep_dimensions = broadcast.(Sectors.quantum_dimension, codomain_irreps)
-  domain_irrep_configurations = GradedAxes.blocklabels.(domain_legs)
-  domain_irrep_dimensions =
-    broadcast.(Sectors.quantum_dimension, domain_irrep_configurations)
+  domain_irreps = GradedAxes.blocklabels.(domain_legs)
+  nondual_domain_irreps = GradedAxes.blocklabels.(GradedAxes.nondual.(domain_legs))
+  domain_irrep_dimensions = broadcast.(Sectors.quantum_dimension, domain_irreps)
   codomain_degens = broadcast.(GradedAxes.unlabel, BlockArrays.blocklengths.(codomain_legs))
   domain_degens = broadcast.(GradedAxes.unlabel, BlockArrays.blocklengths.(domain_legs))
-  codomain_isdual = .!GradedAxes.isdual.(codomain_legs)  # TBD: dual
+  codomain_isdual = GradedAxes.isdual.(codomain_legs)
   domain_isdual = GradedAxes.isdual.(domain_legs)
 
   # cache computed trees
@@ -352,12 +353,12 @@ function BlockSparseArrays.BlockSparseArray(ft::FusionTensor)
 
   # loop for each domain irrep configuration
   block_shifts_column = zeros(Int, n_sectors)
-  for iter_do in Iterators.product(eachindex.(domain_irrep_configurations)...)
-    domain_irreps_config = getindex.(domain_irrep_configurations, iter_do)
+  for iter_do in Iterators.product(eachindex.(domain_irreps)...)
+    domain_irreps_config = getindex.(domain_irreps, iter_do)
     existing_sectors_domain = intersect_sectors(domain_irreps_config, existing_sectors)
     if !isempty(existing_sectors_domain)
       trees_domain_config = prune_fusion_trees_compressed(
-        getindex.(domain_irrep_configurations, iter_do), domain_isdual, existing_sectors
+        getindex.(nondual_domain_irreps, iter_do), domain_isdual, existing_sectors
       )
       block_shifts_row = zeros(Int, n_sectors)
       domain_config_size = prod(getindex.(domain_degens, iter_do))
@@ -370,7 +371,11 @@ function BlockSparseArrays.BlockSparseArray(ft::FusionTensor)
         )
         if !isempty(existing_sectors_config)
           trees_codomain_config = get_tree!(
-            codomain_trees, iter_co, codomain_irreps, codomain_isdual, existing_sectors
+            codomain_trees,
+            iter_co,
+            nondual_codomain_irreps,
+            codomain_isdual,
+            existing_sectors,
           )
           codomain_config_size = prod(getindex.(codomain_degens, iter_co))
           codomain_dims_config = getindex.(codomain_irrep_dimensions, iter_co)
@@ -387,9 +392,7 @@ function BlockSparseArrays.BlockSparseArray(ft::FusionTensor)
           dense_block_config = zeros(eltype(ft), dense_shape_mat)
 
           # loop for each symmetry sector inside this configuration
-          for sec in existing_sectors_config
-            i_sec::Int = findfirst(==(sec), existing_sectors)
-
+          for i_sec in findall(in(existing_sectors_config), existing_sectors)
             c1 = block_shifts_column[i_sec]
             r1 = block_shifts_row[i_sec]
             r2 = r1 + size(trees_codomain_config[i_sec], 3) * codomain_config_size

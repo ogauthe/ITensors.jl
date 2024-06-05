@@ -9,7 +9,7 @@ using NDTensors.GradedAxes: GradedAxes
 using NDTensors.Sectors: SU2, U1, sector
 
 @testset "Abelian FusionTensor" begin
-  # trivial  matrix
+  # trivial matrix
   g = GradedAxes.gradedrange([U1(0) => 1])
   gb = GradedAxes.dual(g)
   m = ones((1, 1))
@@ -58,6 +58,7 @@ using NDTensors.Sectors: SU2, U1, sector
   ft = FusionTensor(dense, codomain_legs, domain_legs)
   @test size(data_matrix(ft)) == (20, 15)
   @test BlockArrays.blocksize(data_matrix(ft)) == (3, 4)
+  @test LinearAlgebra.norm(ft) ≈ LinearAlgebra.norm(dense)
   @test Array(ft) ≈ dense
 end
 

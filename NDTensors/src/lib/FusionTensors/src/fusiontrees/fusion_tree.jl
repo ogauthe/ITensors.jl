@@ -101,13 +101,13 @@ end
 function get_tree!(
   dic::Dict{NTuple{N,Int},Vector{Array{Float64,3}}},
   it::NTuple{N,Int},
-  irreps_vectors::NTuple{N,Vector{C}},
+  nondual_irreps_vectors::NTuple{N,Vector{C}},
   irreps_isdual::NTuple{N,Bool},
   allowed_sectors::Vector{C},
 ) where {N,C<:Sectors.AbstractCategory}
   get!(dic, it) do
     prune_fusion_trees_compressed(
-      getindex.(irreps_vectors, it), irreps_isdual, allowed_sectors
+      getindex.(nondual_irreps_vectors, it), irreps_isdual, allowed_sectors
     )
   end
 end
@@ -115,19 +115,21 @@ end
 function get_tree!(
   dic::Dict{NTuple{N,Int},Vector{<:Array{Float64}}},
   it::NTuple{N,Int},
-  irreps_vectors::NTuple{N,Vector{C}},
+  nondual_irreps_vectors::NTuple{N,Vector{C}},
   irreps_isdual::NTuple{N,Bool},
   allowed_sectors::Vector{C},
 ) where {N,C<:Sectors.AbstractCategory}
   get!(dic, it) do
-    prune_fusion_trees(getindex.(irreps_vectors, it), irreps_isdual, allowed_sectors)
+    prune_fusion_trees(
+      getindex.(nondual_irreps_vectors, it), irreps_isdual, allowed_sectors
+    )
   end
 end
 
 function prune_fusion_trees_compressed(
-  irreps_config::NTuple{N,C}, irreps_isdual::NTuple{N,Bool}, target_sectors::Vector{C}
+  nondual_irreps::NTuple{N,C}, irreps_isdual::NTuple{N,Bool}, target_sectors::Vector{C}
 ) where {N,C<:Sectors.AbstractCategory}
-  return compress_tree.(prune_fusion_trees(irreps_config, irreps_isdual, target_sectors))
+  return compress_tree.(prune_fusion_trees(nondual_irreps, irreps_isdual, target_sectors))
 end
 
 function prune_fusion_trees(
@@ -143,11 +145,11 @@ function prune_fusion_trees(
 end
 
 function prune_fusion_trees(
-  irreps_config::NTuple{N,C}, irreps_isdual::NTuple{N,Bool}, target_sectors::Vector{C}
+  nondual_irreps::NTuple{N,C}, irreps_isdual::NTuple{N,Bool}, target_sectors::Vector{C}
 ) where {N,C<:Sectors.AbstractCategory}
   @assert issorted(target_sectors, lt=!isless, rev=true)  # strict
-  irreps_dims = Sectors.quantum_dimension.(irreps_config)
-  trees, tree_irreps = fusion_trees(irreps_config, irreps_isdual)
+  irreps_dims = Sectors.quantum_dimension.(nondual_irreps)
+  trees, tree_irreps = fusion_trees(nondual_irreps, irreps_isdual)
   trees_sector = [
     zeros((irreps_dims..., Sectors.quantum_dimension(sec), 0)) for sec in target_sectors
   ]

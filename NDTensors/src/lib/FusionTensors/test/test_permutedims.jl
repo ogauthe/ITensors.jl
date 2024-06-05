@@ -2,7 +2,7 @@
 using Test: @test, @testset
 
 using NDTensors.BlockSparseArrays: BlockSparseArray
-using NDTensors.FusionTensors: FusionTensor, ndims_codomain, sanity_check
+using NDTensors.FusionTensors: FusionTensor, ndims_codomain, sanity_check, matching_axes
 using NDTensors.GradedAxes
 using NDTensors.Sectors: U1
 
@@ -11,10 +11,7 @@ using NDTensors.Sectors: U1
   g2 = GradedAxes.gradedrange([U1(0) => 2, U1(1) => 2, U1(3) => 1])
   g3 = GradedAxes.gradedrange([U1(-1) => 1, U1(0) => 2, U1(1) => 1])
   g4 = GradedAxes.gradedrange([U1(-1) => 1, U1(0) => 1, U1(1) => 1])
-  gr = GradedAxes.fusion_product(g1, g2)
-  gc = GradedAxes.fusion_product(g3, g4)
-  m1 = BlockSparseArray{Float64}(gr, gc)
-  ft1 = FusionTensor(m1, (g1, g2), (g3, g4))
+  ft1 = FusionTensor(Float64, GradedAxes.dual.((g1, g2)), (g3, g4))
   @test isnothing(sanity_check(ft1))
 
   # test permutedims
@@ -25,7 +22,7 @@ using NDTensors.Sectors: U1
   @test ft2 === ft1  # same object
 
   ft3 = permutedims(ft1, (4,), (1, 2, 3))
-  @test axes(ft3) == (g4, g1, g2, g3)
+  @test matching_axes(axes(ft3), (g4, GradedAxes.dual(g1), GradedAxes.dual(g2), g3))
   @test ndims_codomain(ft3) == 1
   @test isnothing(sanity_check(ft3))
 end

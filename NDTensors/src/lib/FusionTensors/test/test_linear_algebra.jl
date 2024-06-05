@@ -15,11 +15,11 @@ using NDTensors.Sectors: U1
   g3 = GradedAxes.gradedrange([U1(-1) => 1, U1(0) => 2, U1(1) => 1])
   g4 = GradedAxes.gradedrange([U1(-1) => 1, U1(0) => 1, U1(1) => 1])
 
-  gr1 = GradedAxes.fusion_product(g1, g2)
+  gr1 = GradedAxes.dual(GradedAxes.fusion_product(g1, g2))
   gc1 = GradedAxes.fusion_product(g3, g4)
   m1 = BlockSparseArrays.BlockSparseArray{Float64}(gr1, gc1)
   m1[BlockArrays.Block(1, 3)] = ones((2, 4))
-  ft1 = FusionTensor(m1, (g1, g2), (g3, g4))
+  ft1 = FusionTensor(m1, (GradedAxes.dual(g1), GradedAxes.dual(g2)), (g3, g4))
   @test isnothing(sanity_check(ft1))
 
   @test norm(ft1) ≈ sqrt(8)

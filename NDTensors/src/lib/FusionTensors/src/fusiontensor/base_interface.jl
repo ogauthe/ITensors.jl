@@ -25,8 +25,7 @@ Base.:+(ft::FusionTensor) = ft
 # tensor addition is a block data_matrix add.
 # impose matching axes, allow different eltypes
 function Base.:+(left::FusionTensor, right::FusionTensor)
-  if !matching_axes(codomain_axes(left), codomain_axes(right)) ||
-    !matching_axes(codomain_axes(left), codomain_axes(right))
+  if !matching_axes(axes(left), axes(right))
     throw(DomainError("Incompatible tensor axes"))
   end
   new_data_matrix = data_matrix(left) + data_matrix(right)
@@ -39,8 +38,7 @@ function Base.:-(ft::FusionTensor)
 end
 
 function Base.:-(left::FusionTensor, right::FusionTensor)
-  if !matching_axes(codomain_axes(left), codomain_axes(right)) ||
-    !matching_axes(codomain_axes(left), codomain_axes(right))
+  if !matching_axes(axes(left), axes(right))
     throw(DomainError("Incompatible tensor axes"))
   end
   new_data_matrix = data_matrix(left) - data_matrix(right)
@@ -100,12 +98,11 @@ function Base.similar(ft::FusionTensor)
 end
 
 function Base.similar(ft::FusionTensor, elt::Type)
-  mat = similar(data_matrix(ft), elt)
-  return FusionTensor(mat, codomain_axes(ft), domain_axes(ft))
+  return FusionTensor(elt, codomain_axes(ft), domain_axes(ft))
 end
 
 function Base.similar(::FusionTensor, elt::Type, new_axes::Tuple{<:Tuple,<:Tuple})
-  return FusionTensor{elt}(new_axes[1], new_axes[2])
+  return FusionTensor(elt, new_axes[1], new_axes[2])
 end
 
 Base.show(io::IO, ft::FusionTensor) = print(io, "$(ndims(ft))-dim FusionTensor")
@@ -119,4 +116,4 @@ function Base.show(io::IO, ::MIME"text/plain", ft::FusionTensor)
   return nothing
 end
 
-Base.size(ft::FusionTensor) = Sectors.quantum_dimension.(axes(ft))  # TBD store it?
+Base.size(ft::FusionTensor) = Sectors.quantum_dimension.(axes(ft))
