@@ -1,17 +1,13 @@
 # This files implemets intersect_sectors to find allowed sectors from codomain and domain
 
 # TBD move to Sectors? define as gradedrange(::Vector{<:Sectors.AbstractCategory})?
-function sectors_to_reducible(sectors_vec::Vector{<:Sectors.AbstractCategory}, isdual::Bool)
-  g = GradedAxes.gradedrange(collect(sec => 1 for sec in sectors_vec))
-  return isdual ? GradedAxes.label_dual(g) : g
+function sectors_to_reducible(sectors_vec::Vector{<:Sectors.AbstractCategory})
+  return GradedAxes.gradedrange(sectors_vec .=> 1)
 end
 
 #####################################  fused_sectors  ######################################
-function fused_sectors(
-  sectors_vec::NTuple{N,Vector{<:Sectors.AbstractCategory}},
-  arrow_directions::NTuple{N,Bool},
-) where {N}
-  reducible = sectors_to_reducible.(sectors_vec, arrow_directions)
+function fused_sectors(sectors_vec::NTuple{N,Vector{<:Sectors.AbstractCategory}}) where {N}
+  reducible = sectors_to_reducible.(sectors_vec)
   return GradedAxes.blocklabels(GradedAxes.fusion_product(reducible...))
 end
 
@@ -25,33 +21,27 @@ fused_sectors(::Tuple{}) = Sectors.sector(())
 
 ###################################  intersect_sectors  ####################################
 function intersect_sectors(
-  sectors_codomain::NTuple{NCoAxes,Vector{C}},
-  sectors_domain::NTuple{NDoAxes,Vector{C}},
-  arrow_directions::NTuple{N,Bool},
+  sectors_codomain::NTuple{NCoAxes,Vector{C}}, sectors_domain::NTuple{NDoAxes,Vector{C}}
 ) where {NCoAxes,NDoAxes,N,C<:Sectors.AbstractCategory}
   @assert NCoAxes + NDoAxes == N
-  codomain_fused_sectors = fused_sectors(sectors_codomain, arrow_directions[begin:NCoAxes])
-  domain_fused_sectors = fused_sectors(sectors_domain, arrow_directions[(NCoAxes + 1):end])
+  codomain_fused_sectors = fused_sectors(sectors_codomain)
+  domain_fused_sectors = fused_sectors(sectors_domain)
   return intersect_sectors(codomain_fused_sectors, domain_fused_sectors)
 end
 
 function intersect_sectors(
-  ::Tuple{},
-  sectors_domain::NTuple{N,Vector{<:Sectors.AbstractCategory}},
-  arrow_directions::NTuple{N,Bool},
+  ::Tuple{}, sectors_domain::NTuple{N,Vector{<:Sectors.AbstractCategory}}
 ) where {N}
-  domain_fused_sectors = fused_sectors(sectors_domain, arrow_directions)
+  domain_fused_sectors = fused_sectors(sectors_domain)
   return intersect_sectors(
     Sectors.trivial(eltype(domain_fused_sectors)), domain_fused_sectors
   )
 end
 
 function intersect_sectors(
-  sectors_codomain::NTuple{N,Vector{<:Sectors.AbstractCategory}},
-  ::Tuple{},
-  arrow_directions::NTuple{N,Bool},
+  sectors_codomain::NTuple{N,Vector{<:Sectors.AbstractCategory}}, ::Tuple{}
 ) where {N}
-  codomain_fused_sectors = fused_sectors(sectors_codomain, arrow_directions)
+  codomain_fused_sectors = fused_sectors(sectors_codomain)
   return intersect_sectors(
     codomain_fused_sectors, Sectors.trivial(eltype(codomain_fused_sectors))
   )
