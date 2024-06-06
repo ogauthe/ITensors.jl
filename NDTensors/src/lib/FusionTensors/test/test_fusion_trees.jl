@@ -13,7 +13,7 @@ using NDTensors.Sectors: Sectors, SU, SU2, U1, Z
   @test tree_irreps2 == [U1(0)]
   @test trees2 == [ones((1, 1, 1, 1))]
 
-  trees3, tree_irreps3 = fusion_trees((U1(1), U1(1), U1(2)), (false, false, true))
+  trees3, tree_irreps3 = fusion_trees((U1(1), U1(1), U1(-2)), (false, false, false))
   @test tree_irreps3 == [U1(0)]
   @test trees3 == [ones((1, 1, 1, 1, 1))]
 
