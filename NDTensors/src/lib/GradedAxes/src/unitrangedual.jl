@@ -70,7 +70,7 @@ end
 using NDTensors.LabelledNumbers: LabelledNumbers, label
 LabelledNumbers.label(a::UnitRangeDual) = dual(label(nondual(a)))
 
-using BlockArrays: BlockArrays, blockaxes, blocklasts, findblock
+using BlockArrays: BlockArrays, blockaxes, blocklasts, combine_blockaxes, findblock
 BlockArrays.blockaxes(a::UnitRangeDual) = blockaxes(nondual(a))
 BlockArrays.blockfirsts(a::UnitRangeDual) = label_dual.(blockfirsts(nondual(a)))
 BlockArrays.blocklasts(a::UnitRangeDual) = label_dual.(blocklasts(nondual(a)))
@@ -82,4 +82,20 @@ gradedisequal(a1::UnitRangeDual, a2::GradedUnitRange) = false
 gradedisequal(a1::GradedUnitRange, a2::UnitRangeDual) = false
 function gradedisequal(a1::UnitRangeDual, a2::UnitRangeDual)
   return gradedisequal(nondual(a1), nondual(a2))
+end
+function BlockArrays.combine_blockaxes(a1::UnitRangeDual, a2::UnitRangeDual)
+  return dual(combine_blockaxes(dual(a1), dual(a2)))
+end
+
+# This is needed when constructing `CartesianIndices` from
+# a tuple of unit ranges that have this kind of dual unit range.
+# TODO: See if we can find some more elegant way of constructing
+# `CartesianIndices`, maybe by defining conversion of `LabelledInteger`
+# to `Int`, defining a more general `convert` function, etc.
+function Base.OrdinalRange{Int,Int}(
+  r::UnitRangeDual{<:LabelledInteger{Int},<:LabelledUnitRange{Int,UnitRange{Int}}}
+)
+  # TODO: Implement this broadcasting operation and use it here.
+  # return Int.(r)
+  return unlabel(nondual(r))
 end
