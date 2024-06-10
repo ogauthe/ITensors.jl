@@ -116,6 +116,37 @@ end
   @test size(ft) == (6, 5, 4, 3)
 end
 
+@testset "Less than 2 axes" begin
+  g1 = gradedrange([U1(0) => 1, U1(1) => 2, U1(2) => 3])
+
+  # one row axis
+  ft1 = FusionTensor(Float64, (g1,), ())
+  @test ndims_codomain(ft1) == 1
+  @test ndims_domain(ft1) == 0
+  @test ndims(ft1) == 1
+  @test size(ft1) == (6,)
+  @test size(data_matrix(ft1)) == (6, 1)
+  @test isnothing(sanity_check(ft1))
+
+  # one column axis
+  ft2 = FusionTensor(Float64, (), (g1,))
+  @test ndims_codomain(ft2) == 0
+  @test ndims_domain(ft2) == 1
+  @test ndims(ft2) == 1
+  @test size(ft2) == (6,)
+  @test size(data_matrix(ft2)) == (1, 6)
+  @test isnothing(sanity_check(ft2))
+
+  # zero axis
+  ft3 = FusionTensor(Float64, (), ())
+  @test ndims_codomain(ft3) == 0
+  @test ndims_domain(ft3) == 0
+  @test ndims(ft3) == 0
+  @test size(ft3) == ()
+  @test size(data_matrix(ft3)) == (1, 1)
+  @test isnothing(sanity_check(ft3))
+end
+
 @testset "Base operations" begin
   g1 = gradedrange([U1(0) => 1, U1(1) => 2, U1(2) => 3])
   g2 = gradedrange([U1(0) => 2, U1(1) => 2, U1(3) => 1])

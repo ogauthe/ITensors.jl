@@ -6,7 +6,7 @@ function sectors_to_reducible(sectors_vec::Vector{<:Sectors.AbstractCategory})
 end
 
 #####################################  fused_sectors  ######################################
-function fused_sectors(sectors_vec::NTuple{N,Vector{<:Sectors.AbstractCategory}}) where {N}
+function fused_sectors(sectors_vec::NTuple{<:Any,<:Vector{<:Sectors.AbstractCategory}})
   reducible = sectors_to_reducible.(sectors_vec)
   return GradedAxes.blocklabels(GradedAxes.fusion_product(reducible...))
 end
@@ -17,12 +17,12 @@ end
 
 fused_sectors(sector_tuple::Tuple{<:Sectors.AbstractCategory}) = only(sector_tuple)
 
-fused_sectors(::Tuple{}) = Sectors.sector(())
+fused_sectors(::Tuple{}) = Sectors.sector()
 
 ###################################  intersect_sectors  ####################################
 function intersect_sectors(
-  sectors_codomain::NTuple{NCoAxes,Vector{C}}, sectors_domain::NTuple{NDoAxes,Vector{C}}
-) where {NCoAxes,NDoAxes,N,C<:Sectors.AbstractCategory}
+  sectors_codomain::NTuple{<:Any,Vector{C}}, sectors_domain::NTuple{<:Any,Vector{C}}
+) where {C<:Sectors.AbstractCategory}
   @assert NCoAxes + NDoAxes == N
   codomain_fused_sectors = fused_sectors(sectors_codomain)
   domain_fused_sectors = fused_sectors(sectors_domain)
@@ -30,8 +30,8 @@ function intersect_sectors(
 end
 
 function intersect_sectors(
-  ::Tuple{}, sectors_domain::NTuple{N,Vector{<:Sectors.AbstractCategory}}
-) where {N}
+  ::Tuple{}, sectors_domain::NTuple{<:Any,<:Vector{<:Sectors.AbstractCategory}}
+)
   domain_fused_sectors = fused_sectors(sectors_domain)
   return intersect_sectors(
     Sectors.trivial(eltype(domain_fused_sectors)), domain_fused_sectors
@@ -39,8 +39,8 @@ function intersect_sectors(
 end
 
 function intersect_sectors(
-  sectors_codomain::NTuple{N,Vector{<:Sectors.AbstractCategory}}, ::Tuple{}
-) where {N}
+  sectors_codomain::NTuple{<:Any,<:Vector{<:Sectors.AbstractCategory}}, ::Tuple{}
+)
   codomain_fused_sectors = fused_sectors(sectors_codomain)
   return intersect_sectors(
     codomain_fused_sectors, Sectors.trivial(eltype(codomain_fused_sectors))
@@ -92,7 +92,7 @@ end
 function intersect_sectors(
   ::Sectors.CategoryProduct{Tuple{}}, ::Sectors.CategoryProduct{Tuple{}}
 )
-  return [Sectors.sector(())]
+  return [Sectors.sector()]
 end
 
 function intersect_sectors(sec1::C, sec2::C) where {C<:Sectors.AbstractCategory}
