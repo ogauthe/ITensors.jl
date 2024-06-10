@@ -166,16 +166,16 @@ end
   ft4 = ft3 + ft3
   @test codomain_axes(ft4) === codomain_axes(ft3)
   @test domain_axes(ft4) === domain_axes(ft3)
-  @test_broken gradedisequal(matrix_row_axis(ft4), matrix_row_axis(ft3))
+  @test gradedisequal(matrix_row_axis(ft4), matrix_row_axis(ft3))
   @test gradedisequal(matrix_column_axis(ft4), matrix_column_axis(ft3))
-  @test_broken isnothing(sanity_check(ft4))
+  @test isnothing(sanity_check(ft4))
 
   ft4 = ft3 - ft3
   @test codomain_axes(ft4) === codomain_axes(ft3)
   @test domain_axes(ft4) === domain_axes(ft3)
-  @test_broken gradedisequal(matrix_row_axis(ft4), matrix_row_axis(ft3))
+  @test gradedisequal(matrix_row_axis(ft4), matrix_row_axis(ft3))
   @test gradedisequal(matrix_column_axis(ft4), matrix_column_axis(ft3))
-  @test_broken isnothing(sanity_check(ft4))
+  @test isnothing(sanity_check(ft4))
 
   ft4 = 2 * ft3
   @test codomain_axes(ft4) === codomain_axes(ft3)
