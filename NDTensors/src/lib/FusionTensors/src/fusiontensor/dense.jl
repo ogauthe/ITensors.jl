@@ -2,13 +2,36 @@
 
 ##################################  utility tools  #########################################
 function find_allowed_blocks(data_mat::BlockSparseArrays.AbstractBlockSparseMatrix)
-  col_sectors = GradedAxes.blocklabels(axes(data_mat, 2))
-  dual_row_sectors = GradedAxes.blocklabels(GradedAxes.dual(axes(data_mat, 1)))
+  return find_allowed_blocks(axes(data_mat)...)
+end
+
+function find_allowed_blocks(row_axis::AbstractUnitRange, col_axis::AbstractUnitRange)
+  col_sectors = GradedAxes.blocklabels(col_axis)
+  dual_row_sectors = GradedAxes.blocklabels(GradedAxes.dual(row_axis))
   allowed_sectors = intersect_sectors(dual_row_sectors, col_sectors)
   col_shared_indices = findall(in(allowed_sectors), col_sectors)
   row_shared_indices = findall(in(allowed_sectors), dual_row_sectors)
   allowed_blocks = BlockArrays.Block.(row_shared_indices, col_shared_indices)
   return allowed_sectors, allowed_blocks
+end
+
+function find_existing_blocks(data_mat::BlockSparseArrays.AbstractBlockSparseMatrix)
+  col_sectors = GradedAxes.blocklabels(axes(data_mat, 2))
+  existing_blocks = BlockSparseArrays.block_stored_indices(data_mat)
+  existing_sectors = [col_sectors[it[2]] for it in eachindex(existing_blocks)]
+  return existing_sectors, existing_blocks
+end
+
+function split_axes(legs::Tuple; flip_arrows::Bool=false)
+  arrows = GradedAxes.isdual.(legs)
+  irreps = GradedAxes.blocklabels.(legs)
+  degens = BlockArrays.blocklengths.(legs)
+  dimensions = broadcast.(Sectors.quantum_dimension, irreps)
+  if flip_arrows
+    arrows = .!arrows
+    irreps = broadcast.(GradedAxes.dual, irreps)
+  end
+  return arrows, irreps, degens, dimensions
 end
 
 function split_degen_dims(
@@ -49,25 +72,23 @@ function unpermute_split_dense_block(permuted_split_dense_block::AbstractArray)
   return split_dense_block
 end
 
-function reshape_permuted_to_4dim(
+function reshape_permuted_to_compressed(
   permuted_split_dense_block::AbstractArray, ::Val{N_CO}
 ) where {N_CO}
   N = ndims(permuted_split_dense_block) ÷ 2
   permuted_dense_shape = size(permuted_split_dense_block)
-  swapped4dim_dense_block_shape = (
+  compressed_dense_block_shape = (
     prod(permuted_dense_shape[begin:N_CO]),
     prod(permuted_dense_shape[(N_CO + 1):N]),
     prod(permuted_dense_shape[(N + 1):(N + N_CO)]),
     prod(permuted_dense_shape[(N + N_CO + 1):end]),
   )
-  swapped4dim_dense_block = reshape(
-    permuted_split_dense_block, swapped4dim_dense_block_shape
-  )
-  return swapped4dim_dense_block
+  compressed_dense_block = reshape(permuted_split_dense_block, compressed_dense_block_shape)
+  return compressed_dense_block
 end
 
-function reshape_4dim_to_permuted(
-  swapped4dim_dense_block::AbstractArray,
+function reshape_compressed_to_permuted(
+  compressed_dense_block::AbstractArray,
   codomain_block_degens::Tuple,
   codomain_block_dims::Tuple,
   domain_block_degens::Tuple,
@@ -79,11 +100,11 @@ function reshape_4dim_to_permuted(
     codomain_block_dims...,
     domain_block_dims...,
   )
-  permuted_split_dense_block = reshape(swapped4dim_dense_block, degen_dim_shape)
+  permuted_split_dense_block = reshape(compressed_dense_block, degen_dim_shape)
   return permuted_split_dense_block
 end
 
-function swap4dim_dense_block(
+function compress_dense_block(
   dense_block::AbstractArray,
   codomain_block_degens::Tuple,
   codomain_block_dims::Tuple,
@@ -129,25 +150,25 @@ function swap4dim_dense_block(
   # Finally, it is convenient to merge together legs corresponding to codomain or
   # to codomain and produce a 4-dims tensor
   #
-  #        --------------swapped4dim_dense_block------------
+  #        ----------------compressed_dense_block------------
   #        |                 |               |             |
   #       degen1*degen2   degen3*degen4    dim1*dim2    dim3*dim4
   #
-  swapped4dim_dense_block = reshape_permuted_to_4dim(
+  compressed_dense_block = reshape_permuted_to_compressed(
     permuted_split_dense_block, Val(length(codomain_block_degens))
   )
-  return swapped4dim_dense_block
+  return compressed_dense_block
 end
 
 function contract_fusion_trees(
-  swapped4dim_dense_block::AbstractArray{<:Any,4},
-  tree_codomain::AbstractArray{Float64,3},
-  tree_domain::AbstractArray{Float64,3},
+  compressed_dense_block::AbstractArray{<:Number,4},
+  tree_codomain::AbstractArray{<:Real,3},
+  tree_domain::AbstractArray{<:Real,3},
   sec_dim::Int,
 )
   # Input:
   #
-  #        --------------swapped4dim_dense_block------------
+  #        ---------------compressed_dense_block------------
   #        |                 |               |             |
   #       degen1*degen2   degen3*degen4    dim1*dim2    dim3*dim4
   #
@@ -171,7 +192,7 @@ function contract_fusion_trees(
   #       degen1*degen2   degen3*degen4    dim1*dim2    sec_dim    ndof_sec_domain
   #
   data_1tree = TensorAlgebra.contract(
-    (1, 2, 3, 5, 6), swapped4dim_dense_block, (1, 2, 3, 4), tree_domain, (4, 5, 6)
+    (1, 2, 3, 5, 6), compressed_dense_block, (1, 2, 3, 4), tree_domain, (4, 5, 6)
   )
 
   # contract codomain tree
@@ -179,7 +200,7 @@ function contract_fusion_trees(
   #             |              |                  |              |
   #       degen1*degen2   ndof_sec_codomain    degen3*degen4   ndof_sec_domain
   #
-  T = promote_type(eltype(swapped4dim_dense_block), Float64)
+  T = promote_type(eltype(compressed_dense_block), Float64)
   sym_data::Array{T,4} = TensorAlgebra.contract(
     (1, 7, 2, 6),   # HERE WE SET INNER STRUCTURE FOR MATRIX BLOCKS
     data_1tree,
@@ -211,24 +232,40 @@ function FusionTensor(
     throw(DomainError("legs dimensions are incompatible with array"))
   end
 
-  # initialize data_matrix
   data_mat = initialize_data_matrix(eltype(blockarray), codomain_legs, domain_legs)
+  fill_matrix_blocks!(data_mat, blockarray, codomain_legs, domain_legs)
+  return FusionTensor(data_mat, codomain_legs, domain_legs)
+end
 
+function fill_matrix_blocks!(
+  data_mat::BlockSparseArrays.AbstractBlockSparseMatrix,
+  blockarray::BlockArrays.AbstractBlockArray,
+  codomain_legs::Tuple,
+  domain_legs::Tuple,
+)
   # find sectors
   allowed_sectors, allowed_blocks = find_allowed_blocks(data_mat)
-  allowed_sectors_dims = Sectors.quantum_dimension.(allowed_sectors)
+  allowed_matrix_blocks = [view(data_mat, b) for b in allowed_blocks]
+  return fill_matrix_blocks!(
+    allowed_matrix_blocks, allowed_sectors, blockarray, codomain_legs, domain_legs
+  )
+end
 
-  # split axes into irrep blocks
+function fill_matrix_blocks!(
+  allowed_matrix_blocks::Vector{<:AbstractMatrix},
+  allowed_sectors::Vector{<:Sectors.AbstractCategory},
+  blockarray::BlockArrays.AbstractBlockArray,
+  codomain_legs::Tuple,
+  domain_legs::Tuple,
+)
   # codomain needs to be dualed in fusion tree
-  codomain_arrows = .!GradedAxes.isdual.(codomain_legs)
-  codomain_irreps = GradedAxes.blocklabels.(GradedAxes.dual.(codomain_legs))
-  codomain_degens = BlockArrays.blocklengths.(codomain_legs)
-  codomain_dims = broadcast.(Sectors.quantum_dimension, codomain_irreps)
+  codomain_arrows, codomain_irreps, codomain_degens, codomain_dims = split_axes(
+    codomain_legs; flip_arrows=true
+  )
+  domain_arrows, domain_irreps, domain_degens, domain_dims = split_axes(domain_legs)
 
-  domain_arrows = GradedAxes.isdual.(domain_legs)
-  domain_irreps = GradedAxes.blocklabels.(domain_legs)
-  domain_degens = BlockArrays.blocklengths.(domain_legs)
-  domain_dims = broadcast.(Sectors.quantum_dimension, domain_irreps)
+  # precompute matrix block normalization factor
+  allowed_sectors_dims = Sectors.quantum_dimension.(allowed_sectors)
 
   # cache computed trees
   codomain_trees = Dict{NTuple{length(codomain_legs),Int},Vector{Array{Float64,3}}}()
@@ -240,7 +277,7 @@ function FusionTensor(
     domain_block_allowed_sectors = intersect_sectors(domain_block_irreps, allowed_sectors)
     if !isempty(domain_block_allowed_sectors)
       domain_block_trees = prune_fusion_trees_compressed(
-        getindex.(domain_irreps, iter_do), domain_arrows, allowed_sectors
+        domain_block_irreps, domain_arrows, allowed_sectors
       )
 
       # loop for each codomain irrep configuration
@@ -253,7 +290,7 @@ function FusionTensor(
           codomain_block_trees = get_tree!(
             codomain_trees, iter_co, codomain_irreps, codomain_arrows, allowed_sectors
           )
-          swapped4dim_dense_block = swap4dim_dense_block(
+          compressed_dense_block = compress_dense_block(
             view(blockarray, BlockArrays.Block(iter_co..., iter_do...)),
             getindex.(codomain_degens, iter_co),
             getindex.(codomain_dims, iter_co),
@@ -265,8 +302,11 @@ function FusionTensor(
           for i_sec in findall(in(block_allowed_sectors), allowed_sectors)
 
             # contract fusion trees and reshape symmetric block as a matrix
+            # Note: a final permutedims is needed after the last contract
+            # therefore cannot efficiently use contract!(allowed_matrix_blocks[...], ...)
+            # TBD something like permutedims!(reshape(view), sym_block, (1,3,2,4))?
             sym_block = contract_fusion_trees(
-              swapped4dim_dense_block,
+              compressed_dense_block,
               codomain_block_trees[i_sec],
               domain_block_trees[i_sec],
               allowed_sectors_dims[i_sec],
@@ -274,11 +314,10 @@ function FusionTensor(
 
             # find position and write matrix block
             r1 = block_shifts_rows[i_sec]
-            r2 =
-              r1 + size(swapped4dim_dense_block, 1) * size(codomain_block_trees[i_sec], 3)
+            r2 = r1 + size(compressed_dense_block, 1) * size(codomain_block_trees[i_sec], 3)
             c1 = block_shifts_columns[i_sec]
-            c2 = c1 + size(swapped4dim_dense_block, 2) * size(domain_block_trees[i_sec], 3)
-            @views data_mat[allowed_blocks[i_sec]][(r1 + 1):r2, (c1 + 1):c2] = sym_block
+            c2 = c1 + size(compressed_dense_block, 2) * size(domain_block_trees[i_sec], 3)
+            @views allowed_matrix_blocks[i_sec][(r1 + 1):r2, (c1 + 1):c2] = sym_block
             block_shifts_rows[i_sec] = r2
           end
         end
@@ -288,16 +327,14 @@ function FusionTensor(
       block_shifts_columns += domain_block_length * size.(domain_block_trees, 3)
     end
   end
-
-  return FusionTensor(data_mat, codomain_legs, domain_legs)
 end
 
 ##################################  cast to dense array  ###################################
 function add_sector_block!(
-  swapped4dim_dense_block::AbstractArray{<:Any,4},
+  compressed_dense_block::AbstractArray{<:Number,4},
   sym_block::AbstractMatrix,
-  tree_codomain::AbstractArray{Float64,3},
-  tree_domain::AbstractArray{Float64,3},
+  tree_codomain::AbstractArray{<:Real,3},
+  tree_domain::AbstractArray{<:Real,3},
 )
   codomain_block_ndof_sector = size(tree_codomain, 3)
   domain_block_ndof_sector = size(tree_domain, 3)
@@ -327,12 +364,12 @@ function add_sector_block!(
     (1, 2, 6, 3, 5), sym_data, (1, 7, 2, 6), tree_codomain, (3, 5, 7)
   )
 
-  #        --------------swapped4dim_dense_block------------
+  #        ---------------compressed_dense_block------------
   #        |                 |               |             |
   #       degen1*degen2   degen3*degen4    dim1*dim2    dim3*dim4
   #
   return TensorAlgebra.contract!(
-    swapped4dim_dense_block,
+    compressed_dense_block,
     (1, 2, 3, 4),
     data_1tree,
     (1, 2, 6, 3, 5),
@@ -343,14 +380,14 @@ function add_sector_block!(
   )
 end
 
-function unswap4dim_dense_block(
-  swapped4dim_dense_block::AbstractArray{<:Any,4},
+function decompress_dense_block(
+  compressed_dense_block::AbstractArray{<:Number,4},
   codomain_block_degens::Tuple,
   codomain_block_dims::Tuple,
   domain_block_degens::Tuple,
   domain_block_dims::Tuple,
 )
-  #        --------------swapped4dim_dense_block------------
+  #        ---------------compressed_dense_block------------
   #        |                 |               |             |
   #       degen1*degen2   degen3*degen4    dim1*dim2    dim3*dim4
   #
@@ -359,8 +396,8 @@ function unswap4dim_dense_block(
   #        |        |       |       |       |      |      |      |
   #       degen1  degen2  degen3  degen4   dim1   dim2   dim3   dim4
   #
-  permuted_split_dense_block = reshape_4dim_to_permuted(
-    swapped4dim_dense_block,
+  permuted_split_dense_block = reshape_compressed_to_permuted(
+    compressed_dense_block,
     codomain_block_degens,
     codomain_block_dims,
     domain_block_degens,
@@ -387,46 +424,59 @@ end
 Base.Array(ft::FusionTensor) = Array(BlockSparseArrays.BlockSparseArray(ft))
 
 function BlockSparseArrays.BlockSparseArray(ft::FusionTensor)
-  # initialize block array
   codomain_legs = codomain_axes(ft)
   domain_legs = domain_axes(ft)
   bounds = Sectors.block_dimensions.((codomain_legs..., domain_legs...))
   blockarray = BlockSparseArrays.BlockSparseArray{eltype(ft)}(
     BlockArrays.blockedrange.(bounds)
   )
+  fill_blockarray!(blockarray, data_matrix(ft), codomain_legs, domain_legs)
+  return blockarray
+end
 
-  col_sectors = GradedAxes.blocklabels(matrix_column_axis(ft))
-  existing_blocks = BlockSparseArrays.block_stored_indices(data_matrix(ft))
-  existing_sectors = [col_sectors[it[2]] for it in eachindex(existing_blocks)]
-  matrix_blocks = [data_matrix(ft)[it] for it in existing_blocks]
+function fill_blockarray!(
+  blockarray::BlockArrays.AbstractBlockArray,
+  data_mat::BlockSparseArrays.AbstractBlockSparseMatrix,
+  codomain_legs::Tuple,
+  domain_legs::Tuple,
+)
+  existing_sectors, existing_blocks = find_existing_blocks(data_mat)
+  # TODO replace with view once fixed
+  existing_matrix_blocks = [data_mat[b] for b in existing_blocks]
+  #existing_matrix_blocks = [view(data_mat, b) for b in existing_blocks]
+  return fill_blockarray!(
+    blockarray, existing_sectors, existing_matrix_blocks, codomain_legs, domain_legs
+  )
+end
 
-  # split axes into irrep blocks
+function fill_blockarray!(
+  blockarray::BlockArrays.AbstractBlockArray,
+  existing_sectors::Vector{<:Sectors.AbstractCategory},
+  existing_matrix_blocks::Vector{<:AbstractMatrix},
+  codomain_legs::Tuple,
+  domain_legs::Tuple,
+)
   # codomain needs to be dualed in fusion tree
-  codomain_arrows = .!GradedAxes.isdual.(codomain_legs)
-  codomain_irreps = GradedAxes.blocklabels.(GradedAxes.dual.(codomain_legs))
-  codomain_irrep_dimensions = broadcast.(Sectors.quantum_dimension, codomain_irreps)
-  codomain_degens = BlockArrays.blocklengths.(codomain_legs)
-
-  domain_arrows = GradedAxes.isdual.(domain_legs)
-  domain_irreps = GradedAxes.blocklabels.(domain_legs)
-  domain_irrep_dimensions = broadcast.(Sectors.quantum_dimension, domain_irreps)
-  domain_degens = BlockArrays.blocklengths.(domain_legs)
+  codomain_arrows, codomain_irreps, codomain_degens, codomain_dims = split_axes(
+    codomain_legs; flip_arrows=true
+  )
+  domain_arrows, domain_irreps, domain_degens, domain_dims = split_axes(domain_legs)
 
   # cache computed trees
   codomain_trees = Dict{NTuple{length(codomain_legs),Int},Vector{Array{Float64,3}}}()
 
   # loop for each domain irrep configuration
-  block_shifts_column = zeros(Int, length(existing_blocks))
+  block_shifts_column = zeros(Int, length(existing_sectors))
   for iter_do in Iterators.product(eachindex.(domain_irreps)...)
     domain_block_irreps = getindex.(domain_irreps, iter_do)
     domain_block_existing_sectors = intersect_sectors(domain_block_irreps, existing_sectors)
     if !isempty(domain_block_existing_sectors)
       domain_block_trees = prune_fusion_trees_compressed(
-        getindex.(domain_irreps, iter_do), domain_arrows, existing_sectors
+        domain_block_irreps, domain_arrows, existing_sectors
       )
-      block_shifts_row = zeros(Int, length(existing_blocks))
+      block_shifts_row = zeros(Int, length(existing_sectors))
       domain_block_length = prod(getindex.(domain_degens, iter_do))
-      domain_block_dims = getindex.(domain_irrep_dimensions, iter_do)
+      domain_block_dims = getindex.(domain_dims, iter_do)
 
       # loop for each codomain irrep configuration
       for iter_co in Iterators.product(eachindex.(codomain_irreps)...)
@@ -438,19 +488,19 @@ function BlockSparseArrays.BlockSparseArray(ft::FusionTensor)
             codomain_trees, iter_co, codomain_irreps, codomain_arrows, existing_sectors
           )
           codomain_block_length = prod(getindex.(codomain_degens, iter_co))
-          codomain_block_dims = getindex.(codomain_irrep_dimensions, iter_co)
+          codomain_block_dims = getindex.(codomain_dims, iter_co)
 
-          #        -------------------swapped4dim_dense_block--------------
+          #        ---------------compressed_dense_block------------
           #        |                 |               |             |
           #       degen1*degen2   degen3*degen4    dim1*dim2    dim3*dim4
           #
-          swapped4dim_dense_block_shape = (
+          compressed_dense_block_shape = (
             codomain_block_length,
             domain_block_length,
             prod(codomain_block_dims),
             prod(domain_block_dims),
           )
-          swapped4dim_dense_block = zeros(eltype(ft), swapped4dim_dense_block_shape)
+          compressed_dense_block = zeros(eltype(blockarray), compressed_dense_block_shape)
 
           # loop for each symmetry sector inside this configuration
           for i_sec in findall(in(block_existing_sectors), existing_sectors)
@@ -459,9 +509,9 @@ function BlockSparseArrays.BlockSparseArray(ft::FusionTensor)
             r2 = r1 + size(codomain_block_trees[i_sec], 3) * codomain_block_length
             c2 = c1 + size(domain_block_trees[i_sec], 3) * domain_block_length
 
-            sym_block = @views matrix_blocks[i_sec][(r1 + 1):r2, (c1 + 1):c2]
+            @views sym_block = existing_matrix_blocks[i_sec][(r1 + 1):r2, (c1 + 1):c2]
             add_sector_block!(
-              swapped4dim_dense_block,
+              compressed_dense_block,
               sym_block,
               codomain_block_trees[i_sec],
               domain_block_trees[i_sec],
@@ -470,8 +520,8 @@ function BlockSparseArrays.BlockSparseArray(ft::FusionTensor)
             block_shifts_row[i_sec] = r2
           end
 
-          blockarray[BlockArrays.Block(iter_co..., iter_do...)] = unswap4dim_dense_block(
-            swapped4dim_dense_block,
+          blockarray[BlockArrays.Block(iter_co..., iter_do...)] = decompress_dense_block(
+            compressed_dense_block,
             getindex.(codomain_degens, iter_co),
             codomain_block_dims,
             getindex.(domain_degens, iter_do),
@@ -482,6 +532,4 @@ function BlockSparseArrays.BlockSparseArray(ft::FusionTensor)
       block_shifts_column += domain_block_length * size.(domain_block_trees, 3)
     end
   end
-
-  return blockarray
 end

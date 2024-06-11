@@ -23,7 +23,6 @@ fused_sectors(::Tuple{}) = Sectors.sector()
 function intersect_sectors(
   sectors_codomain::NTuple{<:Any,Vector{C}}, sectors_domain::NTuple{<:Any,Vector{C}}
 ) where {C<:Sectors.AbstractCategory}
-  @assert NCoAxes + NDoAxes == N
   codomain_fused_sectors = fused_sectors(sectors_codomain)
   domain_fused_sectors = fused_sectors(sectors_domain)
   return intersect_sectors(codomain_fused_sectors, domain_fused_sectors)
