@@ -38,7 +38,7 @@ function clebsch_gordan_tensor(
   s3::Sectors.SU{3},
   arrow1::Bool,
   arrow2::Bool,
-  inner_degen_index::Int,
+  inner_mult_index::Int,
 )
   d1 = Sectors.quantum_dimension(s1)
   d2 = Sectors.quantum_dimension(s2)

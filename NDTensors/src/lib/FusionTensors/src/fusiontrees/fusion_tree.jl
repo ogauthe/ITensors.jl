@@ -8,12 +8,12 @@
 # irrep sec with quantum dimension dim_sec. There may be several path that fuse to this
 # irrep in the fusion ring and each of them corresponds to a single "thin" fusion tree with
 # one degree of freedom.
-# We take the ndof_sec trees that fuse on sector sec and merge all of these into one "thick"
-# fusion tree containing all degrees of freedom for sector sec.
+# We take the struct_mult_sec trees that fuse on sector sec and merge all of these into one
+# "thick" fusion tree containing all degrees of freedom for sector sec.
 # The result is a N+2 dimension fusion tree with "uncompressed" size
-# (dim1, dim2, ..., dimN, dim_sec, ndof_sec)
+# (dim1, dim2, ..., dimN, dim_sec, struct_mult_sec)
 #
-#      dim_sec  ndof_sec
+#      dim_sec  struct_mult_sec
 #           \  /
 #            \/
 #            /
@@ -26,11 +26,11 @@
 #
 #
 # It is convenient to compress the tree by merging together the dimension legs to yield a
-# 3-dim tensor with size (dim1*dim2*...*dimN, dim_sec, ndof_sec)
+# 3-dim tensor with size (dim1*dim2*...*dimN, dim_sec, struct_mult_sec)
 #
 #             ---------------------------
 #             |             |           |
-#       dim1*dim2*dim3   dim_sec    ndof_sec
+#       dim1*dim2*dim3   dim_sec    struct_mult_sec
 #
 #
 # convention: the trees are not normalized, i.e they do not define a projector on a given
@@ -90,19 +90,19 @@ function compress_tree(a::AbstractArray)
 end
 
 function decompress_tree(
-  tree::AbstractArray{<:Any,3}, irreps::NTuple{<:Any,<:Sectors.AbstractCategory}
+  tree::AbstractArray{<:Real,3}, irreps::NTuple{<:Any,<:Sectors.AbstractCategory}
 )
   irreps_shape = Sectors.quantum_dimension.(irreps)
   return decompress_tree(tree, irreps_shape)
 end
 
-function decompress_tree(tree::AbstractArray{<:Any,3}, irreps_shape::NTuple{<:Any,Int})
+function decompress_tree(tree::AbstractArray{<:Real,3}, irreps_shape::NTuple{<:Any,Int})
   new_shape = (irreps_shape..., size(tree, 2), size(tree, 3))
   return reshape(tree, new_shape)
 end
 
 function get_tree!(
-  dic::Dict{NTuple{N,Int},Vector{Array{Float64,3}}},
+  dic::Dict{NTuple{N,Int},<:Vector{<:Array{<:Real,3}}},
   it::NTuple{N,Int},
   irreps_vectors::NTuple{N,Vector{C}},
   tree_arrows::NTuple{N,Bool},
@@ -116,7 +116,7 @@ function get_tree!(
 end
 
 function get_tree!(
-  dic::Dict{NTuple{N,Int},Vector{<:Array{Float64}}},
+  dic::Dict{NTuple{N,Int},<:Vector{<:Array{<:Real}}},
   it::NTuple{N,Int},
   irreps_vectors::NTuple{N,Vector{C}},
   tree_arrows::NTuple{N,Bool},
@@ -224,13 +224,13 @@ function build_trees(
   old_irrep::Sectors.AbstractCategory,
   level_irrep::Sectors.AbstractCategory,
   level_arrow::Bool,
-  ndof_sec::Int,
+  inner_multiplicity::Integer,
   sec::Sectors.AbstractCategory,
 )
   sector_trees = Vector{typeof(old_tree)}()
-  for inner_multiplicity in 1:ndof_sec
+  for inner_mult_index in 1:inner_multiplicity
     cgt_inner_mult = clebsch_gordan_tensor(
-      old_irrep, level_irrep, sec, false, level_arrow, inner_multiplicity
+      old_irrep, level_irrep, sec, false, level_arrow, inner_mult_index
     )
     dim_old_irrep, dim_level_irrep, dim_sec = size(cgt_inner_mult)
     tree = old_tree * reshape(cgt_inner_mult, (dim_old_irrep, dim_level_irrep * dim_sec))
@@ -249,11 +249,13 @@ function build_trees(
   new_trees = Vector{typeof(old_tree)}()
   new_irreps = Vector{typeof(old_irrep)}()
   rep = GradedAxes.fusion_product(old_irrep, level_irrep)
-  for (ndof_sec, sec) in
-      zip(GradedAxes.unlabel.(BlockArrays.blocklengths(rep)), GradedAxes.blocklabels(rep))
-    sector_trees = build_trees(old_tree, old_irrep, level_irrep, level_arrow, ndof_sec, sec)
+  for (inner_multiplicity, sec) in
+      zip(BlockArrays.blocklengths(rep), GradedAxes.blocklabels(rep))
+    sector_trees = build_trees(
+      old_tree, old_irrep, level_irrep, level_arrow, inner_multiplicity, sec
+    )
     append!(new_trees, sector_trees)
-    append!(new_irreps, repeat([sec], ndof_sec))
+    append!(new_irreps, repeat([sec], inner_multiplicity))
   end
   return new_trees, new_irreps
 end
