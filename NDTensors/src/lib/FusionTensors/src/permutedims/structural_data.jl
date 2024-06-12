@@ -21,15 +21,17 @@
 # second cache: StructuralData, defined for many blocks
 # contains list of allowed blocks + isometries for each block
 
-struct StructuralData{N,P,Mat,C}
-  biperm::P
+struct StructuralData{N,P,Mat}
+  biperm::P  # not strictly necessary but convenient
   old_block_indices::Vector{NTuple{N,Int}}
   old_codomain_structural_multiplicities::Matrix{Int}
   old_domain_structural_multiplicities::Matrix{Int}
   new_codomain_structural_multiplicities::Matrix{Int}
   new_domain_structural_multiplicities::Matrix{Int}
   isometries::Vector{Mat}
-  new_allowed_sectors::Vector{C}
+  # currently minimalistic, store strict necessary to minimize memory use
+  # TBD not parametrized by C?
+  # TBD store old_irreps?
 
   function StructuralData(
     biperm::TensorAlgebra.BlockedPermutation{2,N},
@@ -38,8 +40,7 @@ struct StructuralData{N,P,Mat,C}
     old_domain_structural_multiplicities::Matrix{Int},
     new_codomain_structural_multiplicities::Matrix{Int},
     new_domain_structural_multiplicities::Matrix{Int},
-    isometries::Vector{<:BlockArrays.AbstractBlockMatrix{Float64}},
-    new_allowed_sectors::Vector{<:Sectors.AbstractCategory},  # TBD drop me?
+    isometries::Vector{<:AbstractMatrix},
   ) where {N}
     @assert size(old_codomain_structural_multiplicities, 1) ==
       size(old_domain_structural_multiplicities, 1)
@@ -47,7 +48,7 @@ struct StructuralData{N,P,Mat,C}
       size(new_domain_structural_multiplicities, 1)
     @assert size(new_codomain_structural_multiplicities, 1) == length(new_allowed_sectors)
     @assert length(old_block_indices) == length(isometries)
-    return new{N,typeof(biperm),eltype(isometries),eltype(new_allowed_sectors)}(
+    return new{N,typeof(biperm),eltype(isometries)}(
       biperm,
       old_block_indices,
       old_codomain_structural_multiplicities,
@@ -55,14 +56,14 @@ struct StructuralData{N,P,Mat,C}
       new_codomain_structural_multiplicities,
       new_domain_structural_multiplicities,
       isometries,
-      new_allowed_sectors,
     )
   end
 end
 
 # getters
 #old_blocks(sd::StructuralData) = sd.old_blocks
-#Base.ndims(::StructuralData{N}) where {N} = N
+Base.ndims(::StructuralData{N}) where {N} = N
+get_biperm(sd::StructuralData) = sd.biperm
 #structural_multiplicities_codomain_ion(sd::StructuralData) = sd.structural_multiplicities
 #isometries(sd::StructuralData) = sd.isometries
 #new_allowed_sectors(sd::StructuralData) = sd.new_allowed_sectors
@@ -81,11 +82,11 @@ function StructuralData(
   old_domain_irreps::NTuple{OldNDoAxes,Vector{C}},
   old_arrows::NTuple{N,Bool},
 ) where {N,OldNCoAxes,OldNDoAxes,C<:Sectors.AbstractCategory}
-  old_block_indices, structural_multiplicities, isometries, new_allowed_sectors = compute_isometries_CG(
-    biperm, old_codomain_irreps, old_domain_irreps, old_arrows
-  )
+  @assert OldNCoAxes + OldNDoAxes == N
+  @assert N > 0
   return StructuralData(
-    old_block_indices, structural_multiplicities, isometries, new_allowed_sectors
+    biperm,
+    compute_isometries_CG(biperm, old_codomain_irreps, old_domain_irreps, old_arrows)...,
   )
 end
 
@@ -224,8 +225,6 @@ function compute_isometries_CG(
 ) where {N,OldNCoAxes,OldNDoAxes,C<:Sectors.AbstractCategory}
 
   # compile time
-  @assert N > 0
-  @assert OldNCoAxes + OldNDoAxes == N
   NCoAxesNew, NDoAxesNew = BlockArrays.blocklengths(biperm)
   irreps_perm = Tuple(biperm)
   perm1, perm2 = BlockArrays.blocks(biperm)
@@ -329,7 +328,6 @@ function compute_isometries_CG(
     new_codomain_structural_multiplicities,
     new_domain_structural_multiplicities,
     isometries,
-    new_allowed_sectors,
   )
 end
 
@@ -340,8 +338,6 @@ function compute_isometries_6j(
   old_codomain_sectors::NTuple{OldNDoAxes,Vector{C}},
   old_arrows::NTuple{N,Bool},
 ) where {N,OldNCoAxes,OldNDoAxes,C<:Sectors.AbstractCategory}
-  @assert N > 0
-  @assert OldNCoAxes + OldNDoAxes == N
   # this function has the same inputs and the same outputs as compute_isometries_CG
 
   # dummy
