@@ -42,8 +42,8 @@ TBLIS = "48530278-0828-4a49-9772-0f3830dfa1e9"
 cuTENSOR = "011b41b2-24ef-40a8-b3eb-fa098493e9e1"
 
 [extensions]
-NDTensorsAMDGPUExt = ["AMDGPU","GPUArraysCore"]
-NDTensorsCUDAExt = ["CUDA","GPUArraysCore"]
+NDTensorsAMDGPUExt = ["AMDGPU", "GPUArraysCore"]
+NDTensorsCUDAExt = ["CUDA", "GPUArraysCore"]
 NDTensorsGPUArraysCoreExt = "GPUArraysCore"
 NDTensorsHDF5Ext = "HDF5"
 NDTensorsMetalExt = ["GPUArraysCore", "Metal"]
@@ -56,10 +56,9 @@ AMDGPU = "0.9"
 Accessors = "0.1.33"
 Adapt = "3.7, 4"
 ArrayLayouts = "1.4"
-BlockArrays = "0.16"
+BlockArrays = "0.16, 1"
 CUDA = "5"
 Compat = "4.9"
-cuTENSOR = "2"
 Dictionaries = "0.4"
 EllipsisNotation = "1.8"
 FillArrays = "1"
@@ -86,6 +85,7 @@ TBLIS = "0.2"
 TimerOutputs = "0.5.5"
 TupleTools = "1.2.0"
 VectorInterface = "0.4.2"
+cuTENSOR = "2"
 julia = "1.6"
 
 [extras]
