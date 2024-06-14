@@ -217,7 +217,7 @@ end
 #################################  cast from dense array  ##################################
 function FusionTensor(dense::AbstractArray, codomain_legs::Tuple, domain_legs::Tuple)
   bounds = Sectors.block_dimensions.((codomain_legs..., domain_legs...))
-  blockarray = BlockArrays.PseudoBlockArray(dense, bounds...)
+  blockarray = BlockArrays.BlockedArray(dense, bounds...)
   return FusionTensor(blockarray, codomain_legs, domain_legs)
 end
 

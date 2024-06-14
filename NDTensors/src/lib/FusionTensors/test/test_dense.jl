@@ -60,6 +60,21 @@ using NDTensors.Sectors: SU2, U1, sector
   @test BlockArrays.blocksize(data_matrix(ft)) == (3, 4)
   @test LinearAlgebra.norm(ft) ≈ LinearAlgebra.norm(dense)
   @test Array(ft) ≈ dense
+
+  # mixing dual and nondual
+  g1 = GradedAxes.gradedrange([U1(-1) => 1, U1(0) => 1, U1(1) => 1])
+  g2 = GradedAxes.gradedrange([U1(0) => 1, U1(1) => 2, U1(2) => 3])
+  g3 = GradedAxes.gradedrange([U1(0) => 2, U1(1) => 2, U1(3) => 1])
+  g4 = GradedAxes.gradedrange([U1(-1) => 1, U1(0) => 2, U1(1) => 1])
+  codomain_legs = (g1,)
+  domain_legs = (GradedAxes.dual(g2), GradedAxes.dual(g3), g4)
+  dense = zeros((3, 6, 5, 4))
+  dense[2:2, 1:1, 1:2, 2:3] .= 1.0
+  ft = FusionTensor(dense, codomain_legs, domain_legs)
+  #@test size(data_matrix(ft)) == (20, 15)
+  #@test BlockArrays.blocksize(data_matrix(ft)) == (3, 4)
+  @test LinearAlgebra.norm(ft) ≈ LinearAlgebra.norm(dense)
+  @test Array(ft) ≈ dense
 end
 
 @testset "SU(2) FusionTensor" begin

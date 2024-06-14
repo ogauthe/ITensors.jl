@@ -1,7 +1,6 @@
 @eval module $(gensym())
 using Test: @test, @testset
 
-using NDTensors.BlockSparseArrays: BlockSparseArray
 using NDTensors.FusionTensors: FusionTensor, ndims_codomain, sanity_check, matching_axes
 using NDTensors.GradedAxes
 using NDTensors.Sectors: U1
