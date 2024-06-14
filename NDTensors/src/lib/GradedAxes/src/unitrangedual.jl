@@ -6,8 +6,9 @@ UnitRangeDual(a::AbstractUnitRange) = UnitRangeDual{eltype(a),typeof(a)}(a)
 dual(a::AbstractUnitRange) = UnitRangeDual(a)
 nondual(a::UnitRangeDual) = a.nondual_unitrange
 dual(a::UnitRangeDual) = nondual(a)
+flip(a::UnitRangeDual) = dual(flip(nondual(a)))
 nondual(a::AbstractUnitRange) = a
-isdual(::GradedUnitRange) = false
+isdual(::AbstractGradedUnitRange) = false
 isdual(::UnitRangeDual) = true
 ## TODO: Define this to instantiate a dual unit range.
 ## materialize_dual(a::UnitRangeDual) = materialize_dual(nondual(a))
@@ -17,6 +18,16 @@ Base.last(a::UnitRangeDual) = label_dual(last(nondual(a)))
 Base.step(a::UnitRangeDual) = label_dual(step(nondual(a)))
 
 Base.view(a::UnitRangeDual, index::Block{1}) = a[index]
+
+function Base.show(io::IO, a::UnitRangeDual)
+  return print(io, UnitRangeDual, "(", blocklasts(a), ")")
+end
+
+function Base.show(io::IO, mimetype::MIME"text/plain", a::UnitRangeDual)
+  return Base.invoke(
+    show, Tuple{typeof(io),MIME"text/plain",AbstractArray}, io, mimetype, a
+  )
+end
 
 function Base.getindex(a::UnitRangeDual, indices::AbstractUnitRange{<:Integer})
   return dual(getindex(nondual(a), indices))
@@ -78,8 +89,8 @@ BlockArrays.findblock(a::UnitRangeDual, index::Integer) = findblock(nondual(a), 
 
 blocklabels(a::UnitRangeDual) = dual.(blocklabels(nondual(a)))
 
-gradedisequal(a1::UnitRangeDual, a2::GradedUnitRange) = false
-gradedisequal(a1::GradedUnitRange, a2::UnitRangeDual) = false
+gradedisequal(::UnitRangeDual, ::AbstractGradedUnitRange) = false
+gradedisequal(::AbstractGradedUnitRange, ::UnitRangeDual) = false
 function gradedisequal(a1::UnitRangeDual, a2::UnitRangeDual)
   return gradedisequal(nondual(a1), nondual(a2))
 end
