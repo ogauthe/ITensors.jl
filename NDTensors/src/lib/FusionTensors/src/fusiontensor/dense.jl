@@ -22,15 +22,11 @@ function find_existing_blocks(data_mat::BlockSparseArrays.AbstractBlockSparseMat
   return existing_sectors, existing_blocks
 end
 
-function split_axes(legs::Tuple; flip_arrows::Bool=false)
+function split_axes(legs::Tuple)
   arrows = GradedAxes.isdual.(legs)
   irreps = GradedAxes.blocklabels.(legs)
   degens = BlockArrays.blocklengths.(legs)
   dimensions = broadcast.(Sectors.quantum_dimension, irreps)
-  if flip_arrows
-    arrows = .!arrows
-    irreps = broadcast.(GradedAxes.dual, irreps)
-  end
   return arrows, irreps, degens, dimensions
 end
 
@@ -260,7 +256,7 @@ function fill_matrix_blocks!(
 )
   # codomain needs to be dualed in fusion tree
   codomain_arrows, codomain_irreps, codomain_degens, codomain_dims = split_axes(
-    codomain_legs; flip_arrows=true
+    GradedAxes.dual.(codomain_legs)
   )
   domain_arrows, domain_irreps, domain_degens, domain_dims = split_axes(domain_legs)
 
@@ -458,7 +454,7 @@ function fill_blockarray!(
 )
   # codomain needs to be dualed in fusion tree
   codomain_arrows, codomain_irreps, codomain_degens, codomain_dims = split_axes(
-    codomain_legs; flip_arrows=true
+    GradedAxes.dual.(codomain_legs)
   )
   domain_arrows, domain_irreps, domain_degens, domain_dims = split_axes(domain_legs)
 
