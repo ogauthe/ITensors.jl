@@ -21,6 +21,22 @@ struct FusionTensor{T,N,CoDomainAxes,DomainAxes,Mat} <: AbstractArray{T,N}
       mat, codomain_legs, domain_legs
     )
   end
+
+  function FusionTensor(
+    mat::LinearAlgebra.Adjoint{<:Number,<:BlockSparseArrays.BlockSparseMatrix},
+    codomain_legs::Tuple{Vararg{AbstractUnitRange}},
+    domain_legs::Tuple{Vararg{AbstractUnitRange}},
+  )
+    return new{
+      eltype(mat),
+      length(codomain_legs) + length(domain_legs),
+      typeof(codomain_legs),
+      typeof(domain_legs),
+      typeof(mat),
+    }(
+      mat, codomain_legs, domain_legs
+    )
+  end
 end
 
 # getters
@@ -79,7 +95,23 @@ function initialize_data_matrix(
   return BlockSparseArrays.BlockSparseArray{promoted}(mat_row_axis, mat_col_axis)
 end
 
-function sanity_check(ft::FusionTensor)
+function check_data_matrix_axes(
+  mat::BlockSparseArrays.BlockSparseMatrix, codomain_legs::Tuple, domain_legs::Tuple
+)
+  rg, cg = initialize_matrix_axes(codomain_legs, domain_legs)
+  @assert GradedAxes.gradedisequal(rg, axes(mat, 1))
+  @assert GradedAxes.gradedisequal(cg, axes(mat, 2))
+end
+
+function check_data_matrix_axes(
+  mat::LinearAlgebra.Adjoint, codomain_legs::Tuple, domain_legs::Tuple
+)
+  return check_data_matrix_axes(
+    adjoint(mat), GradedAxes.dual.(domain_legs), GradedAxes.dual.(codomain_legs)
+  )
+end
+
+function check_sanity(ft::FusionTensor)
   nca = ndims_codomain(ft)
   @assert nca == length(codomain_axes(ft)) "ndims_codomain does not match codomain_axes"
   @assert nca <= ndims(ft) "invalid ndims_codomain"
@@ -100,11 +132,9 @@ function sanity_check(ft::FusionTensor)
 
   row_axis = matrix_row_axis(ft)
   column_axis = matrix_column_axis(ft)
-  @assert row_axis === axes(m)[1] "invalid row_axis"
-  @assert column_axis === axes(m)[2] "invalid column_axis"
-  rg, cg = initialize_matrix_axes(codomain_axes(ft), domain_axes(ft))
-  @assert GradedAxes.gradedisequal(rg, row_axis)
-  @assert GradedAxes.gradedisequal(cg, column_axis)
+  @assert row_axis === axes(m, 1) "invalid row_axis"
+  @assert column_axis === axes(m, 2) "invalid column_axis"
+  check_data_matrix_axes(data_matrix(ft), codomain_axes(ft), domain_axes(ft))
 
   for it in eachindex(BlockSparseArrays.block_stored_indices(m))
     @assert GradedAxes.dual(GradedAxes.blocklabels(row_axis)[it[1]]) ==

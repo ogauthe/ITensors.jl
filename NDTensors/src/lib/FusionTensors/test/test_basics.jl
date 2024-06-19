@@ -1,5 +1,5 @@
 @eval module $(gensym())
-using Test: @test, @test_broken, @testset
+using Test: @test, @testset
 
 using NDTensors.BlockSparseArrays: BlockSparseArray
 using NDTensors.FusionTensors:
@@ -14,7 +14,7 @@ using NDTensors.FusionTensors:
   matrix_size,
   ndims_codomain,
   ndims_domain,
-  sanity_check
+  check_sanity
 using NDTensors.GradedAxes: dual, fusion_product, gradedisequal, gradedrange
 using NDTensors.Sectors: U1
 
@@ -42,8 +42,8 @@ using NDTensors.Sectors: U1
   @test matrix_size(ft1) == (6, 5)
   @test gradedisequal(matrix_row_axis(ft1), dual((g1)))
   @test gradedisequal(matrix_column_axis(ft1), g2)
-  @test isnothing(sanity_check(ft0))
-  @test isnothing(sanity_check(ft1))
+  @test isnothing(check_sanity(ft0))
+  @test isnothing(check_sanity(ft1))
 
   # Base methods
   @test eltype(ft1) === Float64
@@ -53,7 +53,7 @@ using NDTensors.Sectors: U1
 
   # copy
   ft2 = copy(ft1)
-  @test isnothing(sanity_check(ft2))
+  @test isnothing(check_sanity(ft2))
   @test ft2 !== ft1
   @test data_matrix(ft2) == data_matrix(ft1)
   @test data_matrix(ft2) !== data_matrix(ft1)
@@ -69,13 +69,13 @@ using NDTensors.Sectors: U1
 
   # similar
   ft2 = similar(ft1)
-  @test isnothing(sanity_check(ft2))
+  @test isnothing(check_sanity(ft2))
   @test eltype(ft2) == Float64
   @test matching_axes(codomain_axes(ft2), codomain_axes(ft1))
   @test matching_axes(domain_axes(ft2), domain_axes(ft1))
 
   ft3 = similar(ft1, ComplexF64)
-  @test isnothing(sanity_check(ft3))
+  @test isnothing(check_sanity(ft3))
   @test eltype(ft3) == ComplexF64
   @test matching_axes(codomain_axes(ft3), codomain_axes(ft1))
   @test matching_axes(domain_axes(ft3), domain_axes(ft1))
@@ -84,7 +84,7 @@ using NDTensors.Sectors: U1
   @test eltype(ft4) == Float64  # promoted
 
   ft5 = similar(ft1, ComplexF32, ((g1, g1), (g2,)))
-  @test isnothing(sanity_check(ft5))
+  @test isnothing(check_sanity(ft5))
   @test eltype(ft5) == ComplexF64
   @test matching_axes(codomain_axes(ft5), (g1, g1))
   @test matching_axes(domain_axes(ft5), (g2,))
@@ -110,7 +110,7 @@ end
   @test matrix_size(ft) == (30, 12)
   @test gradedisequal(matrix_row_axis(ft), gr)
   @test gradedisequal(matrix_column_axis(ft), gc)
-  @test isnothing(sanity_check(ft))
+  @test isnothing(check_sanity(ft))
 
   @test ndims(ft) == 4
   @test size(ft) == (6, 5, 4, 3)
@@ -126,7 +126,7 @@ end
   @test ndims(ft1) == 1
   @test size(ft1) == (6,)
   @test size(data_matrix(ft1)) == (6, 1)
-  @test isnothing(sanity_check(ft1))
+  @test isnothing(check_sanity(ft1))
 
   # one column axis
   ft2 = FusionTensor(Float64, (), (g1,))
@@ -135,7 +135,7 @@ end
   @test ndims(ft2) == 1
   @test size(ft2) == (6,)
   @test size(data_matrix(ft2)) == (1, 6)
-  @test isnothing(sanity_check(ft2))
+  @test isnothing(check_sanity(ft2))
 
   # zero axis
   ft3 = FusionTensor(Float64, (), ())
@@ -144,7 +144,7 @@ end
   @test ndims(ft3) == 0
   @test size(ft3) == ()
   @test size(data_matrix(ft3)) == (1, 1)
-  @test isnothing(sanity_check(ft3))
+  @test isnothing(check_sanity(ft3))
 end
 
 @testset "Base operations" begin
@@ -153,13 +153,13 @@ end
   g3 = gradedrange([U1(-1) => 1, U1(0) => 2, U1(1) => 1])
   g4 = gradedrange([U1(-1) => 1, U1(0) => 1, U1(1) => 1])
   ft3 = FusionTensor(Float64, (g1, g2), (g3, g4))
-  @test isnothing(sanity_check(ft3))
+  @test isnothing(check_sanity(ft3))
 
   ft4 = +ft3
   @test ft4 === ft3  # same object
 
   ft4 = -ft3
-  @test isnothing(sanity_check(ft4))
+  @test isnothing(check_sanity(ft4))
   @test codomain_axes(ft4) === codomain_axes(ft3)
   @test domain_axes(ft4) === domain_axes(ft3)
 
@@ -168,21 +168,21 @@ end
   @test domain_axes(ft4) === domain_axes(ft3)
   @test gradedisequal(matrix_row_axis(ft4), matrix_row_axis(ft3))
   @test gradedisequal(matrix_column_axis(ft4), matrix_column_axis(ft3))
-  @test isnothing(sanity_check(ft4))
+  @test isnothing(check_sanity(ft4))
 
   ft4 = ft3 - ft3
   @test codomain_axes(ft4) === codomain_axes(ft3)
   @test domain_axes(ft4) === domain_axes(ft3)
   @test gradedisequal(matrix_row_axis(ft4), matrix_row_axis(ft3))
   @test gradedisequal(matrix_column_axis(ft4), matrix_column_axis(ft3))
-  @test isnothing(sanity_check(ft4))
+  @test isnothing(check_sanity(ft4))
 
   ft4 = 2 * ft3
   @test codomain_axes(ft4) === codomain_axes(ft3)
   @test domain_axes(ft4) === domain_axes(ft3)
   @test gradedisequal(matrix_row_axis(ft4), matrix_row_axis(ft3))
   @test gradedisequal(matrix_column_axis(ft4), matrix_column_axis(ft3))
-  @test isnothing(sanity_check(ft4))
+  @test isnothing(check_sanity(ft4))
   @test eltype(ft4) == Float64
 
   ft4 = 2.0 * ft3
@@ -190,7 +190,7 @@ end
   @test domain_axes(ft4) === domain_axes(ft3)
   @test gradedisequal(matrix_row_axis(ft4), matrix_row_axis(ft3))
   @test gradedisequal(matrix_column_axis(ft4), matrix_column_axis(ft3))
-  @test isnothing(sanity_check(ft4))
+  @test isnothing(check_sanity(ft4))
   @test eltype(ft4) == Float64
 
   ft4 = ft3 / 2.0
@@ -198,7 +198,7 @@ end
   @test domain_axes(ft4) === domain_axes(ft3)
   @test gradedisequal(matrix_row_axis(ft4), matrix_row_axis(ft3))
   @test gradedisequal(matrix_column_axis(ft4), matrix_column_axis(ft3))
-  @test isnothing(sanity_check(ft4))
+  @test isnothing(check_sanity(ft4))
   @test eltype(ft4) == Float64
 
   ft5 = 2.0im * ft3
@@ -206,7 +206,7 @@ end
   @test domain_axes(ft5) === domain_axes(ft3)
   @test gradedisequal(matrix_row_axis(ft5), matrix_row_axis(ft3))
   @test gradedisequal(matrix_column_axis(ft5), matrix_column_axis(ft3))
-  @test isnothing(sanity_check(ft4))
+  @test isnothing(check_sanity(ft4))
   @test eltype(ft5) == ComplexF64
 
   ft4 = conj(ft3)
@@ -214,13 +214,21 @@ end
 
   ft6 = conj(ft5)
   @test ft6 !== ft5  # different object
-  @test isnothing(sanity_check(ft6))
+  @test isnothing(check_sanity(ft6))
   @test codomain_axes(ft6) === codomain_axes(ft5)
   @test domain_axes(ft6) === domain_axes(ft5)
   @test gradedisequal(matrix_row_axis(ft6), matrix_row_axis(ft5))
   @test gradedisequal(matrix_column_axis(ft6), matrix_column_axis(ft5))
   @test eltype(ft6) == ComplexF64
 
-  @test_broken isnothing(sanity_check(adjoint(ft3)))
+  ad = adjoint(ft3)
+  @test ad isa FusionTensor
+  @test ndims_codomain(ad) == 2
+  @test ndims_domain(ad) == 2
+  @test gradedisequal(dual(g1), domain_axes(ad)[1])
+  @test gradedisequal(dual(g2), domain_axes(ad)[2])
+  @test gradedisequal(dual(g3), codomain_axes(ad)[1])
+  @test gradedisequal(dual(g4), codomain_axes(ad)[2])
+  @test isnothing(check_sanity(ad))
 end
 end
