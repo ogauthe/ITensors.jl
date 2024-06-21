@@ -1,6 +1,6 @@
 @eval module $(gensym())
 using LinearAlgebra: LinearAlgebra
-using Test: @test, @testset
+using Test: @test, @testset, @test_broken
 
 using NDTensors.BlockSparseArrays: BlockSparseArray
 using NDTensors.FusionTensors: FusionTensor, codomain_axes, domain_axes, check_sanity
@@ -51,5 +51,10 @@ end
   @test isnothing(check_sanity(ft4))
   @test codomain_axes(ft4) === codomain_axes(ft1)
   @test domain_axes(ft4) === domain_axes(ft2)
+
+  ft5 = TensorAlgebra.contract((1, 2, 5), ft1, (1, 2, 3, 4), ft2, (3, 4, 5))
+  @test isnothing(check_sanity(ft5))
+
+  @test_broken TensorAlgebra.contract(((1, 2), (5,)), ft1, (1, 2, 3, 4), ft2, (3, 4, 5))
 end
 end
