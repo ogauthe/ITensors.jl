@@ -107,24 +107,24 @@ function compress_dense_block(
   codomain_block_degens::Tuple,
   codomain_block_dims::Tuple,
 )
-  # start from a dense tensor with e.g. N=4 axes divided into N_DO=2 ndims_domain
-  # and N_CO=2 ndims_codomain. It may have several irrep configurations, select one
-  # of them. The associated dense block has shape
+  # start from a dense tensor block with e.g. N=6 axes divided into N_DO=3 ndims_domain
+  # and N_CO=3 ndims_codomain. Each leg k can be decomposed as a product of external an
+  # multiplicity extk and a quantum dimension dimk
   #
-  #        ----------------------dense_block------------------
-  #        |                  |                |             |
-  #       degen1*dim1    degen2*dim2      degen3*dim3     degen4*dim4
+  #        ------------------------------dense_block-------------------------------
+  #        |             |             |              |               |           |
+  #       ext1*dim1   ext2*dim2     ext3*dim3      ext4*dim4       ext5*dim5   ext6*dim6
   #
 
   # each leg of this this dense block can now be opened to form a 2N-dims tensor.
   # note that this 2N-dims form is only defined at the level of the irrep
   # configuration, not for a larger dense block.
   #
-  #        -------------------split_dense_block----------------
-  #        |                 |                |               |
-  #       / \               / \              / \             / \
-  #      /   \             /   \            /   \           /   \
-  #  degen1  dim1      degen2  dim2     degen3  dim3    degen4  dim4
+  #        ------------------------------split_dense_block-------------------------
+  #        |             |              |             |             |             |
+  #       / \           / \            / \           / \           / \           / \
+  #      /   \         /   \          /   \         /   \         /   \         /   \
+  #    ext1  dim1    ext2  dim2     ext3  dim3    ext4  dim4    ext5  dim5    ext6 dim6
   #
   split_dense_block = split_degen_dims(
     dense_block,
@@ -137,18 +137,18 @@ function compress_dense_block(
   # Now we permute the axes to group together degenearacies on one side and irrep
   # dimensions on the other side. This is the bottleneck.
   #
-  #        --------------permuted_split_dense_block---------------
-  #        |        |       |       |       |      |      |      |
-  #       degen1  degen2  degen3  degen4   dim1   dim2   dim3   dim4
+  #     -------------------permuted_split_dense_block-----------------------------------
+  #     |      |       |       |        |      |      |      |      |      |     |     |
+  #   ext1   ext2    ext3    ext4     ext5   ext6    dim1   dim2   dim3   dim4  dim5  dim6
   #
   permuted_split_dense_block = permute_split_dense_block(split_dense_block)
 
   # Finally, it is convenient to merge together legs corresponding to domain or
   # to codomain and produce a 4-dims tensor
   #
-  #        ----------------compressed_dense_block------------
-  #        |                 |               |             |
-  #       degen1*degen2   degen3*degen4    dim1*dim2    dim3*dim4
+  #        ----------------compressed_dense_block--------------------
+  #        |                   |                 |                  |
+  #  ext1*ext2*ext3      ext4*ext5*ext6    dim1*dim2*dim3    dim4*dim5*dim6
   #
   compressed_dense_block = reshape_permuted_to_compressed(
     permuted_split_dense_block, Val(length(domain_block_degens))
@@ -164,37 +164,37 @@ function contract_fusion_trees(
 )
   # Input:
   #
-  #        ---------------compressed_dense_block------------
-  #        |                 |               |             |
-  #       degen1*degen2   degen3*degen4    dim1*dim2    dim3*dim4
+  #        ----------------compressed_dense_block--------------------
+  #        |                   |                 |                  |
+  #  ext1*ext2*ext3      ext4*ext5*ext6    dim1*dim2*dim3    dim4*dim5*dim6
   #
   #
   #
-  #         -----------tree_domain----------
-  #         |                  |             |
-  #        dim1*dim2         dim_sec    ndof_sec_domain
+  #         ---------------tree_domain------------
+  #         |                      |             |
+  #        dim1*dim2*dim3        dim_sec    struct_sec_domain
   #
   #
-  #         -------------tree_codomain----------
-  #         |                  |             |
-  #        dim3*dim4         dim_sec    ndof_sec_codomain
+  #         ----------------tree_codomain-----------
+  #         |                      |               |
+  #        dim4*dim5*dim6         dim_sec     struct_sec_codomain
   #
   # in this form, we can apply fusion trees on both the codomain and the domain.
   #
 
   # contract codomain tree
-  #             -------------------------data_1tree----------------------
-  #             |               |              |           |            |
-  #       degen1*degen2   degen3*degen4    dim1*dim2    sec_dim    ndof_sec_codomain
+  #           -------------------------data_1tree---------------------------
+  #           |               |                 |             |            |
+  #     ext1*ext2*ext3   ext4*ext5*ext6   dim1*dim2*dim3    dim_sec    struct_sec_codomain
   #
   data_1tree = TensorAlgebra.contract(
     (1, 2, 3, 5, 6), compressed_dense_block, (1, 2, 3, 4), tree_codomain, (4, 5, 6)
   )
 
   # contract domain tree
-  #             -----------------------sym_data-------------------
-  #             |              |                  |              |
-  #       degen1*degen2   ndof_sec_domain    degen3*degen4   ndof_sec_codomain
+  #             -----------------------sym_data----------------------------
+  #             |                  |                    |                 |
+  #       ext1*ext2*ext3    struct_sec_codomain   ext4*ext5*ext6   struct_sec_domain
   #
   T = promote_type(eltype(compressed_dense_block), Float64)
   sym_data::Array{T,4} = TensorAlgebra.contract(
@@ -205,9 +205,14 @@ function contract_fusion_trees(
     (3, 5, 7),
     1 / sec_dim,  # normalization factor
   )
+
+  #             ----------------------sym_block_sec---------------
+  #             |                                                |
+  #       ext1*ext2*ext3*struct_sec_codomain   ext4*ext5*ext6*struct_sec_domain
+  #
   sym_shape = (size(sym_data, 1) * size(sym_data, 2), size(sym_data, 3) * size(sym_data, 4))
-  sym_block = reshape(sym_data, sym_shape)
-  return sym_block
+  sym_block_sec = reshape(sym_data, sym_shape)
+  return sym_block_sec
 end
 
 #################################  cast from dense array  ##################################
@@ -268,6 +273,26 @@ function fill_matrix_blocks!(
   # cache computed trees
   domain_trees = Dict{NTuple{length(domain_legs),Int},Vector{Array{Float64,3}}}()
 
+  # Below, we loop over every allowed dense block, contract domain and codomain fusion trees
+  # for each allowed sector and write the result inside a symmetric matrix block
+  #
+  #          ----------------dim_sec---------
+  #          |                              |
+  #          |  struct_mult_domain_sec      |  struct_mult_codomain_sec
+  #           \  /                           \  /
+  #            \/                             \/
+  #            /                              /
+  #           /                              /
+  #          /\                             /\
+  #         /  \                           /  \
+  #        /\   \                         /\   \
+  #       /  \   \                       /  \   \
+  #     dim1 dim2 dim3                 dim4 dim5 dim6
+  #      |    |    |                    |    |    |
+  #      ------------------dense_block-------------
+  #      |    |    |                    |    |    |
+  #     ext1 ext2 ext3                 ext4 ext5 ext6
+
   # loop for each codomain irrep configuration
   block_shifts_columns = zeros(Int, length(allowed_sectors))
   for iter_co in Iterators.product(eachindex.(codomain_irreps)...)
@@ -301,11 +326,26 @@ function fill_matrix_blocks!(
           # loop for each symmetry sector allowed in this configuration
           for i_sec in findall(in(block_allowed_sectors), allowed_sectors)
 
+            # actual implementation: legs are conveniently merged
+            #
+            #          ----------------dim_sec---------
+            #          |                              |
+            #          |  struct_mult_domain_sec      |  struct_mult_codomain_sec
+            #           \  /                           \  /
+            #            \/                             \/
+            #            /                              /
+            #           |                               |
+            #     dim1*dim2*dim3                 dim4*dim5*dim6
+            #           |                               |
+            #           -------compressed_dense_block----
+            #           |                               |
+            #     ext1*ext2*ext3                 ext4*ext5*ext6
+
             # contract fusion trees and reshape symmetric block as a matrix
             # Note: a final permutedims is needed after the last contract
             # therefore cannot efficiently use contract!(allowed_matrix_blocks[...], ...)
             # TBD something like permutedims!(reshape(view), sym_block, (1,3,2,4))?
-            sym_block = contract_fusion_trees(
+            sym_block_sec = contract_fusion_trees(
               compressed_dense_block,
               domain_block_trees[i_sec],
               codomain_block_trees[i_sec],
@@ -317,7 +357,7 @@ function fill_matrix_blocks!(
             r2 = r1 + size(compressed_dense_block, 1) * size(domain_block_trees[i_sec], 3)
             c1 = block_shifts_columns[i_sec]
             c2 = c1 + size(compressed_dense_block, 2) * size(codomain_block_trees[i_sec], 3)
-            @views allowed_matrix_blocks[i_sec][(r1 + 1):r2, (c1 + 1):c2] = sym_block
+            @views allowed_matrix_blocks[i_sec][(r1 + 1):r2, (c1 + 1):c2] = sym_block_sec
             block_shifts_rows[i_sec] = r2
           end
         end
@@ -332,41 +372,42 @@ end
 ##################################  cast to dense array  ###################################
 function add_sector_block!(
   compressed_dense_block::AbstractArray{<:Number,4},
-  sym_block::AbstractMatrix,
+  sym_block_sec::AbstractMatrix,
   tree_domain::AbstractArray{<:Real,3},
   tree_codomain::AbstractArray{<:Real,3},
 )
-  domain_block_ndof_sector = size(tree_domain, 3)
-  codomain_block_ndof_sector = size(tree_codomain, 3)
-  #             ---------------------sym_block--------------------
+  domain_block_struct_sector = size(tree_domain, 3)
+  codomain_block_struct_sector = size(tree_codomain, 3)
+  #             ----------------------sym_block_sec---------------
   #             |                                                |
-  #       degen1*degen2*ndof_sec_comain    degen3*degen4*ndof_sec_codomain
+  #       ext1*ext2*ext3*struct_sec_codomain   ext4*ext5*ext6*struct_sec_domain
   #
   sym_data_shape = (
-    size(sym_block, 1) ÷ domain_block_ndof_sector,
-    domain_block_ndof_sector,
-    size(sym_block, 2) ÷ codomain_block_ndof_sector,
-    codomain_block_ndof_sector,
+    size(sym_block_sec, 1) ÷ domain_block_struct_sector,
+    domain_block_struct_sector,
+    size(sym_block_sec, 2) ÷ codomain_block_struct_sector,
+    codomain_block_struct_sector,
   )
 
-  #             -----------------------sym_data-------------------
-  #             |              |                  |              |
-  #       degen1*degen2   ndof_sec_domain    degen3*degen4   ndof_sec_codomain
+  #             -----------------------sym_data----------------------------
+  #             |                  |                    |                 |
+  #       ext1*ext2*ext3    struct_sec_codomain   ext4*ext5*ext6   struct_sec_domain
   #
-  sym_data = reshape(sym_block, sym_data_shape)
+  sym_data = reshape(sym_block_sec, sym_data_shape)
 
   # contract domain tree
-  #             -------------------------data_1tree------------------------
-  #             |               |               |              |          |
-  #       degen1*degen2   degen3*degen4    ndof_sec_codomain  dim1*dim2   sec_dim
+  #            -----------------------------data_1tree------------------------------
+  #            |               |                    |              |               |
+  #      ext1*ext2*ext3   ext4*ext5*ext6    struct_sec_domain  dim1*dim2*dim3   dim_sec
   #
   data_1tree = TensorAlgebra.contract(
     (1, 2, 6, 3, 5), sym_data, (1, 7, 2, 6), tree_domain, (3, 5, 7)
   )
 
-  #        ---------------compressed_dense_block------------
-  #        |                 |               |             |
-  #       degen1*degen2   degen3*degen4    dim1*dim2    dim3*dim4
+  # contract codomain tree
+  #        ----------------compressed_dense_block--------------------
+  #        |                   |                 |                  |
+  #  ext1*ext2*ext3      ext4*ext5*ext6    dim1*dim2*dim3    dim4*dim5*dim6
   #
   return TensorAlgebra.contract!(
     compressed_dense_block,
@@ -387,14 +428,14 @@ function decompress_dense_block(
   codomain_block_degens::Tuple,
   codomain_block_dims::Tuple,
 )
-  #        ---------------compressed_dense_block------------
-  #        |                 |               |             |
-  #       degen1*degen2   degen3*degen4    dim1*dim2    dim3*dim4
+  #        ----------------compressed_dense_block--------------------
+  #        |                   |                 |                  |
+  #  ext1*ext2*ext3      ext4*ext5*ext6    dim1*dim2*dim3    dim4*dim5*dim6
   #
 
-  #        -------------permuted_split_dense_block----------------
-  #        |        |       |       |       |      |      |      |
-  #       degen1  degen2  degen3  degen4   dim1   dim2   dim3   dim4
+  #     -------------------permuted_split_dense_block-----------------------------------
+  #     |      |       |       |        |      |      |      |      |      |     |     |
+  #   ext1   ext2    ext3    ext4     ext5   ext6    dim1   dim2   dim3   dim4  dim5  dim6
   #
   permuted_split_dense_block = reshape_compressed_to_permuted(
     compressed_dense_block,
@@ -404,18 +445,18 @@ function decompress_dense_block(
     codomain_block_dims,
   )
 
-  #        -------------------split_dense_block----------------
-  #        |                 |                |               |
-  #       / \               / \              / \             / \
-  #      /   \             /   \            /   \           /   \
-  #  degen1  dim1      degen2  dim2     degen3  dim3    degen4  dim4
+  #        ------------------------------split_dense_block-------------------------
+  #        |             |              |             |             |             |
+  #       / \           / \            / \           / \           / \           / \
+  #      /   \         /   \          /   \         /   \         /   \         /   \
+  #    ext1  dim1    ext2  dim2     ext3  dim3    ext4  dim4    ext5  dim5    ext6 dim6
   #
   split_dense_block = unpermute_split_dense_block(permuted_split_dense_block)
 
   #
-  #        ----------------------dense_block------------------
-  #        |                  |                |             |
-  #       degen1*dim1    degen2*dim2      degen3*dim3     degen4*dim4
+  #        ------------------------------dense_block-------------------------------
+  #        |             |             |              |               |           |
+  #       ext1*dim1   ext2*dim2     ext3*dim3      ext4*dim4       ext5*dim5   ext6*dim6
   #
   dense_block = merge_degen_dims(split_dense_block)
   return dense_block
@@ -494,9 +535,9 @@ function fill_blockarray!(
           domain_block_length = prod(getindex.(domain_degens, iter_do))
           domain_block_dims = getindex.(domain_dims, iter_do)
 
-          #        ---------------compressed_dense_block------------
-          #        |                 |               |             |
-          #       degen1*degen2   degen3*degen4    dim1*dim2    dim3*dim4
+          #        ----------------compressed_dense_block--------------------
+          #        |                   |                 |                  |
+          #  ext1*ext2*ext3      ext4*ext5*ext6    dim1*dim2*dim3    dim4*dim5*dim6
           #
           compressed_dense_block_shape = (
             domain_block_length,
