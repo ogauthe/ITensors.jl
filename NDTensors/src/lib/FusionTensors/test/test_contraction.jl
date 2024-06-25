@@ -3,7 +3,7 @@ using LinearAlgebra: LinearAlgebra
 using Test: @test, @testset, @test_broken
 
 using NDTensors.BlockSparseArrays: BlockSparseArray
-using NDTensors.FusionTensors: FusionTensor, codomain_axes, domain_axes, check_sanity
+using NDTensors.FusionTensors: FusionTensor, domain_axes, codomain_axes, check_sanity
 using NDTensors.GradedAxes: GradedAxes
 using NDTensors.Sectors: U1
 using NDTensors.TensorAlgebra: TensorAlgebra
@@ -22,19 +22,19 @@ using NDTensors.TensorAlgebra: TensorAlgebra
 
   ft3 = ft1 * ft2  # tensor contraction
   @test isnothing(check_sanity(ft3))
-  @test codomain_axes(ft3) === codomain_axes(ft1)
-  @test domain_axes(ft3) === domain_axes(ft2)
+  @test domain_axes(ft3) === domain_axes(ft1)
+  @test codomain_axes(ft3) === codomain_axes(ft2)
 
   # test LinearAlgebra.mul! with in-place matrix product
   LinearAlgebra.mul!(ft3, ft1, ft2)
   @test isnothing(check_sanity(ft3))
-  @test codomain_axes(ft3) === codomain_axes(ft1)
-  @test domain_axes(ft3) === domain_axes(ft2)
+  @test domain_axes(ft3) === domain_axes(ft1)
+  @test codomain_axes(ft3) === codomain_axes(ft2)
 
   LinearAlgebra.mul!(ft3, ft1, ft2, 1.0, 1.0)
   @test isnothing(check_sanity(ft2))
-  @test codomain_axes(ft3) === codomain_axes(ft1)
-  @test domain_axes(ft3) === domain_axes(ft2)
+  @test domain_axes(ft3) === domain_axes(ft1)
+  @test codomain_axes(ft3) === codomain_axes(ft2)
 end
 
 @testset "TensorAlgebra interface" begin
@@ -49,8 +49,8 @@ end
   ft4, legs = TensorAlgebra.contract(ft1, (1, 2, 3, 4), ft2, (3, 4, 5))
   @test legs == (1, 2, 5)
   @test isnothing(check_sanity(ft4))
-  @test codomain_axes(ft4) === codomain_axes(ft1)
-  @test domain_axes(ft4) === domain_axes(ft2)
+  @test domain_axes(ft4) === domain_axes(ft1)
+  @test codomain_axes(ft4) === codomain_axes(ft2)
 
   ft5 = TensorAlgebra.contract((1, 2, 5), ft1, (1, 2, 3, 4), ft2, (3, 4, 5))
   @test isnothing(check_sanity(ft5))

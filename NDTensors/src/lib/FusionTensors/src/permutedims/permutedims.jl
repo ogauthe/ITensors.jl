@@ -8,9 +8,9 @@ end
 
 # permutedims with 2 separate tuples
 function Base.permutedims(
-  ft::FusionTensor, new_codomain_indices::Tuple, new_domain_indices::Tuple
+  ft::FusionTensor, new_domain_indices::Tuple, new_codomain_indices::Tuple
 )
-  biperm = TensorAlgebra.blockedperm(new_codomain_indices, new_domain_indices)
+  biperm = TensorAlgebra.blockedperm(new_domain_indices, new_codomain_indices)
   return permutedims(ft, biperm)
 end
 
@@ -21,7 +21,7 @@ function Base.permutedims(ft::FusionTensor, biperm::TensorAlgebra.BlockedPermuta
   @assert ndims(ft) == length(biperm)
 
   # early return for identity operation. Do not copy.
-  if ndims_codomain(ft) == first(BlockArrays.blocklengths(biperm))  # compile time
+  if ndims_domain(ft) == first(BlockArrays.blocklengths(biperm))  # compile time
     if Tuple(biperm) == ntuple(identity, ndims(ft))
       return ft
     end
@@ -34,21 +34,21 @@ function Base.permutedims(ft::FusionTensor, biperm::TensorAlgebra.BlockedPermuta
   #structural_data = StructuralData(ft, biperm)  # TODO cache me
   #permuted_data_matrix = permute_data_matrix(ft, structural_data)
 
-  #new_codomain_legs = getindex.(Ref(axes(ft)), biperm[BlockArrays.Block(1)])
-  #new_domain_legs = getindex.(Ref(axes(ft)), biperm[BlockArrays.Block(2)])
-  #permuted = FusionTensor(permuted_data_matrix, new_codomain_legs, new_domain_legs)
+  #new_domain_legs = getindex.(Ref(axes(ft)), biperm[BlockArrays.Block(1)])
+  #new_codomain_legs = getindex.(Ref(axes(ft)), biperm[BlockArrays.Block(2)])
+  #permuted = FusionTensor(permuted_data_matrix, new_domain_legs, new_codomain_legs)
   return permuted
 end
 
 function naive_permutedims(ft::FusionTensor, biperm::TensorAlgebra.BlockedPermutation{2})
   @assert ndims(ft) == length(biperm)
-  new_codomain_legs = getindex.(Ref(axes(ft)), biperm[BlockArrays.Block(1)])
-  new_domain_legs = getindex.(Ref(axes(ft)), biperm[BlockArrays.Block(2)])
+  new_domain_legs = getindex.(Ref(axes(ft)), biperm[BlockArrays.Block(1)])
+  new_codomain_legs = getindex.(Ref(axes(ft)), biperm[BlockArrays.Block(2)])
 
   # stupid permute: cast to dense, permutedims, cast to FusionTensor
   arr = Array(ft)
   permuted_arr = permutedims(arr, Tuple(biperm))
-  permuted = FusionTensor(permuted_arr, new_codomain_legs, new_domain_legs)
+  permuted = FusionTensor(permuted_arr, new_domain_legs, new_codomain_legs)
 
   return permuted
 end
@@ -56,12 +56,12 @@ end
 ##################################  Low level interface  ###################################
 function permute_data_matrix(ft::FusionTensor, structural_data::StructuralData)
   biperm = get_biperm(structural_data)
-  new_codomain_legs = getindex.(Ref(axes(ft)), biperm[BlockArrays.Block(1)])
-  new_domain_legs = getindex.(Ref(axes(ft)), biperm[BlockArrays.Block(2)])
-  new_data_matrix = initialize_data_matrix(eltype(ft), new_codomain_legs, new_domain_legs)
+  new_domain_legs = getindex.(Ref(axes(ft)), biperm[BlockArrays.Block(1)])
+  new_codomain_legs = getindex.(Ref(axes(ft)), biperm[BlockArrays.Block(2)])
+  new_data_matrix = initialize_data_matrix(eltype(ft), new_domain_legs, new_codomain_legs)
 
   fill_data_matrix!(
-    new_data_matrix, data_matrix(ft), structural_data, codomain_axes(ft), domain_axes(ft)
+    new_data_matrix, data_matrix(ft), structural_data, domain_axes(ft), codomain_axes(ft)
   )
 
   return new_data_matrix
@@ -72,8 +72,8 @@ function fill_data_matrix!(
   new_data_matrix::BlockSparseArrays.AbstractBlockSparseMatrix,
   old_data_matrix::BlockSparseArrays.AbstractBlockSparseMatrix,
   structural_data::StructuralData,
-  old_codomain_legs::Tuple,
   old_domain_legs::Tuple,
+  old_codomain_legs::Tuple,
 )
   @assert ndims(new_data_matrix) == ndims(old_data_matrix) == ndims(structural_data)
 

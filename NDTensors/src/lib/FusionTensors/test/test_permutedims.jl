@@ -1,7 +1,7 @@
 @eval module $(gensym())
 using Test: @test, @testset
 
-using NDTensors.FusionTensors: FusionTensor, ndims_codomain, check_sanity, matching_axes
+using NDTensors.FusionTensors: FusionTensor, ndims_domain, check_sanity, matching_axes
 using NDTensors.GradedAxes
 using NDTensors.Sectors: U1
 
@@ -22,7 +22,7 @@ using NDTensors.Sectors: U1
 
   ft3 = permutedims(ft1, (4,), (1, 2, 3))
   @test matching_axes(axes(ft3), (g4, GradedAxes.dual(g1), GradedAxes.dual(g2), g3))
-  @test ndims_codomain(ft3) == 1
+  @test ndims_domain(ft3) == 1
   @test isnothing(check_sanity(ft3))
 end
 end

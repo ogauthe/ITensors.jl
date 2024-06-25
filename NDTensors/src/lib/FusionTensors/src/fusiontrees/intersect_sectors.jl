@@ -1,4 +1,4 @@
-# This files implemets intersect_sectors to find allowed sectors from codomain and domain
+# This files implemets intersect_sectors to find allowed sectors from domain and codomain
 
 # TBD move to Sectors? define as gradedrange(::Vector{<:Sectors.AbstractCategory})?
 function sectors_to_reducible(sectors_vec::Vector{<:Sectors.AbstractCategory})
@@ -21,35 +21,35 @@ fused_sectors(::Tuple{}) = Sectors.sector()
 
 ###################################  intersect_sectors  ####################################
 function intersect_sectors(
-  sectors_codomain::NTuple{<:Any,Vector{C}}, sectors_domain::NTuple{<:Any,Vector{C}}
+  sectors_domain::NTuple{<:Any,Vector{C}}, sectors_codomain::NTuple{<:Any,Vector{C}}
 ) where {C<:Sectors.AbstractCategory}
-  codomain_fused_sectors = fused_sectors(sectors_codomain)
   domain_fused_sectors = fused_sectors(sectors_domain)
-  return intersect_sectors(codomain_fused_sectors, domain_fused_sectors)
+  codomain_fused_sectors = fused_sectors(sectors_codomain)
+  return intersect_sectors(domain_fused_sectors, codomain_fused_sectors)
 end
 
 function intersect_sectors(
-  ::Tuple{}, sectors_domain::NTuple{<:Any,<:Vector{<:Sectors.AbstractCategory}}
+  ::Tuple{}, sectors_codomain::NTuple{<:Any,<:Vector{<:Sectors.AbstractCategory}}
 )
-  domain_fused_sectors = fused_sectors(sectors_domain)
+  codomain_fused_sectors = fused_sectors(sectors_codomain)
   return intersect_sectors(
-    Sectors.trivial(eltype(domain_fused_sectors)), domain_fused_sectors
+    Sectors.trivial(eltype(codomain_fused_sectors)), codomain_fused_sectors
   )
 end
 
 function intersect_sectors(
-  sectors_codomain::NTuple{<:Any,<:Vector{<:Sectors.AbstractCategory}}, ::Tuple{}
+  sectors_domain::NTuple{<:Any,<:Vector{<:Sectors.AbstractCategory}}, ::Tuple{}
 )
-  codomain_fused_sectors = fused_sectors(sectors_codomain)
+  domain_fused_sectors = fused_sectors(sectors_domain)
   return intersect_sectors(
-    codomain_fused_sectors, Sectors.trivial(eltype(codomain_fused_sectors))
+    domain_fused_sectors, Sectors.trivial(eltype(domain_fused_sectors))
   )
 end
 
 function intersect_sectors(
-  codomain_sectors::NTuple{<:Any,C}, domain_sectors::NTuple{<:Any,C}
+  domain_sectors::NTuple{<:Any,C}, codomain_sectors::NTuple{<:Any,C}
 ) where {C<:Sectors.AbstractCategory}
-  return intersect_sectors(fused_sectors(codomain_sectors), domain_sectors)
+  return intersect_sectors(fused_sectors(domain_sectors), codomain_sectors)
 end
 
 function intersect_sectors(
@@ -103,7 +103,7 @@ function intersect_sectors(sec::C, allowed::Vector{C}) where {C<:Sectors.Abstrac
 end
 
 function intersect_sectors(
-  codomain_allowed::Vector{C}, domain_allowed::Vector{C}
+  domain_allowed::Vector{C}, codomain_allowed::Vector{C}
 ) where {C<:Sectors.AbstractCategory}
-  return intersect(codomain_allowed, domain_allowed)
+  return intersect(domain_allowed, codomain_allowed)
 end

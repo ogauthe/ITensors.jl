@@ -1,11 +1,11 @@
 # This files defines Base functions for FusionTensor
 
 function Base.:*(x::Number, ft::FusionTensor)
-  return FusionTensor(x * data_matrix(ft), codomain_axes(ft), domain_axes(ft))
+  return FusionTensor(x * data_matrix(ft), domain_axes(ft), codomain_axes(ft))
 end
 
 function Base.:*(ft::FusionTensor, x::Number)
-  return FusionTensor(x * data_matrix(ft), codomain_axes(ft), domain_axes(ft))
+  return FusionTensor(x * data_matrix(ft), domain_axes(ft), codomain_axes(ft))
 end
 
 # tensor contraction is a block data_matrix product.
@@ -13,11 +13,11 @@ end
 # impose matching type and number of axes at compile time
 # impose matching axes at run time
 function Base.:*(left::FusionTensor, right::FusionTensor)
-  if !matching_dual(domain_axes(left), codomain_axes(right))
+  if !matching_dual(codomain_axes(left), domain_axes(right))
     throw(DomainError("Incompatible tensor axes"))
   end
   new_data_matrix = data_matrix(left) * data_matrix(right)
-  return FusionTensor(new_data_matrix, codomain_axes(left), domain_axes(right))
+  return FusionTensor(new_data_matrix, domain_axes(left), codomain_axes(right))
 end
 
 Base.:+(ft::FusionTensor) = ft
@@ -29,12 +29,12 @@ function Base.:+(left::FusionTensor, right::FusionTensor)
     throw(DomainError("Incompatible tensor axes"))
   end
   new_data_matrix = data_matrix(left) + data_matrix(right)
-  return FusionTensor(new_data_matrix, codomain_axes(left), domain_axes(left))
+  return FusionTensor(new_data_matrix, domain_axes(left), codomain_axes(left))
 end
 
 function Base.:-(ft::FusionTensor)
   new_data_matrix = -data_matrix(ft)
-  return FusionTensor(new_data_matrix, codomain_axes(ft), domain_axes(ft))
+  return FusionTensor(new_data_matrix, domain_axes(ft), codomain_axes(ft))
 end
 
 function Base.:-(left::FusionTensor, right::FusionTensor)
@@ -42,11 +42,11 @@ function Base.:-(left::FusionTensor, right::FusionTensor)
     throw(DomainError("Incompatible tensor axes"))
   end
   new_data_matrix = data_matrix(left) - data_matrix(right)
-  return FusionTensor(new_data_matrix, codomain_axes(left), domain_axes(left))
+  return FusionTensor(new_data_matrix, domain_axes(left), codomain_axes(left))
 end
 
 function Base.:/(ft::FusionTensor, x::Number)
-  return FusionTensor(data_matrix(ft) / x, codomain_axes(ft), domain_axes(ft))
+  return FusionTensor(data_matrix(ft) / x, domain_axes(ft), codomain_axes(ft))
 end
 
 # adjoint is costless: dual axes, swap domain and codomain, take data_matrix adjoint.
@@ -54,33 +54,33 @@ end
 function Base.adjoint(ft::FusionTensor)
   return FusionTensor(
     adjoint(data_matrix(ft)),
-    GradedAxes.dual.(domain_axes(ft)),
     GradedAxes.dual.(codomain_axes(ft)),
+    GradedAxes.dual.(domain_axes(ft)),
   )
 end
 
-Base.axes(ft::FusionTensor) = (codomain_axes(ft)..., domain_axes(ft)...)
+Base.axes(ft::FusionTensor) = (domain_axes(ft)..., codomain_axes(ft)...)
 
 # conj is defined as coefficient wise complex conjugation, without axis dual
 # same object for real element type
 Base.conj(ft::FusionTensor{<:Real}) = ft
 
 function Base.conj(ft::FusionTensor)
-  return FusionTensor(conj(data_matrix(ft)), codomain_axes(ft), domain_axes(ft))
+  return FusionTensor(conj(data_matrix(ft)), domain_axes(ft), codomain_axes(ft))
 end
 
 function Base.copy(ft::FusionTensor)
   new_data_matrix = copy(data_matrix(ft))
-  new_codomain_axes = copy.(codomain_axes(ft))
   new_domain_axes = copy.(domain_axes(ft))
-  return FusionTensor(new_data_matrix, new_codomain_axes, new_domain_axes)
+  new_codomain_axes = copy.(codomain_axes(ft))
+  return FusionTensor(new_data_matrix, new_domain_axes, new_codomain_axes)
 end
 
 function Base.deepcopy(ft::FusionTensor)
   new_data_matrix = deepcopy(data_matrix(ft))
-  new_codomain_axes = deepcopy.(codomain_axes(ft))
   new_domain_axes = deepcopy.(domain_axes(ft))
-  return FusionTensor(new_data_matrix, new_codomain_axes, new_domain_axes)
+  new_codomain_axes = deepcopy.(codomain_axes(ft))
+  return FusionTensor(new_data_matrix, new_domain_axes, new_codomain_axes)
 end
 
 # eachindex is automatically defined for AbstractArray. We do now want it.
@@ -94,11 +94,11 @@ Base.ndims(::FusionTensor{T,N}) where {T,N} = N
 
 function Base.similar(ft::FusionTensor)
   mat = similar(data_matrix(ft))
-  return FusionTensor(mat, codomain_axes(ft), domain_axes(ft))
+  return FusionTensor(mat, domain_axes(ft), codomain_axes(ft))
 end
 
 function Base.similar(ft::FusionTensor, elt::Type)
-  return FusionTensor(elt, codomain_axes(ft), domain_axes(ft))
+  return FusionTensor(elt, domain_axes(ft), codomain_axes(ft))
 end
 
 function Base.similar(::FusionTensor, elt::Type, new_axes::Tuple{<:Tuple,<:Tuple})
