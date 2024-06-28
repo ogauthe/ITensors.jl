@@ -7,6 +7,7 @@ using BlockArrays:
   BlockVector,
   BlockedOneTo,
   BlockedUnitRange,
+  BlockedVector,
   blockedrange,
   blocklength,
   blocklengths,
@@ -16,13 +17,31 @@ using BlockArrays:
 using Compat: @compat
 using LinearAlgebra: mul!
 using NDTensors.BlockSparseArrays:
-  @view!, BlockSparseArray, block_nstored, block_reshape, view!
+  @view!, BlockSparseArray, BlockView, block_nstored, block_reshape, view!
 using NDTensors.SparseArrayInterface: nstored
 using NDTensors.TensorAlgebra: contract
 using Test: @test, @test_broken, @test_throws, @testset
 include("TestBlockSparseArraysUtils.jl")
 @testset "BlockSparseArrays (eltype=$elt)" for elt in
                                                (Float32, Float64, ComplexF32, ComplexF64)
+  @testset "Broken" begin
+    a = BlockSparseArray{elt}([2, 2, 2, 2], [2, 2, 2, 2])
+    @views for I in [Block(1, 1), Block(2, 2), Block(3, 3), Block(4, 4)]
+      a[I] = randn(elt, size(a[I]))
+    end
+
+    I = blockedrange([4, 4])
+    b = @view a[I, I]
+    @test_broken copy(b)
+
+    I = BlockedVector(Block.(1:4), [2, 2])
+    b = @view a[I, I]
+    @test_broken copy(b)
+
+    I = BlockedVector([Block(4), Block(3), Block(2), Block(1)], [2, 2])
+    b = @view a[I, I]
+    @test_broken copy(b)
+  end
   @testset "Basics" begin
     a = BlockSparseArray{elt}([2, 3], [2, 3])
     @test a == BlockSparseArray{elt}(blockedrange([2, 3]), blockedrange([2, 3]))
@@ -343,10 +362,10 @@ include("TestBlockSparseArraysUtils.jl")
     b = @view a[Block(2, 2)]
     @test size(b) == (3, 4)
     for i in parentindices(b)
-      @test i isa BlockSlice{<:Block{1}}
+      @test i isa Base.OneTo{Int}
     end
-    @test parentindices(b)[1] == BlockSlice(Block(2), 3:5)
-    @test parentindices(b)[2] == BlockSlice(Block(2), 4:7)
+    @test parentindices(b)[1] == 1:3
+    @test parentindices(b)[2] == 1:4
 
     a = BlockSparseArray{elt}([2, 3], [3, 4])
     b = @view a[Block(2, 2)[1:2, 2:2]]
@@ -373,9 +392,9 @@ include("TestBlockSparseArraysUtils.jl")
 
     a = BlockSparseArray{elt}([2, 3], [3, 4])
     b = @views a[Block(2, 2)][1:2, 2:3]
-    @test b isa SubArray{<:Any,<:Any,<:BlockSparseArray}
+    @test b isa SubArray{<:Any,<:Any,<:BlockView}
     for i in parentindices(b)
-      @test i isa BlockSlice{<:BlockIndexRange{1}}
+      @test i isa UnitRange{Int}
     end
     x = randn(elt, 2, 2)
     b .= x

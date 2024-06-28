@@ -230,8 +230,26 @@ function blockrange(axis::AbstractUnitRange, r::AbstractVector{<:Block{1}})
   return r
 end
 
+# This handles changing the blocking, for example:
+# a = BlockSparseArray{Float64}([2, 2, 2, 2], [2, 2, 2, 2])
+# I = blockedrange([4, 4])
+# a[I, I]
+# TODO: Generalize to `AbstractBlockedUnitRange`.
+function blockrange(axis::BlockedOneTo{<:Integer}, r::BlockedOneTo{<:Integer})
+  # TODO: Probably this is incorrect and should be something like:
+  # return findblock(axis, first(r)):findblock(axis, last(r))
+  return only(blockaxes(r))
+end
+
+# This handles changing the blocking, for example:
+# a = BlockSparseArray{Float64}([2, 2, 2, 2], [2, 2, 2, 2])
+# I = BlockedVector([Block(4), Block(3), Block(2), Block(1)], [2, 2])
+# a[I, I]
+# TODO: Generalize to `AbstractBlockedUnitRange` and `AbstractBlockVector`.
 function blockrange(axis::BlockedOneTo{<:Integer}, r::BlockVector{<:Integer})
-  return error("Slicing not implemented for range of type `$(typeof(r))`.")
+  # TODO: Probably this is incorrect and should be something like:
+  # return findblock(axis, first(r)):findblock(axis, last(r))
+  return only(blockaxes(r))
 end
 
 using BlockArrays: BlockSlice
@@ -376,6 +394,33 @@ function blocked_cartesianindices(axes::Tuple, subaxes::Tuple, blocks)
   return map(subblocks(axes, subaxes, blocks)) do block
     return cartesianindices(subaxes, block)
   end
+end
+
+# Represents a view of a block of a blocked array.
+struct BlockView{T,N,Array<:AbstractArray{T,N}} <: AbstractArray{T,N}
+  array::Array
+  block::Tuple{Vararg{Block{1,Int},N}}
+end
+function Base.axes(a::BlockView)
+  # TODO: Try to avoid conversion to `Base.OneTo{Int}`, or just convert
+  # the element type to `Int` with `Int.(...)`.
+  # When the axes of `a.array` are `GradedOneTo`, the block is `LabelledUnitRange`,
+  # which has element type `LabelledInteger`. That causes conversion problems
+  # in some generic Base Julia code, for example when printing `BlockView`.
+  return ntuple(ndims(a)) do dim
+    return Base.OneTo{Int}(only(axes(axes(a.array, dim)[a.block[dim]])))
+  end
+end
+function Base.size(a::BlockView)
+  return length.(axes(a))
+end
+function Base.getindex(a::BlockView{<:Any,N}, index::Vararg{Int,N}) where {N}
+  return blocks(a.array)[Int.(a.block)...][index...]
+end
+function Base.setindex!(a::BlockView{<:Any,N}, value, index::Vararg{Int,N}) where {N}
+  blocks(a.array)[Int.(a.block)...] = blocks(a.array)[Int.(a.block)...]
+  blocks(a.array)[Int.(a.block)...][index...] = value
+  return a
 end
 
 function view!(a::BlockSparseArray{<:Any,N}, index::Block{N}) where {N}
