@@ -246,7 +246,7 @@ function fill_matrix_blocks!(
 )
   # find sectors
   allowed_sectors, allowed_blocks = find_allowed_blocks(data_mat)
-  allowed_matrix_blocks = [view(data_mat, b) for b in allowed_blocks]
+  allowed_matrix_blocks = [BlockSparseArrays.view!(data_mat, b) for b in allowed_blocks]
   return fill_matrix_blocks!(
     allowed_matrix_blocks, allowed_sectors, blockarray, domain_legs, codomain_legs
   )
@@ -482,9 +482,7 @@ function fill_blockarray!(
   codomain_legs::Tuple,
 )
   existing_sectors, existing_blocks = find_existing_blocks(data_mat)
-  # TODO replace with view once fixed
-  existing_matrix_blocks = [data_mat[b] for b in existing_blocks]
-  #existing_matrix_blocks = [view(data_mat, b) for b in existing_blocks]
+  existing_matrix_blocks = [view(data_mat, b) for b in existing_blocks]
   return fill_blockarray!(
     blockarray, existing_sectors, existing_matrix_blocks, domain_legs, codomain_legs
   )
@@ -554,10 +552,10 @@ function fill_blockarray!(
             r2 = r1 + size(domain_block_trees[i_sec], 3) * domain_block_length
             c2 = c1 + size(codomain_block_trees[i_sec], 3) * codomain_block_length
 
-            @views sym_block = existing_matrix_blocks[i_sec][(r1 + 1):r2, (c1 + 1):c2]
+            sym_block_sec = view(existing_matrix_blocks[i_sec], (r1 + 1):r2, (c1 + 1):c2)
             add_sector_block!(
               compressed_dense_block,
-              sym_block,
+              sym_block_sec,
               domain_block_trees[i_sec],
               codomain_block_trees[i_sec],
             )
