@@ -1,12 +1,42 @@
 @eval module $(gensym())
 using LinearAlgebra: LinearAlgebra
-using Test: @test, @testset
+using Test: @test, @testset, @test_broken
 
 using BlockArrays: BlockArrays
 
 using NDTensors.FusionTensors: FusionTensor, check_sanity, data_matrix
 using NDTensors.GradedAxes: GradedAxes
 using NDTensors.Sectors: SU2, U1, sector
+
+@testset "Empty FusionTensor" begin
+  # trivial matrix
+  g = GradedAxes.gradedrange([sector() => 1])
+  gb = GradedAxes.dual(g)
+  m = ones((1, 1))
+  ft = FusionTensor(m, (gb,), (g,))
+  @test size(data_matrix(ft)) == (1, 1)
+  @test BlockArrays.blocksize(data_matrix(ft)) == (1, 1)
+  @test data_matrix(ft)[1, 1] ≈ 1.0
+  @test isnothing(check_sanity(ft))
+  @test Array(ft) ≈ m
+  @test Array(adjoint(ft)) ≈ m
+
+  # several axes, one block
+  g1 = GradedAxes.gradedrange([sector() => 2])
+  g2 = GradedAxes.gradedrange([sector() => 3])
+  g3 = GradedAxes.gradedrange([sector() => 4])
+  g4 = GradedAxes.gradedrange([sector() => 2])
+  domain_legs = GradedAxes.dual.((g1, g2))
+  codomain_legs = (g3, g4)
+  t = convert.(Float64, reshape(collect(1:48), (2, 3, 4, 2)))
+  ft = FusionTensor(t, domain_legs, codomain_legs)
+  @test size(data_matrix(ft)) == (6, 8)
+  @test BlockArrays.blocksize(data_matrix(ft)) == (1, 1)
+  @test data_matrix(ft)[BlockArrays.Block(1, 1)] ≈ reshape(t, (6, 8))
+  @test isnothing(check_sanity(ft))
+  @test Array(ft) ≈ t
+  @test Array(adjoint(ft)) ≈ permutedims(t, (3, 4, 1, 2))
+end
 
 @testset "Abelian FusionTensor" begin
   # trivial matrix
@@ -19,6 +49,7 @@ using NDTensors.Sectors: SU2, U1, sector
   @test data_matrix(ft)[1, 1] ≈ 1.0
   @test isnothing(check_sanity(ft))
   @test Array(ft) ≈ m
+  @test Array(adjoint(ft)) ≈ m
 
   # non self-conjugate
   g = GradedAxes.gradedrange([U1(1) => 2])
@@ -30,6 +61,7 @@ using NDTensors.Sectors: SU2, U1, sector
   @test data_matrix(ft)[BlockArrays.Block(1, 1)] ≈ m
   @test isnothing(check_sanity(ft))
   @test Array(ft) ≈ m
+  @test Array(adjoint(ft)) ≈ m
 
   # several axes, one block
   g1 = GradedAxes.gradedrange([U1(1) => 2])
@@ -38,13 +70,14 @@ using NDTensors.Sectors: SU2, U1, sector
   g4 = GradedAxes.gradedrange([U1(0) => 2])
   domain_legs = GradedAxes.dual.((g1, g2))
   codomain_legs = (g3, g4)
-  m = convert.(Float64, reshape(collect(1:48), (2, 3, 4, 2)))
-  ft = FusionTensor(m, domain_legs, codomain_legs)
+  t = convert.(Float64, reshape(collect(1:48), (2, 3, 4, 2)))
+  ft = FusionTensor(t, domain_legs, codomain_legs)
   @test size(data_matrix(ft)) == (6, 8)
   @test BlockArrays.blocksize(data_matrix(ft)) == (1, 1)
-  @test data_matrix(ft)[BlockArrays.Block(1, 1)] ≈ reshape(m, (6, 8))
+  @test data_matrix(ft)[BlockArrays.Block(1, 1)] ≈ reshape(t, (6, 8))
   @test isnothing(check_sanity(ft))
-  @test Array(ft) ≈ m
+  @test Array(ft) ≈ t
+  @test Array(adjoint(ft)) ≈ permutedims(t, (3, 4, 1, 2))
 
   # several axes, several blocks
   g1 = GradedAxes.gradedrange([U1(1) => 2, U1(2) => 2])
@@ -64,6 +97,7 @@ using NDTensors.Sectors: SU2, U1, sector
   @test LinearAlgebra.norm(ft) ≈ LinearAlgebra.norm(dense)
   @test isnothing(check_sanity(ft))
   @test Array(ft) ≈ dense
+  @test Array(adjoint(ft)) ≈ permutedims(dense, (3, 4, 1, 2))
 
   # mixing dual and nondual
   g1 = GradedAxes.gradedrange([U1(-1) => 1, U1(0) => 1, U1(1) => 1])
@@ -80,6 +114,7 @@ using NDTensors.Sectors: SU2, U1, sector
   @test LinearAlgebra.norm(ft) ≈ LinearAlgebra.norm(dense)
   @test isnothing(check_sanity(ft))
   @test Array(ft) ≈ dense
+  @test_broken Array(adjoint(ft)) ≈ permutedims(dense, (2, 3, 4, 1))
 end
 
 @testset "SU(2) FusionTensor" begin
@@ -93,15 +128,18 @@ end
   @test data_matrix(ft)[1, 1] ≈ 1.0
   @test isnothing(check_sanity(ft))
   @test Array(ft) ≈ m
+  @test Array(adjoint(ft)) ≈ m
 
   g2 = GradedAxes.gradedrange([SU2(1 / 2) => 1])
   g2b = GradedAxes.dual(g2)
 
   # spin 1/2 Id
-  ft = FusionTensor(LinearAlgebra.I((2)), (g2b,), (g2,))
+  id2 = LinearAlgebra.I((2))
+  ft = FusionTensor(id2, (g2b,), (g2,))
   @test LinearAlgebra.norm(ft) ≈ √2
   @test isnothing(check_sanity(ft))
-  @test Array(ft) ≈ LinearAlgebra.I((2))
+  @test Array(ft) ≈ id2
+  @test Array(adjoint(ft)) ≈ id2
 
   # S⋅S
   sds22 = reshape(
@@ -118,6 +156,7 @@ end
   @test LinearAlgebra.norm(ft) ≈ √3 / 2
   @test isnothing(check_sanity(ft))
   @test Array(ft) ≈ sds22
+  @test Array(adjoint(ft)) ≈ sds22
 
   # dual over one spin. This changes the dense coefficients but not the FusionTensor ones
   sds22b = reshape(
@@ -135,18 +174,21 @@ end
   @test LinearAlgebra.norm(ftb) ≈ √3 / 2
   @test isnothing(check_sanity(ft))
   @test Array(ftb) ≈ sds22b
+  @test Array(adjoint(ftb)) ≈ sds22b
 
   # no codomain axis
   dense, domain_legs, codomain_legs = sds22, (g2b, g2b, g2, g2), ()
   ft = FusionTensor(dense, domain_legs, codomain_legs)
   @test isnothing(check_sanity(ft))
   @test Array(ft) ≈ sds22
+  @test Array(adjoint(ft)) ≈ sds22
 
   # no domain axis
   dense, domain_legs, codomain_legs = sds22, (), (g2b, g2b, g2, g2)
   ft = FusionTensor(dense, domain_legs, codomain_legs)
   @test isnothing(check_sanity(ft))
   @test Array(ft) ≈ sds22
+  @test Array(adjoint(ft)) ≈ sds22
 
   # large identity
   g = reduce(GradedAxes.fusion_product, (SU2(1 / 2), SU2(1 / 2), SU2(1 / 2)))
@@ -158,6 +200,7 @@ end
   ft = FusionTensor(dense, domain_legs, codomain_legs)
   @test isnothing(check_sanity(ft))
   @test Array(ft) ≈ dense
+  @test Array(adjoint(ft)) ≈ dense
 end
 
 @testset "U(1)×SU(2) FusionTensor" begin

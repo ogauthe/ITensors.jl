@@ -75,6 +75,12 @@ function intersect_sectors(other, c::Sectors.AbstractCategory)
 end
 
 function intersect_sectors(
+  ::Sectors.CategoryProduct{Tuple{}}, allowed::Vector{Sectors.CategoryProduct{Tuple{}}}
+)
+  return [Sectors.sector()]
+end
+
+function intersect_sectors(
   ::Sectors.CategoryProduct{Tuple{}}, allowed::Vector{<:Sectors.AbstractCategory}
 )
   return intersect_sectors(Sectors.trivial(eltype(allowed)), allowed)

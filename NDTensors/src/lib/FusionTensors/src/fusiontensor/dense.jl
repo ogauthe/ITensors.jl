@@ -15,7 +15,7 @@ function find_allowed_blocks(row_axis::AbstractUnitRange, col_axis::AbstractUnit
   return allowed_sectors, allowed_blocks
 end
 
-function find_existing_blocks(data_mat::BlockSparseArrays.AbstractBlockSparseMatrix)
+function find_existing_blocks(data_mat::AbstractMatrix)
   col_sectors = GradedAxes.blocklabels(axes(data_mat, 2))
   existing_blocks = BlockSparseArrays.block_stored_indices(data_mat)
   existing_sectors = [col_sectors[it[2]] for it in eachindex(existing_blocks)]
@@ -477,7 +477,7 @@ end
 
 function fill_blockarray!(
   blockarray::BlockArrays.AbstractBlockArray,
-  data_mat::BlockSparseArrays.AbstractBlockSparseMatrix,
+  data_mat::AbstractMatrix,
   domain_legs::Tuple,
   codomain_legs::Tuple,
 )
