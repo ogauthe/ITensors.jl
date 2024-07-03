@@ -1,5 +1,5 @@
 @eval module $(gensym())
-using LinearAlgebra: norm
+using LinearAlgebra: norm, tr
 using Test: @test, @testset
 
 using BlockArrays: BlockArrays
@@ -7,21 +7,26 @@ using BlockArrays: BlockArrays
 using NDTensors.BlockSparseArrays: BlockSparseArrays
 using NDTensors.FusionTensors: FusionTensor, check_sanity
 using NDTensors.GradedAxes
-using NDTensors.Sectors: U1
+using NDTensors.Sectors: U1, SU2, sector
 
 @testset "LinearAlgebra interface" begin
-  g1 = GradedAxes.gradedrange([U1(0) => 1, U1(1) => 2, U1(2) => 3])
-  g2 = GradedAxes.gradedrange([U1(0) => 2, U1(1) => 2, U1(3) => 1])
-  g3 = GradedAxes.gradedrange([U1(-1) => 1, U1(0) => 2, U1(1) => 1])
-  g4 = GradedAxes.gradedrange([U1(-1) => 1, U1(0) => 1, U1(1) => 1])
+  sds22 = [
+    0.25 0.0 0.0 0.0
+    0.0 -0.25 0.5 0.0
+    0.0 0.5 -0.25 0.0
+    0.0 0.0 0.0 0.25
+  ]
+  sdst = reshape(sds22, (2, 2, 2, 2))
 
-  gr1 = GradedAxes.dual(GradedAxes.fusion_product(g1, g2))
-  gc1 = GradedAxes.fusion_product(g3, g4)
-  m1 = BlockSparseArrays.BlockSparseArray{Float64}(gr1, gc1)
-  m1[BlockArrays.Block(1, 3)] = ones((2, 4))
-  ft1 = FusionTensor(m1, (GradedAxes.dual(g1), GradedAxes.dual(g2)), (g3, g4))
-  @test isnothing(check_sanity(ft1))
+  g0 = GradedAxes.gradedrange([sector() => 2])
+  gu1 = GradedAxes.gradedrange([U1(1) => 1, U1(-1) => 1])
+  gsu2 = GradedAxes.gradedrange([SU2(1 / 2) => 1])
 
-  @test norm(ft1) ≈ sqrt(8)
+  for g in [g0, gu1, gsu2]
+    ft = FusionTensor(sdst, (GradedAxes.dual(g), GradedAxes.dual(g)), (g, g))
+    @test isnothing(check_sanity(ft))
+    @test norm(ft) ≈ √3 / 2
+    @test isapprox(tr(ft), 0; atol=eps(Float64))
+  end
 end
 end

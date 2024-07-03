@@ -34,19 +34,29 @@ end
 
 # the compiler automatically defines LinearAlgebra.mul!(C,A,B)
 
-# simpler to define as Frobenius norm(block) than Tr(t^dagger * t)
 function LinearAlgebra.norm(ft::FusionTensor)
-  n2 = 0.0
   m = data_matrix(ft)
-  row_sectors, col_sectors = GradedAxes.blocklabels.(axes(m))
-  for idx in BlockSparseArrays.stored_indices(BlockArrays.blocks(m))  # TODO update interface?
-    nb = LinearAlgebra.norm(m[BlockArrays.Block(Tuple(idx))])
-    # do not assume row_sector == col_sector (may be false for equivariant tensor)
-    dr = Sectors.quantum_dimension(row_sectors[idx[1]])
-    dc = Sectors.quantum_dimension(col_sectors[idx[2]])
-    n2 += sqrt(dr * dc) * nb^2
-  end
+  row_sectors = GradedAxes.blocklabels(matrix_row_axis(ft))
+  n2 = mapreduce(
+    idx ->
+      Sectors.quantum_dimension(row_sectors[idx[1]]) *
+      LinearAlgebra.norm(m[BlockArrays.Block(Tuple(idx))])^2,
+    +,
+    BlockSparseArrays.stored_indices(BlockArrays.blocks(m)),
+  )
   return sqrt(n2)
+end
+
+function LinearAlgebra.tr(ft::FusionTensor)
+  m = data_matrix(ft)
+  row_sectors = GradedAxes.blocklabels(matrix_row_axis(ft))
+  return mapreduce(
+    idx ->
+      Sectors.quantum_dimension(row_sectors[idx[1]]) *
+      LinearAlgebra.tr(m[BlockArrays.Block(Tuple(idx))]),
+    +,
+    BlockSparseArrays.stored_indices(BlockArrays.blocks(m)),
+  )
 end
 
 function LinearAlgebra.qr(ft::FusionTensor)
