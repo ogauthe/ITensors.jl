@@ -4,7 +4,7 @@ using Test: @test, @testset
 
 using BlockArrays: BlockArrays
 
-using NDTensors.FusionTensors: FusionTensor, data_matrix
+using NDTensors.FusionTensors: FusionTensor, check_sanity, data_matrix
 using NDTensors.GradedAxes: GradedAxes
 using NDTensors.Sectors: SU2, U1, sector
 
@@ -17,6 +17,7 @@ using NDTensors.Sectors: SU2, U1, sector
   @test size(data_matrix(ft)) == (1, 1)
   @test BlockArrays.blocksize(data_matrix(ft)) == (1, 1)
   @test data_matrix(ft)[1, 1] ≈ 1.0
+  @test isnothing(check_sanity(ft))
   @test Array(ft) ≈ m
 
   # non self-conjugate
@@ -27,6 +28,7 @@ using NDTensors.Sectors: SU2, U1, sector
   @test size(data_matrix(ft)) == (2, 2)
   @test BlockArrays.blocksize(data_matrix(ft)) == (1, 1)
   @test data_matrix(ft)[BlockArrays.Block(1, 1)] ≈ m
+  @test isnothing(check_sanity(ft))
   @test Array(ft) ≈ m
 
   # several axes, one block
@@ -41,6 +43,7 @@ using NDTensors.Sectors: SU2, U1, sector
   @test size(data_matrix(ft)) == (6, 8)
   @test BlockArrays.blocksize(data_matrix(ft)) == (1, 1)
   @test data_matrix(ft)[BlockArrays.Block(1, 1)] ≈ reshape(m, (6, 8))
+  @test isnothing(check_sanity(ft))
   @test Array(ft) ≈ m
 
   # several axes, several blocks
@@ -59,6 +62,7 @@ using NDTensors.Sectors: SU2, U1, sector
   @test size(data_matrix(ft)) == (20, 15)
   @test BlockArrays.blocksize(data_matrix(ft)) == (3, 4)
   @test LinearAlgebra.norm(ft) ≈ LinearAlgebra.norm(dense)
+  @test isnothing(check_sanity(ft))
   @test Array(ft) ≈ dense
 
   # mixing dual and nondual
@@ -74,6 +78,7 @@ using NDTensors.Sectors: SU2, U1, sector
   #@test size(data_matrix(ft)) == (20, 15)
   #@test BlockArrays.blocksize(data_matrix(ft)) == (3, 4)
   @test LinearAlgebra.norm(ft) ≈ LinearAlgebra.norm(dense)
+  @test isnothing(check_sanity(ft))
   @test Array(ft) ≈ dense
 end
 
@@ -86,6 +91,7 @@ end
   @test size(data_matrix(ft)) == (1, 1)
   @test BlockArrays.blocksize(data_matrix(ft)) == (1, 1)
   @test data_matrix(ft)[1, 1] ≈ 1.0
+  @test isnothing(check_sanity(ft))
   @test Array(ft) ≈ m
 
   g2 = GradedAxes.gradedrange([SU2(1 / 2) => 1])
@@ -94,6 +100,7 @@ end
   # spin 1/2 Id
   ft = FusionTensor(LinearAlgebra.I((2)), (g2b,), (g2,))
   @test LinearAlgebra.norm(ft) ≈ √2
+  @test isnothing(check_sanity(ft))
   @test Array(ft) ≈ LinearAlgebra.I((2))
 
   # S⋅S
@@ -109,6 +116,7 @@ end
   dense, domain_legs, codomain_legs = sds22, (g2b, g2b), (g2, g2)
   ft = FusionTensor(dense, domain_legs, codomain_legs)
   @test LinearAlgebra.norm(ft) ≈ √3 / 2
+  @test isnothing(check_sanity(ft))
   @test Array(ft) ≈ sds22
 
   # dual over one spin. This changes the dense coefficients but not the FusionTensor ones
@@ -125,16 +133,19 @@ end
   dense, domain_legs, codomain_legs = sds22b, (g2, g2b), (g2b, g2)
   ftb = FusionTensor(dense, domain_legs, codomain_legs)
   @test LinearAlgebra.norm(ftb) ≈ √3 / 2
+  @test isnothing(check_sanity(ft))
   @test Array(ftb) ≈ sds22b
 
   # no codomain axis
   dense, domain_legs, codomain_legs = sds22, (g2b, g2b, g2, g2), ()
   ft = FusionTensor(dense, domain_legs, codomain_legs)
+  @test isnothing(check_sanity(ft))
   @test Array(ft) ≈ sds22
 
   # no domain axis
   dense, domain_legs, codomain_legs = sds22, (), (g2b, g2b, g2, g2)
   ft = FusionTensor(dense, domain_legs, codomain_legs)
+  @test isnothing(check_sanity(ft))
   @test Array(ft) ≈ sds22
 
   # large identity
@@ -145,6 +156,7 @@ end
   d = 8
   dense = reshape(LinearAlgebra.I(d^N), ntuple(_ -> d, 2 * N))
   ft = FusionTensor(dense, domain_legs, codomain_legs)
+  @test isnothing(check_sanity(ft))
   @test Array(ft) ≈ dense
 end
 
@@ -165,6 +177,7 @@ end
     gD = GradedAxes.gradedrange([sector(SU2(0), U1(1)) => 1, sector(s, U1(0)) => 1])
     codomain_legs = (gD, gD, gD, gD)
     ft = FusionTensor(tRVB, domain_legs, codomain_legs)
+    @test isnothing(check_sanity(ft))
     @test Array(ft) ≈ tRVB
 
     # same with NamedTuples
@@ -175,6 +188,7 @@ end
     ])
     codomain_legs_nt = (gD_nt, gD_nt, gD_nt, gD_nt)
     ft_nt = FusionTensor(tRVB, domain_legs_nt, codomain_legs_nt)
+    @test isnothing(check_sanity(ft_nt))
     @test Array(ft_nt) ≈ tRVB
   end
 end

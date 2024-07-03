@@ -127,9 +127,6 @@ function check_sanity(ft::FusionTensor)
 
   m = data_matrix(ft)
   @assert ndims(m) == 2 "invalid data_matrix ndims"
-  @assert size(m, 1) == prod(length.(domain_axes(ft))) "invalid data_matrix row number"
-  @assert size(m, 2) == prod(length.(codomain_axes(ft))) "invalid data_matrix column number"
-
   row_axis = matrix_row_axis(ft)
   column_axis = matrix_column_axis(ft)
   @assert row_axis === axes(m, 1) "invalid row_axis"
