@@ -175,6 +175,12 @@ function fusion_trees(::Tuple{}, ::Tuple{})
 end
 
 function fusion_trees(
+  ::NTuple{N,Sectors.CategoryProduct{Tuple{}}}, ::NTuple{N,Bool}
+) where {N}
+  return [ones(ntuple(_ -> 1, N + 2))], [Sectors.sector()]
+end
+
+function fusion_trees(
   irreps::NTuple{N,<:Sectors.CategoryProduct}, tree_arrows::NTuple{N,Bool}
 ) where {N}
   # for CategoryProduct, either compute tree(kron( CG tensor for each category))

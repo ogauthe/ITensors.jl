@@ -6,7 +6,17 @@ using BlockArrays: BlockArrays
 
 using NDTensors.FusionTensors: fusion_trees
 using NDTensors.GradedAxes: GradedAxes
-using NDTensors.Sectors: Sectors, SU, SU2, U1, Z
+using NDTensors.Sectors: Sectors, SU, SU2, U1, Z, sector
+
+@testset "Empty fusion trees" begin
+  trees2, tree_irreps2 = fusion_trees((sector(), sector()), (false, false))
+  @test tree_irreps2 == [sector()]
+  @test trees2 == [ones((1, 1, 1, 1))]
+
+  trees3, tree_irreps3 = fusion_trees((sector(), sector(), sector()), (false, true, true))
+  @test tree_irreps3 == [sector()]
+  @test trees3 == [ones((1, 1, 1, 1, 1))]
+end
 
 @testset "Abelian fusion trees" begin
   trees2, tree_irreps2 = fusion_trees((U1(0), U1(0)), (false, false))
