@@ -1,6 +1,6 @@
 @eval module $(gensym())
 using LinearAlgebra: LinearAlgebra
-using Test: @test, @testset, @test_broken
+using Test: @test, @testset
 
 using BlockArrays: BlockArrays
 
@@ -114,7 +114,7 @@ end
   @test LinearAlgebra.norm(ft) ≈ LinearAlgebra.norm(dense)
   @test isnothing(check_sanity(ft))
   @test Array(ft) ≈ dense
-  @test_broken Array(adjoint(ft)) ≈ permutedims(dense, (2, 3, 4, 1))
+  @test Array(adjoint(ft)) ≈ permutedims(dense, (2, 3, 4, 1))
 end
 
 @testset "SU(2) FusionTensor" begin
