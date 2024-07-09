@@ -17,7 +17,7 @@ end
 
 function find_existing_blocks(data_mat::AbstractMatrix)
   col_sectors = GradedAxes.blocklabels(axes(data_mat, 2))
-  existing_blocks = BlockSparseArrays.block_stored_indices(data_mat)
+  existing_blocks = sort(collect(BlockSparseArrays.block_stored_indices(data_mat)))
   existing_sectors = [col_sectors[Int(Tuple(b)[2])] for b in existing_blocks]
   return existing_sectors, existing_blocks
 end
