@@ -17,7 +17,7 @@ end
 # 0-dim case
 Base.permutedims(ft::FusionTensor{<:Any,0}, ::TensorAlgebra.BlockedPermutation{2,0}) = ft
 
-function Base.permutedims(ft::FusionTensor, biperm::TensorAlgebra.BlockedPermutation)
+function Base.permutedims(ft::FusionTensor, biperm::TensorAlgebra.BlockedPermutation{2})
   @assert ndims(ft) == length(biperm)
 
   # early return for identity operation. Do not copy.
