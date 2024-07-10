@@ -1,6 +1,6 @@
 # This file defines permutedims for a FusionTensor
 
-##################################  High level interface  ##################################
+# =================================  High level interface  =================================
 # permutedims with 1 tuple of 2 separate tuples
 function Base.permutedims(ft::FusionTensor, new_leg_indices::Tuple{NTuple,NTuple})
   return permutedims(ft, new_leg_indices[1], new_leg_indices[2])
@@ -28,15 +28,20 @@ function Base.permutedims(ft::FusionTensor, biperm::TensorAlgebra.BlockedPermuta
   end
 
   # TODO remove me
-  permuted = naive_permutedims(ft, biperm)
+  return naive_permutedims(ft, biperm)
 
-  # TODO
-  #structural_data = StructuralData(ft, biperm)  # TODO cache me
-  #permuted_data_matrix = permute_data_matrix(ft, structural_data)
+  new_domain_legs = getindex.(Ref(axes(ft)), biperm[BlockArrays.Block(1)])
+  new_codomain_legs = getindex.(Ref(axes(ft)), biperm[BlockArrays.Block(2)])
+  permuted_data_matrix = permute_data_matrix(
+    data_matrix(ft),
+    domain_axes(ft),
+    codomain_axes(ft),
+    new_domain_legs,
+    new_codomain_legs,
+    Tuple(biperm),
+  )
 
-  #new_domain_legs = getindex.(Ref(axes(ft)), biperm[BlockArrays.Block(1)])
-  #new_codomain_legs = getindex.(Ref(axes(ft)), biperm[BlockArrays.Block(2)])
-  #permuted = FusionTensor(permuted_data_matrix, new_domain_legs, new_codomain_legs)
+  permuted = FusionTensor(permuted_data_matrix, new_domain_legs, new_codomain_legs)
   return permuted
 end
 
@@ -53,17 +58,30 @@ function naive_permutedims(ft::FusionTensor, biperm::TensorAlgebra.BlockedPermut
   return permuted
 end
 
-##################################  Low level interface  ###################################
-function permute_data_matrix(ft::FusionTensor, structural_data::StructuralData)
-  biperm = get_biperm(structural_data)
-  new_domain_legs = getindex.(Ref(axes(ft)), biperm[BlockArrays.Block(1)])
-  new_codomain_legs = getindex.(Ref(axes(ft)), biperm[BlockArrays.Block(2)])
-  new_data_matrix = initialize_data_matrix(eltype(ft), new_domain_legs, new_codomain_legs)
+# =================================  Low level interface  ==================================
+function permute_data_matrix(
+  old_data_matrix::BlockSparseArrays.AbstractBlockSparseMatrix,
+  old_domain_legs::Tuple{Vararg{AbstractUnitRange}},
+  old_codomain_legs::Tuple{Vararg{AbstractUnitRange}},
+  new_domain_legs::Tuple{Vararg{AbstractUnitRange}},
+  new_codomain_legs::Tuple{Vararg{AbstractUnitRange}},
+  flat_permutation::Tuple{Vararg{Int}},
+)
+  @assert length(old_domain_legs) + length(old_codomain_legs) == length(flat_permutation)
+  @assert length(new_domain_legs) + length(new_codomain_legs) == length(flat_permutation)
 
-  fill_data_matrix!(
-    new_data_matrix, data_matrix(ft), structural_data, domain_axes(ft), codomain_axes(ft)
+  new_data_matrix = initialize_data_matrix(
+    eltype(old_data_matrix), new_domain_legs, new_codomain_legs
   )
-
+  fill_data_matrix!(
+    new_data_matrix,
+    old_data_matrix,
+    old_domain_legs,
+    old_codomain_legs,
+    new_domain_legs,
+    new_codomain_legs,
+    flat_permutation,
+  )
   return new_data_matrix
 end
 
@@ -71,20 +89,31 @@ end
 function fill_data_matrix!(
   new_data_matrix::BlockSparseArrays.AbstractBlockSparseMatrix,
   old_data_matrix::BlockSparseArrays.AbstractBlockSparseMatrix,
-  structural_data::StructuralData,
-  old_domain_legs::Tuple,
-  old_codomain_legs::Tuple,
+  old_domain_legs::Tuple{Vararg{AbstractUnitRange}},
+  old_codomain_legs::Tuple{Vararg{AbstractUnitRange}},
+  new_domain_legs::Tuple{Vararg{AbstractUnitRange}},
+  new_codomain_legs::Tuple{Vararg{AbstractUnitRange}},
+  flat_permutation::Tuple{Vararg{Int}},
 )
-  @assert ndims(new_data_matrix) == ndims(old_data_matrix) == ndims(structural_data)
+  structural_data = StructuralData(  # TODO cache me
+    GradedAxes.blocklabels.(old_domain_legs),
+    GradedAxes.blocklabels.(old_codomain_legs),
+    GradedAxes.blocklabels.(new_domain_legs),
+    GradedAxes.blocklabels.(new_codomain_legs),
+    (GradedAxes.isdual.(old_domain_legs)..., GradedAxes.isdual(old_codomain_legs)...),
+    flat_permutation,
+  )
 
   for old_block in get_old_block_indices(structural_data)  # TODO PARALLELIZE ME
     new_sym_block = initialize_new_sym_block(old_block)
-    iso_block = isometries[old_block]
+    iso_block = structural_data[old_block]
 
     for old_sector in existing_old_sectors  # race condition: cannot parallelize
-      iso_block_sector = iso_block[old_sector, :]
-      old_sym_block_sector = old_data_matrix[old_sector_index][r1:r2, c1:c2]
-      new_sym_block += change_basis_block_sector(old_sym_block_sector, iso_block_sector)
+      iso_block_sector = iso_block[old_sector, :]  # take all new blocks at once
+      old_sym_block_sector = old_data_matrix[old_sector_index][r1:r2, c1:c2]  # TODO strided view
+      new_sym_block += change_basis_block_sector(
+        old_sym_block_sector, iso_block_sector, flat_permutation
+      )
     end
 
     for new_sector in allowed_new_sectors  # not worth parallelize
