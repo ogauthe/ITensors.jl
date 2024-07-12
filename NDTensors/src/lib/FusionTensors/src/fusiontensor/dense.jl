@@ -1,5 +1,56 @@
 # This file defines interface to cast from and to dense array
 
+# =================================  High level interface  =================================
+
+#### cast from dense to symmetric
+function FusionTensor(dense::AbstractArray, domain_legs::Tuple, codomain_legs::Tuple)
+  bounds = Sectors.block_dimensions.((domain_legs..., codomain_legs...))
+  blockarray = BlockArrays.BlockedArray(dense, bounds...)
+  return FusionTensor(blockarray, domain_legs, codomain_legs)
+end
+
+function FusionTensor(
+  blockarray::BlockArrays.AbstractBlockArray, domain_legs::Tuple, codomain_legs::Tuple
+)
+  data_mat = cast_from_dense(blockarray, domain_legs, codomain_legs)
+  return FusionTensor(data_mat, domain_legs, codomain_legs)
+end
+
+#### cast from symmetric to dense
+Base.Array(ft::FusionTensor) = Array(BlockSparseArrays.BlockSparseArray(ft))
+
+function BlockSparseArrays.BlockSparseArray(ft::FusionTensor)
+  return cast_to_dense(data_matrix(ft), domain_axes(ft), codomain_axes(ft))
+end
+
+# =================================  Low level interface  ==================================
+function cast_from_dense(
+  blockarray::BlockArrays.AbstractBlockArray, domain_legs::Tuple, codomain_legs::Tuple
+)
+  # input validation
+  if length(domain_legs) + length(codomain_legs) != ndims(blockarray)  # compile time
+    throw(DomainError("legs are incompatible with array ndims"))
+  end
+  if Sectors.quantum_dimension.((domain_legs..., codomain_legs...)) != size(blockarray)
+    throw(DomainError("legs dimensions are incompatible with array"))
+  end
+
+  data_mat = initialize_data_matrix(eltype(blockarray), domain_legs, codomain_legs)
+  fill_matrix_blocks!(data_mat, blockarray, domain_legs, codomain_legs)
+  return data_mat
+end
+
+function cast_to_dense(data_mat::AbstractMatrix, domain_legs::Tuple, codomain_legs::Tuple)
+  bounds = Sectors.block_dimensions.((domain_legs..., codomain_legs...))
+  blockarray = BlockSparseArrays.BlockSparseArray{eltype(data_mat)}(
+    BlockArrays.blockedrange.(bounds)
+  )
+  fill_blockarray!(blockarray, data_mat, domain_legs, codomain_legs)
+  return blockarray
+end
+
+# =====================================  Internals  ========================================
+
 ##################################  utility tools  #########################################
 function find_allowed_blocks(data_mat::BlockSparseArrays.AbstractBlockSparseMatrix)
   return find_allowed_blocks(axes(data_mat)...)
@@ -216,27 +267,6 @@ function contract_fusion_trees(
 end
 
 #################################  cast from dense array  ##################################
-function FusionTensor(dense::AbstractArray, domain_legs::Tuple, codomain_legs::Tuple)
-  bounds = Sectors.block_dimensions.((domain_legs..., codomain_legs...))
-  blockarray = BlockArrays.BlockedArray(dense, bounds...)
-  return FusionTensor(blockarray, domain_legs, codomain_legs)
-end
-
-function FusionTensor(
-  blockarray::BlockArrays.AbstractBlockArray, domain_legs::Tuple, codomain_legs::Tuple
-)
-  # input validation
-  if length(domain_legs) + length(codomain_legs) != ndims(blockarray)  # compile time
-    throw(DomainError("legs are incompatible with array ndims"))
-  end
-  if Sectors.quantum_dimension.((domain_legs..., codomain_legs...)) != size(blockarray)
-    throw(DomainError("legs dimensions are incompatible with array"))
-  end
-
-  data_mat = initialize_data_matrix(eltype(blockarray), domain_legs, codomain_legs)
-  fill_matrix_blocks!(data_mat, blockarray, domain_legs, codomain_legs)
-  return FusionTensor(data_mat, domain_legs, codomain_legs)
-end
 
 function fill_matrix_blocks!(
   data_mat::BlockSparseArrays.AbstractBlockSparseMatrix,
@@ -460,19 +490,6 @@ function decompress_dense_block(
   #
   dense_block = merge_degen_dims(split_dense_block)
   return dense_block
-end
-
-Base.Array(ft::FusionTensor) = Array(BlockSparseArrays.BlockSparseArray(ft))
-
-function BlockSparseArrays.BlockSparseArray(ft::FusionTensor)
-  domain_legs = domain_axes(ft)
-  codomain_legs = codomain_axes(ft)
-  bounds = Sectors.block_dimensions.((domain_legs..., codomain_legs...))
-  blockarray = BlockSparseArrays.BlockSparseArray{eltype(ft)}(
-    BlockArrays.blockedrange.(bounds)
-  )
-  fill_blockarray!(blockarray, data_matrix(ft), domain_legs, codomain_legs)
-  return blockarray
 end
 
 function fill_blockarray!(
