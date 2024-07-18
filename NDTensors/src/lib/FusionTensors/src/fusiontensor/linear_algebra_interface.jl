@@ -42,7 +42,8 @@ function LinearAlgebra.norm(ft::FusionTensor)
       Sectors.quantum_dimension(row_sectors[idx[1]]) *
       LinearAlgebra.norm(m[BlockArrays.Block(Tuple(idx))])^2,
     +,
-    BlockSparseArrays.stored_indices(BlockArrays.blocks(m)),
+    BlockSparseArrays.stored_indices(BlockArrays.blocks(m));
+    init=eltype(ft)(0),
   )
   return sqrt(n2)
 end
@@ -55,7 +56,8 @@ function LinearAlgebra.tr(ft::FusionTensor)
       Sectors.quantum_dimension(row_sectors[idx[1]]) *
       LinearAlgebra.tr(m[BlockArrays.Block(Tuple(idx))]),
     +,
-    BlockSparseArrays.stored_indices(BlockArrays.blocks(m)),
+    BlockSparseArrays.stored_indices(BlockArrays.blocks(m));
+    init=eltype(ft)(0),
   )
 end
 
