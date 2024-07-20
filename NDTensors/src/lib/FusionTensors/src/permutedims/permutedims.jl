@@ -30,8 +30,7 @@ function Base.permutedims(ft::FusionTensor, biperm::TensorAlgebra.BlockedPermuta
   # TODO remove me
   return naive_permutedims(ft, biperm)
 
-  new_domain_legs = getindex.(Ref(axes(ft)), biperm[BlockArrays.Block(1)])
-  new_codomain_legs = getindex.(Ref(axes(ft)), biperm[BlockArrays.Block(2)])
+  new_domain_legs, new_codomain_legs = TensorAlgebra.blockpermute(axes(ft), biperm)
   permuted_data_matrix = permute_data_matrix(
     data_matrix(ft),
     domain_axes(ft),
@@ -47,8 +46,7 @@ end
 
 function naive_permutedims(ft::FusionTensor, biperm::TensorAlgebra.BlockedPermutation{2})
   @assert ndims(ft) == length(biperm)
-  new_domain_legs = getindex.(Ref(axes(ft)), biperm[BlockArrays.Block(1)])
-  new_codomain_legs = getindex.(Ref(axes(ft)), biperm[BlockArrays.Block(2)])
+  new_domain_legs, new_codomain_legs = TensorAlgebra.blockpermute(axes(ft), biperm)
 
   # stupid permute: cast to dense, permutedims, cast to FusionTensor
   arr = Array(ft)
