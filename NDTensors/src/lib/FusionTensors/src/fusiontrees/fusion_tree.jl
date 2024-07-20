@@ -41,19 +41,10 @@
 #
 
 # ===================================  Utility tools  ======================================
-# TODO move tuple operations elsewhere
-flatten_nested_tuple(t::Tuple) = merge_tuples(t...)
-function merge_tuples(t1, t2, t3...)
-  return merge_tuples(merge_tuples(t1, t2), t3...)
-end
-merge_tuples(t1::Tuple, t2::Tuple) = (t1..., t2...)
-merge_tuples(t1::Tuple) = t1
-merge_tuples() = ()
-
 function braid_tuples(t1::Tuple{Vararg{<:Any,N}}, t2::Tuple{Vararg{<:Any,N}}) where {N}
   t12 = (t1, t2)
   nested = ntuple(i -> getindex.(t12, i), N)
-  return flatten_nested_tuple(nested)
+  return TensorAlgebra.flatten_tuples(nested)
 end
 
 function f_to_c_perm(iterable_product)
