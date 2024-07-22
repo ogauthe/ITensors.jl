@@ -3,7 +3,6 @@ module FusionTensors
 using LinearAlgebra: LinearAlgebra
 
 using BlockArrays: BlockArrays
-using EllipsisNotation: var".."
 using HalfIntegers: HalfIntegers
 using WignerSymbols: WignerSymbols
 
