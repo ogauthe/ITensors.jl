@@ -44,7 +44,8 @@ end
   g4 = GradedAxes.gradedrange([U1(-1) => 1, U1(0) => 1, U1(1) => 1])
 
   ft1 = FusionTensor(Float64, (g1, g2), (g3, g4))
-  ft2 = FusionTensor(Float64, GradedAxes.dual.((g3, g4)), (g1,))
+  ft2 = FusionTensor(Float64, GradedAxes.dual.((g3, g4)), (GradedAxes.dual(g1),))
+  ft3 = FusionTensor(Float64, GradedAxes.dual.((g3, g4)), GradedAxes.dual.((g1, g2)))
 
   ft4, legs = TensorAlgebra.contract(ft1, (1, 2, 3, 4), ft2, (3, 4, 5))
   @test legs == (1, 2, 5)
@@ -55,6 +56,12 @@ end
   ft5 = TensorAlgebra.contract((1, 2, 5), ft1, (1, 2, 3, 4), ft2, (3, 4, 5))
   @test isnothing(check_sanity(ft5))
 
+  # biperm is not allowed
   @test_broken TensorAlgebra.contract(((1, 2), (5,)), ft1, (1, 2, 3, 4), ft2, (3, 4, 5))
+
+  # issue with 0 axis
+  @test permutedims(ft1, (), (1, 2, 3, 4)) * permutedims(ft3, (3, 4, 1, 2), ()) isa
+    FusionTensor{Float64,0}
+  @test_broken TensorAlgebra.contract(ft1, (1, 2, 3, 4), ft3, (3, 4, 1, 2))
 end
 end
