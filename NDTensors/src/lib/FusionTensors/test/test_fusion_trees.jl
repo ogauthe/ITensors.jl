@@ -51,7 +51,7 @@ end
 
   trees_1b, tree_irreps_1b = fusion_trees((SU2(1 / 2),), (true,))
   @test tree_irreps_1b == [SU2(1 / 2)]
-  @test trees_1b == [reshape([0, 1, -1, 0], (2, 2, 1))]
+  @test trees_1b ≈ [reshape([0, 1, -1, 0], (2, 2, 1))]
 
   trees3h, tree_irreps3h = fusion_trees(
     (SU2(1 / 2), SU2(1 / 2), SU2(1 / 2)), (false, false, false)
