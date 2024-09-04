@@ -211,7 +211,6 @@ function contract_fusion_trees(
   compressed_dense_block::AbstractArray{<:Number,4},
   tree_domain::AbstractArray{<:Real,3},
   tree_codomain::AbstractArray{<:Real,3},
-  sec_dim::Int,
 )
   # Input:
   #
@@ -254,7 +253,7 @@ function contract_fusion_trees(
     (1, 2, 3, 5, 6),
     tree_domain,
     (3, 5, 7),
-    1 / sec_dim,  # normalization factor
+    1 / size(tree_domain, 2),  # normalization factor
   )
 
   #             ----------------------sym_block_sec---------------
@@ -296,9 +295,6 @@ function fill_matrix_blocks!(
   codomain_arrows, codomain_irreps, codomain_degens, codomain_dims = split_axes(
     codomain_legs
   )
-
-  # precompute matrix block normalization factor
-  allowed_sectors_dims = Sectors.quantum_dimension.(allowed_sectors)
 
   # cache computed trees
   domain_trees = Dict{NTuple{length(domain_legs),Int},Vector{Array{Float64,3}}}()
@@ -376,10 +372,7 @@ function fill_matrix_blocks!(
             # therefore cannot efficiently use contract!(allowed_matrix_blocks[...], ...)
             # TBD something like permutedims!(reshape(view), sym_block, (1,3,2,4))?
             sym_block_sec = contract_fusion_trees(
-              compressed_dense_block,
-              domain_block_trees[i_sec],
-              codomain_block_trees[i_sec],
-              allowed_sectors_dims[i_sec],
+              compressed_dense_block, domain_block_trees[i_sec], codomain_block_trees[i_sec]
             )
 
             # find position and write matrix block
