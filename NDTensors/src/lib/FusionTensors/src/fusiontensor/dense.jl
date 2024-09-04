@@ -158,7 +158,7 @@ function compress_dense_block(
   codomain_block_degens::Tuple,
   codomain_block_dims::Tuple,
 )
-  # start from a dense tensor block with e.g. N=6 axes divided into N_DO=3 ndims_domain
+  # start from a dense outer block with e.g. N=6 axes divided into N_DO=3 ndims_domain
   # and N_CO=3 ndims_codomain. Each leg k can be decomposed as a product of external an
   # multiplicity extk and a quantum dimension dimk
   #
@@ -168,8 +168,8 @@ function compress_dense_block(
   #
 
   # each leg of this this dense block can now be opened to form a 2N-dims tensor.
-  # note that this 2N-dims form is only defined at the level of the irrep
-  # configuration, not for a larger dense block.
+  # note that this 2N-dims form is only defined at the level of the outer block,
+  # not for a larger block.
   #
   #        ------------------------------split_dense_block-------------------------
   #        |             |              |             |             |             |
@@ -286,9 +286,9 @@ function fill_matrix_blocks!(
   )
 
   # cache computed trees
-  domain_trees = Dict{NTuple{length(domain_legs),Int},Vector{Array{Float64,3}}}()
+  domain_trees_cache = Dict{NTuple{length(domain_legs),Int},Vector{Array{Float64,3}}}()
 
-  # Below, we loop over every allowed dense block, contract domain and codomain fusion trees
+  # Below, we loop over every allowed outer block, contract domain and codomain fusion trees
   # for each allowed sector and write the result inside a symmetric matrix block
   #
   #          ----------------dim_sec---------
@@ -328,7 +328,7 @@ function fill_matrix_blocks!(
         )
         if !isempty(block_allowed_sectors)
           domain_block_trees = get_tree!(
-            domain_trees, iter_do, domain_irreps, domain_arrows, allowed_sectors
+            domain_trees_cache, iter_do, domain_irreps, domain_arrows, allowed_sectors
           )
           compressed_dense_block = compress_dense_block(
             view(blockarray, BlockArrays.Block(iter_do..., iter_co...)),
@@ -503,7 +503,7 @@ function fill_blockarray!(
   )
 
   # cache computed trees
-  domain_trees = Dict{NTuple{length(domain_legs),Int},Vector{Array{Float64,3}}}()
+  domain_trees_cache = Dict{NTuple{length(domain_legs),Int},Vector{Array{Float64,3}}}()
 
   # loop for each codomain irrep configuration
   block_shifts_column = zeros(Int, length(existing_sectors))
@@ -527,7 +527,7 @@ function fill_blockarray!(
         )
         if !isempty(block_existing_sectors)
           domain_block_trees = get_tree!(
-            domain_trees, iter_do, domain_irreps, domain_arrows, existing_sectors
+            domain_trees_cache, iter_do, domain_irreps, domain_arrows, existing_sectors
           )
           domain_block_length = prod(getindex.(domain_degens, iter_do))
           domain_block_dims = getindex.(domain_dims, iter_do)
