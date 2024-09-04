@@ -10,7 +10,7 @@
 # one degree of freedom.
 # We take the struct_mult_sec trees that fuse on sector sec and merge all of these into one
 # "thick" fusion tree containing all degrees of freedom for sector sec.
-# The result is a N+2 dimension fusion tree with "uncompressed" size
+# The result is a N+2 dimension fusion tree with "unfused" size
 # (dim1, dim2, ..., dimN, dim_sec, struct_mult_sec)
 #
 #      dim_sec  struct_mult_sec
@@ -25,7 +25,7 @@
 #     dim1 dim2 dim3
 #
 #
-# It is convenient to compress the tree by merging together the dimension legs to yield a
+# It is convenient to "fuse" the tree by merging together the dimension legs to yield a
 # 3-dim tensor with size (dim1*dim2*...*dimN, dim_sec, struct_mult_sec)
 #
 #             ---------------------------
@@ -75,56 +75,58 @@ function _tensor_kron(a::AbstractArray{<:Any,N}, b::AbstractArray{<:Any,N}) wher
 end
 
 # ================================  High level interface  ==================================
-function compress_tree(a::AbstractArray)
+function merge_tree_leaves(a::AbstractArray)
   shape_3leg = (prod(size(a)[begin:(end - 2)]), size(a, ndims(a) - 1), size(a, ndims(a)))
   return reshape(a, shape_3leg)
 end
 
-function decompress_tree(
+function unmerge_tree_leaves(
   tree::AbstractArray{<:Real,3}, irreps::NTuple{<:Any,<:Sectors.AbstractCategory}
 )
   irreps_shape = Sectors.quantum_dimension.(irreps)
-  return decompress_tree(tree, irreps_shape)
+  return unmerge_tree_leaves(tree, irreps_shape)
 end
 
-function decompress_tree(tree::AbstractArray{<:Real,3}, irreps_shape::NTuple{<:Any,Int})
+function unmerge_tree_leaves(tree::AbstractArray{<:Real,3}, irreps_shape::NTuple{<:Any,Int})
   new_shape = (irreps_shape..., size(tree, 2), size(tree, 3))
   return reshape(tree, new_shape)
 end
 
 function get_tree!(
-  dic::Dict{NTuple{N,Int},<:Vector{<:Array{<:Real,3}}},
+  cache::Dict{NTuple{N,Int},<:Vector{<:Array{<:Real,3}}},
   it::NTuple{N,Int},
   irreps_vectors::NTuple{N,Vector{C}},
   tree_arrows::NTuple{N,Bool},
   allowed_sectors::Vector{C},
 ) where {N,C<:Sectors.AbstractCategory}
-  get!(dic, it) do
-    prune_fusion_trees_compressed(
+  get!(cache, it) do
+    compute_pruned_leavesmerged_fusion_trees(
       getindex.(irreps_vectors, it), tree_arrows, allowed_sectors
     )
   end
 end
 
 function get_tree!(
-  dic::Dict{NTuple{N,Int},<:Vector{<:Array{<:Real}}},
+  cache::Dict{NTuple{N,Int},<:Vector{<:Array{<:Real}}},
   it::NTuple{N,Int},
   irreps_vectors::NTuple{N,Vector{C}},
   tree_arrows::NTuple{N,Bool},
   allowed_sectors::Vector{C},
 ) where {N,C<:Sectors.AbstractCategory}
-  get!(dic, it) do
-    prune_fusion_trees(getindex.(irreps_vectors, it), tree_arrows, allowed_sectors)
+  get!(cache, it) do
+    compute_pruned_fusion_trees(getindex.(irreps_vectors, it), tree_arrows, allowed_sectors)
   end
 end
 
-function prune_fusion_trees_compressed(
+function compute_pruned_leavesmerged_fusion_trees(
   irreps::NTuple{N,C}, tree_arrows::NTuple{N,Bool}, target_sectors::Vector{C}
 ) where {N,C<:Sectors.AbstractCategory}
-  return compress_tree.(prune_fusion_trees(irreps, tree_arrows, target_sectors))
+  return merge_tree_leaves.(
+    compute_pruned_fusion_trees(irreps, tree_arrows, target_sectors)
+  )
 end
 
-function prune_fusion_trees(
+function compute_pruned_fusion_trees(
   ::Tuple{}, ::Tuple{}, target_sectors::Vector{<:Sectors.AbstractCategory}
 )
   @assert issorted(target_sectors, lt=!isless, rev=true)  # strict
@@ -136,7 +138,7 @@ function prune_fusion_trees(
   return trees_sector
 end
 
-function prune_fusion_trees(
+function compute_pruned_fusion_trees(
   irreps::NTuple{N,C}, tree_arrows::NTuple{N,Bool}, target_sectors::Vector{C}
 ) where {N,C<:Sectors.AbstractCategory}
   @assert issorted(target_sectors, lt=!isless, rev=true)  # strict
@@ -283,38 +285,38 @@ end
 
 function compute_thin_trees(irreps::Tuple, tree_arrows::Tuple)
   # init from trivial, NOT from first(irreps) to get first arrow correct
-  compressed_thin_trees = [ones((1, 1))]
-  unmerged_tree_irreps = [Sectors.trivial(first(irreps))]
-  return build_trees(compressed_thin_trees, unmerged_tree_irreps, irreps, tree_arrows)
+  thin_trees = [ones((1, 1))]
+  tree_irreps = [Sectors.trivial(first(irreps))]
+  return build_trees(thin_trees, tree_irreps, irreps, tree_arrows)
 end
 
-function merge_sector_trees(
-  thin_trees::Vector, unmerged_tree_irreps::Vector, sector_irrep::Sectors.AbstractCategory
+function cat_thin_trees(
+  thin_trees::Vector, uncat_tree_irreps::Vector, sector_irrep::Sectors.AbstractCategory
 )
-  indices_irrep = findall(==(sector_irrep), unmerged_tree_irreps)
+  indices_irrep = findall(==(sector_irrep), uncat_tree_irreps)
   thin_trees_irrep = getindex.(Ref(thin_trees), indices_irrep)
   thick_shape = (size(first(thin_trees_irrep))..., length(indices_irrep))
   return reshape(reduce(hcat, thin_trees_irrep), thick_shape)
 end
 
-function merge_sector_trees(thin_trees::Vector, unmerged_tree_irreps::Vector)
-  # merge trees fusing on the same irrep (simpler + avoids moving data at each tree level)
-  tree_irreps = sort(unique(unmerged_tree_irreps))
+function cat_thin_trees(thin_trees::Vector, uncat_tree_irreps::Vector)
+  # cat trees fusing on the same irrep
+  tree_irreps = sort(unique(uncat_tree_irreps))
   thick_trees = map(
-    irrep -> merge_sector_trees(thin_trees, unmerged_tree_irreps, irrep), tree_irreps
+    irrep -> cat_thin_trees(thin_trees, uncat_tree_irreps, irrep), tree_irreps
   )
   return thick_trees, tree_irreps
 end
 
 # arrow direction is needed to define CG tensor for Lie groups
 function fusion_trees(::Sectors.NonAbelianGroup, irreps::Tuple, tree_arrows::Tuple)
-  # compute trees as 1 tree = 1 degree of freedom
-  thin_compressed_trees, unmerged_tree_irreps = compute_thin_trees(irreps, tree_arrows)
-  thick_compressed_trees, tree_irreps = merge_sector_trees(
-    thin_compressed_trees, unmerged_tree_irreps
-  )
+  # compute "thin" trees: 1 tree = fuses on ONE irrep
+  thin_trees, uncat_tree_irreps = compute_thin_trees(irreps, tree_arrows)
+
+  # cat thin trees into "thick" trees
+  thick_mergedleaves_trees, tree_irreps = cat_thin_trees(thin_trees, uncat_tree_irreps)
 
   irrep_dims = Sectors.quantum_dimension.(irreps)
-  thick_trees = map(tree -> decompress_tree(tree, irrep_dims), thick_compressed_trees)
+  thick_trees = map(tree -> unmerge_tree_leaves(tree, irrep_dims), thick_mergedleaves_trees)
   return thick_trees, tree_irreps
 end
