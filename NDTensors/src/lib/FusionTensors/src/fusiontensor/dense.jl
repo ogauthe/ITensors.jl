@@ -276,18 +276,7 @@ function fill_matrix_blocks!(
   # find sectors
   allowed_sectors, allowed_blocks = find_allowed_blocks(data_mat)
   allowed_matrix_blocks = [BlockSparseArrays.view!(data_mat, b) for b in allowed_blocks]
-  return fill_matrix_blocks!(
-    allowed_matrix_blocks, allowed_sectors, blockarray, domain_legs, codomain_legs
-  )
-end
 
-function fill_matrix_blocks!(
-  allowed_matrix_blocks::Vector{<:AbstractMatrix},
-  allowed_sectors::Vector{<:Sectors.AbstractCategory},
-  blockarray::BlockArrays.AbstractBlockArray,
-  domain_legs::Tuple,
-  codomain_legs::Tuple,
-)
   # domain needs to be dualed in fusion tree
   domain_arrows, domain_irreps, domain_degens, domain_dims = split_axes(
     GradedAxes.dual.(domain_legs)
