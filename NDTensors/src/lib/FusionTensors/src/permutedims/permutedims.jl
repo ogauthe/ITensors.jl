@@ -2,12 +2,12 @@
 
 # =================================  High level interface  =================================
 # permutedims with 1 tuple of 2 separate tuples
-function Base.permutedims(ft::FusionTensor, new_leg_indices::Tuple{NTuple,NTuple})
+function fusiontensor_permutedims(ft::FusionTensor, new_leg_indices::Tuple{NTuple,NTuple})
   return permutedims(ft, new_leg_indices[1], new_leg_indices[2])
 end
 
 # permutedims with 2 separate tuples
-function Base.permutedims(
+function fusiontensor_permutedims(
   ft::FusionTensor, new_domain_indices::Tuple, new_codomain_indices::Tuple
 )
   biperm = TensorAlgebra.blockedperm(new_domain_indices, new_codomain_indices)
@@ -15,9 +15,15 @@ function Base.permutedims(
 end
 
 # 0-dim case
-Base.permutedims(ft::FusionTensor{<:Any,0}, ::TensorAlgebra.BlockedPermutation{2,0}) = ft
+function fusiontensor_permutedims(
+  ft::FusionTensor{<:Any,0}, ::TensorAlgebra.BlockedPermutation{2,0}
+)
+  return ft
+end
 
-function Base.permutedims(ft::FusionTensor, biperm::TensorAlgebra.BlockedPermutation{2})
+function fusiontensor_permutedims(
+  ft::FusionTensor, biperm::TensorAlgebra.BlockedPermutation{2}
+)
   @assert ndims(ft) == length(biperm)
 
   # early return for identity operation. Do not copy.

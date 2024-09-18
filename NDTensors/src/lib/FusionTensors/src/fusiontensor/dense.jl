@@ -17,10 +17,8 @@ function FusionTensor(
 end
 
 #### cast from symmetric to dense
-Base.Array(ft::FusionTensor) = Array(BlockSparseArrays.BlockSparseArray(ft))
-
 function BlockSparseArrays.BlockSparseArray(ft::FusionTensor)
-  return cast_to_dense(data_matrix(ft), domain_axes(ft), codomain_axes(ft))
+  return cast_to_dense(ft)
 end
 
 # =================================  Low level interface  ==================================
@@ -38,6 +36,10 @@ function cast_from_dense(
   data_mat = initialize_data_matrix(eltype(blockarray), domain_legs, codomain_legs)
   fill_matrix_blocks!(data_mat, blockarray, domain_legs, codomain_legs)
   return data_mat
+end
+
+function cast_to_dense(ft::FusionTensor)
+  return cast_to_dense(data_matrix(ft), domain_axes(ft), codomain_axes(ft))
 end
 
 function cast_to_dense(data_mat::AbstractMatrix, domain_legs::Tuple, codomain_legs::Tuple)

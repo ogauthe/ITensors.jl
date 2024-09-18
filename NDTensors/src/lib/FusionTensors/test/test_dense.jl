@@ -137,7 +137,7 @@ end
     @test Array(ft2) ≈ v1
 
     zerodim = ones(())
-    @test_broken FusionTensor(zerodim, (), ()) isa FusionTensor  # https://github.com/JuliaArrays/BlockArrays.jl/issues/409
+    @test_broken FusionTensor(zerodim, (), ()) isa FusionTensor  # https://github.com/JuliaLang/julia/issues/52615
   end
 end
 

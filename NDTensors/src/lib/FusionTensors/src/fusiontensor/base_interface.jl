@@ -49,6 +49,8 @@ function Base.:/(ft::FusionTensor, x::Number)
   return FusionTensor(data_matrix(ft) / x, domain_axes(ft), codomain_axes(ft))
 end
 
+Base.Array(ft::FusionTensor) = Array(cast_to_dense(ft))
+
 # adjoint is costless: dual axes, swap domain and codomain, take data_matrix adjoint.
 # data_matrix coeff are not modified (beyond complex conjugation)
 function Base.adjoint(ft::FusionTensor)
@@ -90,7 +92,7 @@ end
 
 Base.ndims(::FusionTensor{T,N}) where {T,N} = N
 
-# Base.permutedims is defined in a separate file
+Base.permutedims(ft::FusionTensor, args...) = fusiontensor_permutedims(ft, args...)
 
 function Base.similar(ft::FusionTensor)
   mat = similar(data_matrix(ft))
