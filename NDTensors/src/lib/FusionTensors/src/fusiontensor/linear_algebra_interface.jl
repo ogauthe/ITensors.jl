@@ -43,7 +43,7 @@ function LinearAlgebra.norm(ft::FusionTensor)
       LinearAlgebra.norm(m[BlockArrays.Block(Tuple(idx))])^2,
     +,
     BlockSparseArrays.stored_indices(BlockArrays.blocks(m));
-    init=eltype(ft)(0),
+    init=0.0,
   )
   return sqrt(n2)
 end
