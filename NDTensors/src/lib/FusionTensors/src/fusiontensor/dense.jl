@@ -291,6 +291,9 @@ function fill_matrix_blocks!(
   # cache computed trees
   domain_trees_cache = Dict{NTuple{length(domain_legs),Int},Vector{Array{Float64,3}}}()
 
+  # precompute internal structure
+  ftbs = FusionTensorBlockStructure(domain_legs, codomain_legs, allowed_sectors)
+
   # Below, we loop over every allowed outer block, contract domain and codomain fusion trees
   # for each allowed sector and write the result inside a symmetric matrix block
   #
@@ -312,7 +315,6 @@ function fill_matrix_blocks!(
   #     ext1 ext2 ext3                 ext4 ext5 ext6
 
   # loop for each codomain irrep configuration
-  block_shifts_columns = zeros(Int, length(allowed_sectors))
   for iter_co in Iterators.product(eachindex.(codomain_irreps)...)
     codomain_block_irreps = getindex.(codomain_irreps, iter_co)
     codomain_block_allowed_sectors = intersect_sectors(
@@ -324,7 +326,6 @@ function fill_matrix_blocks!(
     )
 
     # loop for each domain irrep configuration
-    block_shifts_rows = zeros(Int, length(allowed_sectors))
     for iter_do in Iterators.product(eachindex.(domain_irreps)...)
       block_allowed_sectors = intersect_sectors(
         getindex.(domain_irreps, iter_do), codomain_block_allowed_sectors
@@ -367,18 +368,11 @@ function fill_matrix_blocks!(
           fused_dense_block, domain_block_trees[i_sec], codomain_block_trees[i_sec]
         )
 
-        # find position and write matrix block
-        r1 = block_shifts_rows[i_sec]
-        r2 = r1 + size(fused_dense_block, 1) * size(domain_block_trees[i_sec], 3)
-        c1 = block_shifts_columns[i_sec]
-        c2 = c1 + size(fused_dense_block, 2) * size(codomain_block_trees[i_sec], 3)
-        @views allowed_matrix_blocks[i_sec][(r1 + 1):r2, (c1 + 1):c2] = sym_block_sec
-        block_shifts_rows[i_sec] = r2
+        # find outer block location inside this matrix block && write it
+        row_range, col_range = find_block_ranges(ftbs, iter_do, iter_co, i_sec)
+        @views allowed_matrix_blocks[i_sec][row_range, col_range] = sym_block_sec
       end
     end
-
-    codomain_block_length = prod(getindex.(codomain_degens, iter_co))
-    block_shifts_columns += codomain_block_length * size.(codomain_block_trees, 3)
   end
 end
 
@@ -503,11 +497,13 @@ function fill_blockarray!(
     codomain_legs
   )
 
+  # TODO cache ftbs inside FusionTensor
+  ftbs = FusionTensorBlockStructure(domain_legs, codomain_legs, existing_sectors)
+
   # cache computed trees
   domain_trees_cache = Dict{NTuple{length(domain_legs),Int},Vector{Array{Float64,3}}}()
 
   # loop for each codomain irrep configuration
-  block_shifts_column = zeros(Int, length(existing_sectors))
   for iter_co in Iterators.product(eachindex.(codomain_irreps)...)
     codomain_block_irreps = getindex.(codomain_irreps, iter_co)
     codomain_block_existing_sectors = intersect_sectors(
@@ -517,7 +513,6 @@ function fill_blockarray!(
     codomain_block_trees = compute_pruned_leavesmerged_fusion_trees(
       codomain_block_irreps, codomain_arrows, existing_sectors
     )
-    block_shifts_row = zeros(Int, length(existing_sectors))
     codomain_block_length = prod(getindex.(codomain_degens, iter_co))
     codomain_block_dims = getindex.(codomain_dims, iter_co)
 
@@ -547,20 +542,14 @@ function fill_blockarray!(
 
       # loop for each symmetry sector inside this configuration
       for i_sec in findall(in(block_existing_sectors), existing_sectors)
-        c1 = block_shifts_column[i_sec]
-        r1 = block_shifts_row[i_sec]
-        r2 = r1 + size(domain_block_trees[i_sec], 3) * domain_block_length
-        c2 = c1 + size(codomain_block_trees[i_sec], 3) * codomain_block_length
-
-        sym_block_sec = view(existing_matrix_blocks[i_sec], (r1 + 1):r2, (c1 + 1):c2)
+        row_range, col_range = find_block_ranges(ftbs, iter_do, iter_co, i_sec)
+        sym_block_sec = view(existing_matrix_blocks[i_sec], row_range, col_range)
         add_sector_block!(
           fused_dense_block,
           sym_block_sec,
           domain_block_trees[i_sec],
           codomain_block_trees[i_sec],
         )
-
-        block_shifts_row[i_sec] = r2
       end
 
       blockarray[BlockArrays.Block(iter_do..., iter_co...)] = unfuse_dense_block(
@@ -571,6 +560,5 @@ function fill_blockarray!(
         codomain_block_dims,
       )
     end
-    block_shifts_column += codomain_block_length * size.(codomain_block_trees, 3)
   end
 end

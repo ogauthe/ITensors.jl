@@ -1,14 +1,10 @@
 # This file defines helper functions to access FusionTensor internal structures
 
-function translate_outer_block_to_inner(
-  outer_block::BlockArrays.Block{N}, blocklength::NTuple{N,Integer}
-) where {N}
+function translate_outer_block_to_inner(outer_block, blocklength::NTuple{<:Any,Integer})
   return BlockArrays.Block(LinearIndices(blocklength)[(Int.(Tuple(outer_block))...)])
 end
 
-function translate_inner_block_to_outer(
-  inner_block::BlockArrays.Block{1}, blocklength::NTuple{<:Any,Integer}
-)
+function translate_inner_block_to_outer(inner_block, blocklength::NTuple{<:Any,Integer})
   return BlockArrays.Block(Tuple(CartesianIndices(blocklength)[Int(inner_block)]))
 end
 
@@ -35,7 +31,15 @@ function FusionTensorBlockStructure(
   allowed_sectors = intersect_sectors(
     GradedAxes.blocklabels(row_axis), GradedAxes.blocklabels(col_axis)
   )
-  row_blockranges = compute_inner_ranges(domain_legs, allowed_sectors)
+  return FusionTensorBlockStructure(domain_legs, codomain_legs, allowed_sectors)
+end
+
+function FusionTensorBlockStructure(
+  domain_legs::Tuple{Vararg{AbstractUnitRange}},
+  codomain_legs::Tuple{Vararg{AbstractUnitRange}},
+  allowed_sectors::Vector{<:Sectors.AbstractCategory},
+)
+  row_blockranges = compute_inner_ranges(GradedAxes.dual.(domain_legs), allowed_sectors)
   col_blockranges = compute_inner_ranges(codomain_legs, allowed_sectors)
   domain_blocklength = BlockArrays.blocklength.(domain_legs)
   codomain_blocklength = BlockArrays.blocklength.(codomain_legs)
@@ -50,8 +54,8 @@ end
 
 function find_block_ranges(
   ftbs::FusionTensorBlockStructure,
-  domain_block::BlockArrays.Block,
-  codomain_block::BlockArrays.Block,
+  domain_block,
+  codomain_block,
   c::Sectors.AbstractCategory,
 )
   i_sec = findfirst(==(c), get_allowed_sectors(ftbs))
@@ -60,32 +64,23 @@ end
 
 function find_block_ranges(
   ftbs::FusionTensorBlockStructure,
-  domain_block::BlockArrays.Block,
-  codomain_block::BlockArrays.Block,
+  domain_block,  # either Tuple{N_DO} or Block{N_DO}
+  codomain_block,  # either Tuple{N_CO} or Block{N_CO}
   i_sec::Integer,
 )
   row_block = translate_outer_block_to_inner(domain_block, get_domain_blocklength(ftbs))
   row_range = access_symmetric_block_range(get_row_blockranges(ftbs), row_block, i_sec)
   col_block = translate_outer_block_to_inner(codomain_block, get_codomain_blocklength(ftbs))
-  col_range = access_symmetric_block_range(get_row_blockranges(ftbs), col_block, i_sec)
+  col_range = access_symmetric_block_range(get_col_blockranges(ftbs), col_block, i_sec)
   return row_range, col_range
 end
 
 function access_symmetric_block_range(
-  inner_blockranges::Vector{<:AbstractUnitRange},
+  inner_blockranges::Vector{<:BlockArrays.AbstractBlockedUnitRange},
   inner_block::BlockArrays.Block{1},
   i_sec::Integer,
 )
   return inner_blockranges[i_sec][inner_block]
-end
-
-function compute_inner_ranges(legs::Tuple{Vararg{AbstractUnitRange}})
-  allowed_sectors = GradedAxes.blocklabels(GradedAxes.fusion_product(legs...))
-  return compute_inner_ranges(legs, allowed_sectors)
-end
-
-function GradedAxes.tensor_product(l1, l2)
-  return GradedAxes.tensor_product(Sectors.to_graded_axis(l1), Sectors.to_graded_axis(l2))
 end
 
 # TBD speed up: a and b are sorted
@@ -95,8 +90,20 @@ function find_shared_indices(a::AbstractVector{T}, b::AbstractVector{T}) where {
   return indices1, indices2
 end
 
+function compute_inner_ranges(legs::Tuple{Vararg{AbstractUnitRange}})
+  allowed_sectors = GradedAxes.blocklabels(GradedAxes.fusion_product(legs...))
+  return compute_inner_ranges(legs, allowed_sectors)
+end
+
 function compute_inner_ranges(
-  legs::Tuple{Vararg{AbstractUnitRange}}, allowed_sectors::Vector
+  ::Tuple{}, allowed_sectors::Vector{<:Sectors.AbstractCategory}
+)
+  return [BlockArrays.blockedrange([Sectors.istrivial(s)]) for s in allowed_sectors]
+end
+
+function compute_inner_ranges(
+  legs::Tuple{Vararg{AbstractUnitRange}},
+  allowed_sectors::Vector{<:Sectors.AbstractCategory},
 )
   blocklengths = BlockArrays.blocklengths.(legs)
   blocklabels = GradedAxes.blocklabels.(legs)
