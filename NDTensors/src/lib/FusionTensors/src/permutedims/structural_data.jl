@@ -1,96 +1,121 @@
-# This file defines StructuralData to be used in permutedims
-# StructuralData only depends on Fusion Category, symmetry sectors and permutation
-# it does not depend on tensor coefficients or degeneracies
+# This file defines helper functions to access FusionTensor internal structures
 
-# TBD: Unitary format
-#      * BlockMatrix?
-#      * 4-dim BlockSparseArray?
-#      * other?
-
-# TBD: cache format
-#       * global Dict of Dict{(N,C,OldNDo,OldNCo,NewNDo,NewNCo,OldArrows,flatperm), Dict}
-#          + unitary Dict{NTuple{C<:AbstractCategory}, Unitary}
-
-# TBD: inner structure of a matrix block
-#       * (struct, ext) or its transpose
-
-# TBD: cache of FusionTensor inner structure
-#       * cache in FT (TensorKit choice)
-#       * cache in StructuralData  (froSTspin choice)
-#       * no cache
-
-# Current implementation:
-# * Unitary = BlockMatrix
-# * no unitary cache
-# * inner structure = (struct, ext)
-# * no cache of internal structure
-#
-
-struct StructuralData{N,C,OldNDo,OldNCo,NewNDo,NewNCo,Unitaries}
-  old_domain_labels::NTuple{OldNDo,Vector{C}}
-  old_codomain_labels::Tuple{OldNCo,Vector{C}}
-  new_domain_labels::Tuple{NewNDo,Vector{C}}
-  new_codomain_labels::Tuple{NewNCo,Vector{C}}
-  old_arrows::NTuple{N,Bool}
-  flat_permutation::NTuple{N,Int}
-  unitaries::Unitaries
-
-  function StructuralData(
-    old_domain_labels::Tuple{Vararg{Vector{C}}},
-    old_codomain_labels::Tuple{Vararg{Vector{C}}},
-    new_domain_labels::Tuple{Vararg{Vector{C}}},
-    new_codomain_labels::Tuple{Vararg{Vector{C}}},
-    old_arrows::NTuple{N,Bool},
-    flat_permutation::NTuple{N,Int},
-    unitaries,
-  ) where {N,C<:Sectors.AbstractCategory}
-    @assert length(old_domain_labels) + length(old_codomain_labels) == N
-    @assert length(new_domain_labels) + length(new_codomain_labels_codomain_labels) == N
-    @assert N > 0
-
-    return new{
-      N,
-      C,
-      length(old_domain_labels),
-      length(old_codomain_labels),
-      length(new_domain_labels),
-      length(new_codomain_labels),
-      eltype(unitaries),
-    }(
-      old_domain_labels,
-      old_codomain_labels,
-      new_domain_labels,
-      new_codomain_labels,
-      old_arrows,
-      flat_permutation,
-      unitaries,
-    )
-  end
+function translate_outer_block_to_inner(
+  outer_block::BlockArrays.Block{N}, blocklength::NTuple{N,Integer}
+) where {N}
+  return BlockArrays.Block(LinearIndices(blocklength)[(Int.(Tuple(outer_block))...)])
 end
 
-function StructuralData(
-  old_domain_labels::Tuple{Vararg{Vector{C}}},
-  old_codomain_labels::Tuple{Vararg{Vector{C}}},
-  new_domain_labels::Tuple{Vararg{Vector{C}}},
-  new_codomain_labels::Tuple{Vararg{Vector{C}}},
-  old_arrows::NTuple{N,Bool},
-  flat_permutation::NTuple{N,Int},
-) where {N,C<:Sectors.AbstractCategory}
-  unitaries = compute_unitaries_CG(
-    old_domain_labels,
-    old_codomain_labels,
-    new_domain_labels,
-    new_codomain_labels,
-    old_arrows,
-    flat_permutation,
+function translate_inner_block_to_outer(
+  inner_block::BlockArrays.Block{1}, blocklength::NTuple{<:Any,Integer}
+)
+  return BlockArrays.Block(Tuple(CartesianIndices(blocklength)[Int(inner_block)]))
+end
+
+struct FusionTensorBlockStructure{A,B,C,D}
+  allowed_sectors::A
+  domain_blocklength::B
+  codomain_blocklength::C
+  row_blockranges::D
+  col_blockranges::D
+end
+
+get_allowed_sectors(ftbs::FusionTensorBlockStructure) = ftbs.allowed_sectors
+get_row_blockranges(ftbs::FusionTensorBlockStructure) = ftbs.row_blockranges
+get_col_blockranges(ftbs::FusionTensorBlockStructure) = ftbs.col_blockranges
+get_domain_blocklength(ftbs::FusionTensorBlockStructure) = ftbs.domain_blocklength
+get_codomain_blocklength(ftbs::FusionTensorBlockStructure) = ftbs.codomain_blocklength
+
+function FusionTensorBlockStructure(
+  domain_legs::Tuple{Vararg{AbstractUnitRange}},
+  codomain_legs::Tuple{Vararg{AbstractUnitRange}},
+)
+  row_axis = GradedAxes.dual(GradedAxes.fusion_product(GradedAxes.dual.(domain_legs)...))
+  col_axis = GradedAxes.fusion_product(codomain_legs...)
+  allowed_sectors = intersect_sectors(
+    GradedAxes.blocklabels(row_axis), GradedAxes.blocklabels(col_axis)
   )
-  return StructuralData(
-    old_domain_labels,
-    old_codomain_labels,
-    new_domain_labels,
-    new_codomain_labels,
-    old_arrows,
-    flat_permutation,
-    unitaries,
+  row_blockranges = compute_inner_ranges(domain_legs, allowed_sectors)
+  col_blockranges = compute_inner_ranges(codomain_legs, allowed_sectors)
+  domain_blocklength = BlockArrays.blocklength.(domain_legs)
+  codomain_blocklength = BlockArrays.blocklength.(codomain_legs)
+  return FusionTensorBlockStructure(
+    allowed_sectors,
+    domain_blocklength,
+    codomain_blocklength,
+    row_blockranges,
+    col_blockranges,
   )
+end
+
+function find_block_ranges(
+  ftbs::FusionTensorBlockStructure,
+  domain_block::BlockArrays.Block,
+  codomain_block::BlockArrays.Block,
+  c::Sectors.AbstractCategory,
+)
+  i_sec = findfirst(==(c), get_allowed_sectors(ftbs))
+  return find_block_ranges(ftbs, domain_block, codomain_block, i_sec)
+end
+
+function find_block_ranges(
+  ftbs::FusionTensorBlockStructure,
+  domain_block::BlockArrays.Block,
+  codomain_block::BlockArrays.Block,
+  i_sec::Integer,
+)
+  row_block = translate_outer_block_to_inner(domain_block, get_domain_blocklength(ftbs))
+  row_range = access_symmetric_block_range(get_row_blockranges(ftbs), row_block, i_sec)
+  col_block = translate_outer_block_to_inner(codomain_block, get_codomain_blocklength(ftbs))
+  col_range = access_symmetric_block_range(get_row_blockranges(ftbs), col_block, i_sec)
+  return row_range, col_range
+end
+
+function access_symmetric_block_range(
+  inner_blockranges::Vector{<:AbstractUnitRange},
+  inner_block::BlockArrays.Block{1},
+  i_sec::Integer,
+)
+  return inner_blockranges[i_sec][inner_block]
+end
+
+function compute_inner_ranges(legs::Tuple{Vararg{AbstractUnitRange}})
+  allowed_sectors = GradedAxes.blocklabels(GradedAxes.fusion_product(legs...))
+  return compute_inner_ranges(legs, allowed_sectors)
+end
+
+function GradedAxes.tensor_product(l1, l2)
+  return GradedAxes.tensor_product(Sectors.to_graded_axis(l1), Sectors.to_graded_axis(l2))
+end
+
+# TBD speed up: a and b are sorted
+function find_shared_indices(a::AbstractVector{T}, b::AbstractVector{T}) where {T}
+  indices1 = findall(in(b), a)
+  indices2 = findall(in(a), b)
+  return indices1, indices2
+end
+
+function compute_inner_ranges(
+  legs::Tuple{Vararg{AbstractUnitRange}}, allowed_sectors::Vector
+)
+  blocklengths = BlockArrays.blocklengths.(legs)
+  blocklabels = GradedAxes.blocklabels.(legs)
+  n_sec = length(allowed_sectors)
+  n_blocks = prod(length.(blocklengths))
+  m = zeros(Int, n_blocks, n_sec)
+  for (i_block, it) in enumerate(Tuple.(CartesianIndices(BlockArrays.blocklength.(legs))))
+    # TODO fuse directly blocklengths
+    # requires fixed blocklengths(dual) && fusion_product(::LabelledNumber,::GradedUnitRange)
+    # TBD if fusion_product is too slow, compute it recursively
+    block_axis = GradedAxes.fusion_product(getindex.(blocklabels, Tuple(it))...)
+    block_sectors = GradedAxes.blocklabels(block_axis)
+
+    indices1, indices2 = find_shared_indices(allowed_sectors, block_sectors)
+    for (i1, i2) in zip(indices1, indices2)
+      m[i_block, i1] =
+        prod(getindex.(blocklengths, it)) * length(block_axis[BlockArrays.Block(i2)])
+    end
+  end
+  sector_axes = [BlockArrays.blockedrange(m[:, i]) for i in 1:n_sec]
+  return sector_axes
 end
