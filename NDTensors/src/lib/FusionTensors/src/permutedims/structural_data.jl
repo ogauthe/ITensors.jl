@@ -76,11 +76,9 @@ function find_block_ranges(
 end
 
 function access_symmetric_block_range(
-  inner_blockranges::Vector{<:BlockArrays.AbstractBlockedUnitRange},
-  inner_block::BlockArrays.Block{1},
-  i_sec::Integer,
+  inner_blockranges::AbstractArray, inner_block, i_sec::Integer
 )
-  return inner_blockranges[i_sec][inner_block]
+  return inner_blockranges[Int(inner_block), i_sec]
 end
 
 # TBD speed up: a and b are sorted
@@ -98,7 +96,7 @@ end
 function compute_inner_ranges(
   ::Tuple{}, allowed_sectors::Vector{<:Sectors.AbstractCategory}
 )
-  return [BlockArrays.blockedrange([Sectors.istrivial(s)]) for s in allowed_sectors]
+  return reshape([1:Sectors.istrivial(s) for s in allowed_sectors], 1, :)
 end
 
 function compute_inner_ranges(
@@ -109,7 +107,7 @@ function compute_inner_ranges(
   blocklabels = GradedAxes.blocklabels.(legs)
   n_sec = length(allowed_sectors)
   n_blocks = prod(length.(blocklengths))
-  m = zeros(Int, n_blocks, n_sec)
+  m = zeros(Int, n_blocks + 1, n_sec)
   for (i_block, it) in enumerate(Tuple.(CartesianIndices(BlockArrays.blocklength.(legs))))
     # TODO fuse directly blocklengths
     # requires fixed blocklengths(dual) && fusion_product(::LabelledNumber,::GradedUnitRange)
@@ -119,10 +117,11 @@ function compute_inner_ranges(
 
     indices1, indices2 = find_shared_indices(allowed_sectors, block_sectors)
     for (i1, i2) in zip(indices1, indices2)
-      m[i_block, i1] =
+      m[i_block + 1, i1] =
         prod(getindex.(blocklengths, it)) * length(block_axis[BlockArrays.Block(i2)])
     end
   end
-  sector_axes = [BlockArrays.blockedrange(m[:, i]) for i in 1:n_sec]
-  return sector_axes
+  mcs = cumsum(m; dims=1)
+  index_matrix = range.(mcs[begin:(end - 1), :] .+ 1, mcs[2:end, :])
+  return index_matrix
 end
