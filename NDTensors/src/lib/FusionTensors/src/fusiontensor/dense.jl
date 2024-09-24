@@ -54,6 +54,10 @@ end
 # =====================================  Internals  ========================================
 
 ##################################  utility tools  #########################################
+
+find_category_type(g, x...) = eltype(GradedAxes.blocklabels(g))
+find_category_type() = typeof(Sectors.sector())
+
 function find_allowed_blocks(data_mat::BlockSparseArrays.AbstractBlockSparseMatrix)
   return find_allowed_blocks(axes(data_mat)...)
 end
@@ -292,7 +296,9 @@ function fill_matrix_blocks!(
   domain_trees_cache = Dict{NTuple{length(domain_legs),Int},Vector{Array{Float64,3}}}()
 
   # precompute internal structure
-  ftbs = FusionTensorBlockStructure(domain_legs, codomain_legs, allowed_sectors)
+  cat_type = find_category_type(domain_legs..., codomain_legs...)
+  row_fused_axes = FusedAxes(domain_legs, cat_type)
+  col_fused_axes = FusedAxes(codomain_legs, cat_type)
 
   # Below, we loop over every allowed outer block, contract domain and codomain fusion trees
   # for each allowed sector and write the result inside a symmetric matrix block
@@ -315,7 +321,7 @@ function fill_matrix_blocks!(
   #     ext1 ext2 ext3                 ext4 ext5 ext6
 
   # loop for each codomain irrep configuration
-  for iter_co in Iterators.product(eachindex.(codomain_irreps)...)
+  for iter_co in col_fused_axes
     codomain_block_irreps = getindex.(codomain_irreps, iter_co)
     codomain_block_allowed_sectors = intersect_sectors(
       codomain_block_irreps, allowed_sectors
@@ -326,7 +332,7 @@ function fill_matrix_blocks!(
     )
 
     # loop for each domain irrep configuration
-    for iter_do in Iterators.product(eachindex.(domain_irreps)...)
+    for iter_do in row_fused_axes
       block_allowed_sectors = intersect_sectors(
         getindex.(domain_irreps, iter_do), codomain_block_allowed_sectors
       )
@@ -369,7 +375,10 @@ function fill_matrix_blocks!(
         )
 
         # find outer block location inside this matrix block && write it
-        row_range, col_range = find_block_ranges(ftbs, iter_do, iter_co, i_sec)
+        row_range = find_block_range(
+          row_fused_axes, iter_do, GradedAxes.dual(allowed_sectors[i_sec])
+        )
+        col_range = find_block_range(col_fused_axes, iter_co, allowed_sectors[i_sec])
         @views allowed_matrix_blocks[i_sec][row_range, col_range] = sym_block_sec
       end
     end
@@ -497,14 +506,16 @@ function fill_blockarray!(
     codomain_legs
   )
 
-  # TODO cache ftbs inside FusionTensor
-  ftbs = FusionTensorBlockStructure(domain_legs, codomain_legs, existing_sectors)
+  # TODO cache FusedAxes inside FusionTensor
+  cat_type = find_category_type(domain_legs..., codomain_legs...)
+  row_fused_axes = FusedAxes(domain_legs, cat_type)
+  col_fused_axes = FusedAxes(codomain_legs, cat_type)
 
   # cache computed trees
   domain_trees_cache = Dict{NTuple{length(domain_legs),Int},Vector{Array{Float64,3}}}()
 
   # loop for each codomain irrep configuration
-  for iter_co in Iterators.product(eachindex.(codomain_irreps)...)
+  for iter_co in col_fused_axes
     codomain_block_irreps = getindex.(codomain_irreps, iter_co)
     codomain_block_existing_sectors = intersect_sectors(
       codomain_block_irreps, existing_sectors
@@ -517,7 +528,7 @@ function fill_blockarray!(
     codomain_block_dims = getindex.(codomain_dims, iter_co)
 
     # loop for each domain irrep configuration
-    for iter_do in Iterators.product(eachindex.(domain_irreps)...)
+    for iter_do in row_fused_axes
       block_existing_sectors = intersect_sectors(
         getindex.(domain_irreps, iter_do), codomain_block_existing_sectors
       )
@@ -542,7 +553,10 @@ function fill_blockarray!(
 
       # loop for each symmetry sector inside this configuration
       for i_sec in findall(in(block_existing_sectors), existing_sectors)
-        row_range, col_range = find_block_ranges(ftbs, iter_do, iter_co, i_sec)
+        row_range = find_block_range(
+          row_fused_axes, iter_do, GradedAxes.dual(existing_sectors[i_sec])
+        )
+        col_range = find_block_range(col_fused_axes, iter_co, existing_sectors[i_sec])
         sym_block_sec = view(existing_matrix_blocks[i_sec], row_range, col_range)
         add_sector_block!(
           fused_dense_block,
