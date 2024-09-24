@@ -1,5 +1,14 @@
 # This file defines helper functions to access FusionTensor internal structures
 
+find_category_type(g, x...) = eltype(GradedAxes.blocklabels(g))
+find_category_type() = typeof(Sectors.sector())
+function fuse_axes(domain_legs, codomain_legs)
+  cat_type = find_category_type(domain_legs..., codomain_legs...)
+  domain_fused_axes = FusedAxes(domain_legs, cat_type)
+  codomain_fused_axes = FusedAxes(codomain_legs, cat_type)
+  return domain_fused_axes, codomain_fused_axes
+end
+
 struct FusedAxes{A,B,C,D}
   outer_axes::A
   fused_axis::B
