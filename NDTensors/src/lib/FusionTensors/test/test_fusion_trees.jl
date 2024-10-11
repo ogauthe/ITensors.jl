@@ -6,15 +6,17 @@ using BlockArrays: BlockArrays
 
 using NDTensors.FusionTensors: fusion_trees
 using NDTensors.GradedAxes: GradedAxes
-using NDTensors.Sectors: Sectors, SU, SU2, U1, Z, sector
+using NDTensors.SymmetrySectors: SymmetrySectors, SU, SU2, TrivialSector, U1, Z
 
 @testset "Empty fusion trees" begin
-  trees2, tree_irreps2 = fusion_trees((sector(), sector()), (false, false))
-  @test tree_irreps2 == [sector()]
+  trees2, tree_irreps2 = fusion_trees((TrivialSector(), TrivialSector()), (false, false))
+  @test tree_irreps2 == [TrivialSector()]
   @test trees2 == [ones((1, 1, 1, 1))]
 
-  trees3, tree_irreps3 = fusion_trees((sector(), sector(), sector()), (false, true, true))
-  @test tree_irreps3 == [sector()]
+  trees3, tree_irreps3 = fusion_trees(
+    (TrivialSector(), TrivialSector(), TrivialSector()), (false, true, true)
+  )
+  @test tree_irreps3 == [TrivialSector()]
   @test trees3 == [ones((1, 1, 1, 1, 1))]
 end
 
@@ -27,16 +29,16 @@ end
   @test tree_irreps3 == [U1(0)]
   @test trees3 == [ones((1, 1, 1, 1, 1))]
 
-  s1 = Sectors.sector(Z{2}(1), U1(0))
-  s2 = Sectors.sector(Z{2}(1), U1(1))
+  s1 = SymmetrySectors.SectorProduct(Z{2}(1), U1(0))
+  s2 = SymmetrySectors.SectorProduct(Z{2}(1), U1(1))
   trees_z2u1, tree_irreps_z2u1 = fusion_trees((s1, s2), (false, false))
-  @test tree_irreps_z2u1 == [Sectors.sector(Z{2}(0), U1(1))]
+  @test tree_irreps_z2u1 == [SymmetrySectors.SectorProduct(Z{2}(0), U1(1))]
   @test trees_z2u1 == [ones((1, 1, 1, 1))]
 
-  s3 = Sectors.sector(; A=Z{2}(1), B=U1(0))
-  s4 = Sectors.sector(; A=Z{2}(1), B=U1(1))
+  s3 = SymmetrySectors.SectorProduct(; A=Z{2}(1), B=U1(0))
+  s4 = SymmetrySectors.SectorProduct(; A=Z{2}(1), B=U1(1))
   trees_nt, tree_irreps_nt = fusion_trees((s3, s4), (false, false))
-  @test tree_irreps_nt == [Sectors.sector(; A=Z{2}(0), B=U1(1))]
+  @test tree_irreps_nt == [SymmetrySectors.SectorProduct(; A=Z{2}(0), B=U1(1))]
   @test trees_nt == [ones((1, 1, 1, 1))]
 end
 
@@ -60,28 +62,32 @@ end
   @test size.(trees3h) == [(2, 2, 2, 2, 2), (2, 2, 2, 4, 1)]
 end
 
-@testset "CategoryProduct fusion trees" begin
-  hole = Sectors.sector(; N=U1(1), S=SU2(0))
-  s12 = Sectors.sector(; N=U1(0), S=SU2(1 / 2))
+@testset "SectorProduct fusion trees" begin
+  hole = SymmetrySectors.SectorProduct(; N=U1(1), S=SU2(0))
+  s12 = SymmetrySectors.SectorProduct(; N=U1(0), S=SU2(1 / 2))
   trees, tree_irreps = fusion_trees((hole, hole, hole, s12), (false, false, false, false))
-  @test tree_irreps == [Sectors.sector(; N=U1(3), S=SU2(1 / 2))]
+  @test tree_irreps == [SymmetrySectors.SectorProduct(; N=U1(3), S=SU2(1 / 2))]
   @test trees == [reshape(LinearAlgebra.I(2), (1, 1, 1, 2, 2, 1))]
 
-  s3 = Sectors.sector(Sectors.SU((1, 0)), Sectors.SU((1,)), Sectors.U1(1))
+  s3 = SymmetrySectors.SectorProduct(
+    SymmetrySectors.SU((1, 0)), SymmetrySectors.SU((1,)), SymmetrySectors.U1(1)
+  )
   irreps = (s3, s3, s3)
   isdual = (false, false, false)
   trees, tree_irreps = fusion_trees(irreps, isdual)
   rep = GradedAxes.fusion_product(irreps...)
   @test GradedAxes.blocklabels(rep) == tree_irreps
-  @test Sectors.quantum_dimension.(tree_irreps) == size.(trees, 4)
+  @test SymmetrySectors.quantum_dimension.(tree_irreps) == size.(trees, 4)
   @test GradedAxes.unlabel.(BlockArrays.blocklengths(rep)) == size.(trees, 5)
 
-  s_nt = Sectors.sector(; A=Sectors.SU((1, 0)), B=Sectors.SU((1,)), C=Sectors.U1(1))
+  s_nt = SymmetrySectors.SectorProduct(;
+    A=SymmetrySectors.SU((1, 0)), B=SymmetrySectors.SU((1,)), C=SymmetrySectors.U1(1)
+  )
   irreps_nt = (s_nt, s_nt, s_nt)
   trees_nt, tree_irreps_nt = fusion_trees(irreps_nt, isdual)
   rep_nt = reduce(GradedAxes.fusion_product, irreps_nt)
   @test GradedAxes.blocklabels(rep_nt) == tree_irreps_nt
-  @test Sectors.quantum_dimension.(tree_irreps_nt) == size.(trees_nt, 4)
+  @test SymmetrySectors.quantum_dimension.(tree_irreps_nt) == size.(trees_nt, 4)
   @test GradedAxes.unlabel.(BlockArrays.blocklengths(rep_nt)) == size.(trees_nt, 5)
 end
 end

@@ -15,8 +15,8 @@ using NDTensors.FusionTensors:
   ndims_domain,
   ndims_codomain,
   check_sanity
-using NDTensors.GradedAxes: dual, fusion_product, gradedisequal, gradedrange
-using NDTensors.Sectors: U1
+using NDTensors.GradedAxes: dual, fusion_product, space_isequal, gradedrange
+using NDTensors.SymmetrySectors: U1
 
 @testset "Fusion matrix" begin
   g1 = gradedrange([U1(0) => 1, U1(1) => 2, U1(2) => 3])
@@ -24,8 +24,8 @@ using NDTensors.Sectors: U1
 
   # check dual convention when initializing data_matrix
   ft0 = FusionTensor(Float64, (dual(g1),), (g2,))
-  @test gradedisequal(matrix_row_axis(ft0), dual(g1))
-  @test gradedisequal(matrix_column_axis(ft0), g2)
+  @test space_isequal(matrix_row_axis(ft0), dual(g1))
+  @test space_isequal(matrix_column_axis(ft0), g2)
 
   m = BlockSparseArray{Float64}(dual(g1), g2)
   ft1 = FusionTensor(m, (dual(g1),), (g2,))
@@ -40,8 +40,8 @@ using NDTensors.Sectors: U1
   @test ndims_domain(ft1) == 1
   @test ndims_codomain(ft1) == 1
   @test matrix_size(ft1) == (6, 5)
-  @test gradedisequal(matrix_row_axis(ft1), dual((g1)))
-  @test gradedisequal(matrix_column_axis(ft1), g2)
+  @test space_isequal(matrix_row_axis(ft1), dual((g1)))
+  @test space_isequal(matrix_column_axis(ft1), g2)
   @test isnothing(check_sanity(ft0))
   @test isnothing(check_sanity(ft1))
 
@@ -108,8 +108,8 @@ end
   @test ndims_domain(ft) == 2
   @test ndims_codomain(ft) == 2
   @test matrix_size(ft) == (30, 12)
-  @test gradedisequal(matrix_row_axis(ft), gr)
-  @test gradedisequal(matrix_column_axis(ft), gc)
+  @test space_isequal(matrix_row_axis(ft), gr)
+  @test space_isequal(matrix_column_axis(ft), gc)
   @test isnothing(check_sanity(ft))
 
   @test ndims(ft) == 4
@@ -166,46 +166,46 @@ end
   ft4 = ft3 + ft3
   @test domain_axes(ft4) === domain_axes(ft3)
   @test codomain_axes(ft4) === codomain_axes(ft3)
-  @test gradedisequal(matrix_row_axis(ft4), matrix_row_axis(ft3))
-  @test gradedisequal(matrix_column_axis(ft4), matrix_column_axis(ft3))
+  @test space_isequal(matrix_row_axis(ft4), matrix_row_axis(ft3))
+  @test space_isequal(matrix_column_axis(ft4), matrix_column_axis(ft3))
   @test isnothing(check_sanity(ft4))
 
   ft4 = ft3 - ft3
   @test domain_axes(ft4) === domain_axes(ft3)
   @test codomain_axes(ft4) === codomain_axes(ft3)
-  @test gradedisequal(matrix_row_axis(ft4), matrix_row_axis(ft3))
-  @test gradedisequal(matrix_column_axis(ft4), matrix_column_axis(ft3))
+  @test space_isequal(matrix_row_axis(ft4), matrix_row_axis(ft3))
+  @test space_isequal(matrix_column_axis(ft4), matrix_column_axis(ft3))
   @test isnothing(check_sanity(ft4))
 
   ft4 = 2 * ft3
   @test domain_axes(ft4) === domain_axes(ft3)
   @test codomain_axes(ft4) === codomain_axes(ft3)
-  @test gradedisequal(matrix_row_axis(ft4), matrix_row_axis(ft3))
-  @test gradedisequal(matrix_column_axis(ft4), matrix_column_axis(ft3))
+  @test space_isequal(matrix_row_axis(ft4), matrix_row_axis(ft3))
+  @test space_isequal(matrix_column_axis(ft4), matrix_column_axis(ft3))
   @test isnothing(check_sanity(ft4))
   @test eltype(ft4) == Float64
 
   ft4 = 2.0 * ft3
   @test domain_axes(ft4) === domain_axes(ft3)
   @test codomain_axes(ft4) === codomain_axes(ft3)
-  @test gradedisequal(matrix_row_axis(ft4), matrix_row_axis(ft3))
-  @test gradedisequal(matrix_column_axis(ft4), matrix_column_axis(ft3))
+  @test space_isequal(matrix_row_axis(ft4), matrix_row_axis(ft3))
+  @test space_isequal(matrix_column_axis(ft4), matrix_column_axis(ft3))
   @test isnothing(check_sanity(ft4))
   @test eltype(ft4) == Float64
 
   ft4 = ft3 / 2.0
   @test domain_axes(ft4) === domain_axes(ft3)
   @test codomain_axes(ft4) === codomain_axes(ft3)
-  @test gradedisequal(matrix_row_axis(ft4), matrix_row_axis(ft3))
-  @test gradedisequal(matrix_column_axis(ft4), matrix_column_axis(ft3))
+  @test space_isequal(matrix_row_axis(ft4), matrix_row_axis(ft3))
+  @test space_isequal(matrix_column_axis(ft4), matrix_column_axis(ft3))
   @test isnothing(check_sanity(ft4))
   @test eltype(ft4) == Float64
 
   ft5 = 2.0im * ft3
   @test domain_axes(ft5) === domain_axes(ft3)
   @test codomain_axes(ft5) === codomain_axes(ft3)
-  @test gradedisequal(matrix_row_axis(ft5), matrix_row_axis(ft3))
-  @test gradedisequal(matrix_column_axis(ft5), matrix_column_axis(ft3))
+  @test space_isequal(matrix_row_axis(ft5), matrix_row_axis(ft3))
+  @test space_isequal(matrix_column_axis(ft5), matrix_column_axis(ft3))
   @test isnothing(check_sanity(ft4))
   @test eltype(ft5) == ComplexF64
 
@@ -217,18 +217,18 @@ end
   @test isnothing(check_sanity(ft6))
   @test domain_axes(ft6) === domain_axes(ft5)
   @test codomain_axes(ft6) === codomain_axes(ft5)
-  @test gradedisequal(matrix_row_axis(ft6), matrix_row_axis(ft5))
-  @test gradedisequal(matrix_column_axis(ft6), matrix_column_axis(ft5))
+  @test space_isequal(matrix_row_axis(ft6), matrix_row_axis(ft5))
+  @test space_isequal(matrix_column_axis(ft6), matrix_column_axis(ft5))
   @test eltype(ft6) == ComplexF64
 
   ad = adjoint(ft3)
   @test ad isa FusionTensor
   @test ndims_domain(ad) == 2
   @test ndims_codomain(ad) == 2
-  @test gradedisequal(dual(g1), codomain_axes(ad)[1])
-  @test gradedisequal(dual(g2), codomain_axes(ad)[2])
-  @test gradedisequal(dual(g3), domain_axes(ad)[1])
-  @test gradedisequal(dual(g4), domain_axes(ad)[2])
+  @test space_isequal(dual(g1), codomain_axes(ad)[1])
+  @test space_isequal(dual(g2), codomain_axes(ad)[2])
+  @test space_isequal(dual(g3), domain_axes(ad)[1])
+  @test space_isequal(dual(g4), domain_axes(ad)[2])
   @test isnothing(check_sanity(ad))
 end
 end

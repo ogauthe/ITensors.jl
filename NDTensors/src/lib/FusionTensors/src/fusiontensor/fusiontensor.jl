@@ -48,7 +48,7 @@ codomain_axes(ft::FusionTensor) = ft.codomain_axes
 ndims_domain(ft::FusionTensor) = length(domain_axes(ft))
 ndims_codomain(ft::FusionTensor) = length(codomain_axes(ft))
 
-matrix_size(ft::FusionTensor) = Sectors.quantum_dimension.(axes(data_matrix(ft)))
+matrix_size(ft::FusionTensor) = SymmetrySectors.quantum_dimension.(axes(data_matrix(ft)))
 matrix_row_axis(ft::FusionTensor) = first(axes(data_matrix(ft)))
 matrix_column_axis(ft::FusionTensor) = last(axes(data_matrix(ft)))
 
@@ -62,19 +62,19 @@ function initialize_matrix_axes(domain_legs::Tuple, codomain_legs::Tuple)
 end
 
 function initialize_matrix_axes(::Tuple{}, codomain_legs::Tuple)
-  mat_row_axis = GradedAxes.dual(Sectors.trivial(first(codomain_legs)))
+  mat_row_axis = GradedAxes.dual(SymmetrySectors.trivial(first(codomain_legs)))
   mat_col_axis = GradedAxes.fusion_product(codomain_legs...)
   return mat_row_axis, mat_col_axis
 end
 
 function initialize_matrix_axes(domain_legs::Tuple, ::Tuple{})
   mat_row_axis = GradedAxes.dual(GradedAxes.fusion_product(domain_legs...))
-  mat_col_axis = Sectors.trivial(first(domain_legs))
+  mat_col_axis = SymmetrySectors.trivial(first(domain_legs))
   return mat_row_axis, mat_col_axis
 end
 
 function initialize_matrix_axes(::Tuple{}, ::Tuple{})
-  mat_col_axis = GradedAxes.gradedrange([Sectors.sector() => 1])
+  mat_col_axis = GradedAxes.gradedrange([SymmetrySectors.TrivialSector() => 1])
   mat_row_axis = GradedAxes.dual(mat_col_axis)
   return mat_row_axis, mat_col_axis
 end
@@ -99,8 +99,8 @@ function check_data_matrix_axes(
   mat::BlockSparseArrays.BlockSparseMatrix, domain_legs::Tuple, codomain_legs::Tuple
 )
   rg, cg = initialize_matrix_axes(domain_legs, codomain_legs)
-  @assert GradedAxes.gradedisequal(rg, axes(mat, 1))
-  @assert GradedAxes.gradedisequal(cg, axes(mat, 2))
+  @assert GradedAxes.space_isequal(rg, axes(mat, 1))
+  @assert GradedAxes.space_isequal(cg, axes(mat, 2))
 end
 
 function check_data_matrix_axes(
@@ -143,5 +143,5 @@ end
 matching_dual(axes1::Tuple, axes2::Tuple) = matching_axes(GradedAxes.dual.(axes1), axes2)
 matching_axes(axes1::Tuple, axes2::Tuple) = false
 function matching_axes(axes1::T, axes2::T) where {T<:Tuple}
-  return all(GradedAxes.gradedisequal.(axes1, axes2))
+  return all(GradedAxes.space_isequal.(axes1, axes2))
 end

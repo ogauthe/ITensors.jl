@@ -5,7 +5,7 @@ using Test: @test, @testset, @test_broken
 using NDTensors.BlockSparseArrays: BlockSparseArray
 using NDTensors.FusionTensors: FusionTensor, domain_axes, codomain_axes, check_sanity
 using NDTensors.GradedAxes: GradedAxes
-using NDTensors.Sectors: U1
+using NDTensors.SymmetrySectors: U1
 using NDTensors.TensorAlgebra: TensorAlgebra
 
 @testset "contraction" begin

@@ -6,11 +6,11 @@ using BlockArrays: BlockArrays
 
 using NDTensors.FusionTensors: FusionTensor, check_sanity, data_matrix
 using NDTensors.GradedAxes: GradedAxes
-using NDTensors.Sectors: O2, SU2, U1, sector
+using NDTensors.SymmetrySectors: O2, SectorProduct, SU2, TrivialSector, U1
 
 @testset "Empty FusionTensor" begin
   @testset "trivial matrix" begin
-    g = GradedAxes.gradedrange([sector() => 1])
+    g = GradedAxes.gradedrange([TrivialSector() => 1])
     gb = GradedAxes.dual(g)
     m = ones((1, 1))
     ft = FusionTensor(m, (gb,), (g,))
@@ -23,10 +23,10 @@ using NDTensors.Sectors: O2, SU2, U1, sector
   end
 
   @testset "several axes, one block" begin
-    g1 = GradedAxes.gradedrange([sector() => 2])
-    g2 = GradedAxes.gradedrange([sector() => 3])
-    g3 = GradedAxes.gradedrange([sector() => 4])
-    g4 = GradedAxes.gradedrange([sector() => 2])
+    g1 = GradedAxes.gradedrange([TrivialSector() => 2])
+    g2 = GradedAxes.gradedrange([TrivialSector() => 3])
+    g3 = GradedAxes.gradedrange([TrivialSector() => 4])
+    g4 = GradedAxes.gradedrange([TrivialSector() => 2])
     domain_legs = GradedAxes.dual.((g1, g2))
     codomain_legs = (g3, g4)
     t = convert.(Float64, reshape(collect(1:48), (2, 3, 4, 2)))
@@ -324,19 +324,21 @@ end
       tRVB[i, 1, 1, 1, i + 1] = 1.0
     end
 
-    gd = GradedAxes.gradedrange([sector(s, U1(3)) => 1])
+    gd = GradedAxes.gradedrange([SectorProduct(s, U1(3)) => 1])
     domain_legs = (GradedAxes.dual(gd),)
-    gD = GradedAxes.gradedrange([sector(SU2(0), U1(1)) => 1, sector(s, U1(0)) => 1])
+    gD = GradedAxes.gradedrange([
+      SectorProduct(SU2(0), U1(1)) => 1, SectorProduct(s, U1(0)) => 1
+    ])
     codomain_legs = (gD, gD, gD, gD)
     ft = FusionTensor(tRVB, domain_legs, codomain_legs)
     @test isnothing(check_sanity(ft))
     @test Array(ft) ≈ tRVB
 
     # same with NamedTuples
-    gd_nt = GradedAxes.gradedrange([sector(; S=s, N=U1(3)) => 1])
+    gd_nt = GradedAxes.gradedrange([SectorProduct(; S=s, N=U1(3)) => 1])
     domain_legs_nt = (GradedAxes.dual(gd_nt),)
     gD_nt = GradedAxes.gradedrange([
-      sector(; S=SU2(0), N=U1(1)) => 1, sector(; S=s, N=U1(0)) => 1
+      SectorProduct(; S=SU2(0), N=U1(1)) => 1, SectorProduct(; S=s, N=U1(0)) => 1
     ])
     codomain_legs_nt = (gD_nt, gD_nt, gD_nt, gD_nt)
     ft_nt = FusionTensor(tRVB, domain_legs_nt, codomain_legs_nt)

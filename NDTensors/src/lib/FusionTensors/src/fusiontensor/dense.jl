@@ -4,7 +4,7 @@
 
 #### cast from dense to symmetric
 function FusionTensor(dense::AbstractArray, domain_legs::Tuple, codomain_legs::Tuple)
-  bounds = Sectors.block_dimensions.((domain_legs..., codomain_legs...))
+  bounds = SymmetrySectors.block_dimensions.((domain_legs..., codomain_legs...))
   blockarray = BlockArrays.BlockedArray(dense, bounds...)
   return FusionTensor(blockarray, domain_legs, codomain_legs)
 end
@@ -29,7 +29,8 @@ function cast_from_dense(
   if length(domain_legs) + length(codomain_legs) != ndims(blockarray)  # compile time
     throw(DomainError("legs are incompatible with array ndims"))
   end
-  if Sectors.quantum_dimension.((domain_legs..., codomain_legs...)) != size(blockarray)
+  if SymmetrySectors.quantum_dimension.((domain_legs..., codomain_legs...)) !=
+    size(blockarray)
     throw(DomainError("legs dimensions are incompatible with array"))
   end
 
@@ -43,7 +44,7 @@ function cast_to_dense(ft::FusionTensor)
 end
 
 function cast_to_dense(data_mat::AbstractMatrix, domain_legs::Tuple, codomain_legs::Tuple)
-  bounds = Sectors.block_dimensions.((domain_legs..., codomain_legs...))
+  bounds = SymmetrySectors.block_dimensions.((domain_legs..., codomain_legs...))
   blockarray = BlockSparseArrays.BlockSparseArray{eltype(data_mat)}(
     BlockArrays.blockedrange.(bounds)
   )
@@ -80,7 +81,7 @@ function split_axes(legs::Tuple)
   arrows = GradedAxes.isdual.(legs)
   irreps = GradedAxes.blocklabels.(legs)
   degens = BlockArrays.blocklengths.(legs)
-  dimensions = broadcast.(Sectors.quantum_dimension, irreps)
+  dimensions = broadcast.(SymmetrySectors.quantum_dimension, irreps)
   return arrows, irreps, degens, dimensions
 end
 
@@ -488,7 +489,7 @@ end
 
 function fill_blockarray!(
   blockarray::BlockArrays.AbstractBlockArray,
-  existing_sectors::Vector{<:Sectors.AbstractCategory},
+  existing_sectors::Vector{<:SymmetrySectors.AbstractSector},
   existing_matrix_blocks::Vector{<:AbstractMatrix},
   domain_legs::Tuple,
   codomain_legs::Tuple,

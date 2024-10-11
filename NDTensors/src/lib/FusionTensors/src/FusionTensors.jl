@@ -8,7 +8,7 @@ using WignerSymbols: WignerSymbols
 
 using NDTensors.BlockSparseArrays: BlockSparseArrays
 using NDTensors.GradedAxes: GradedAxes
-using NDTensors.Sectors: Sectors, ⊗
+using NDTensors.SymmetrySectors: SymmetrySectors, ⊗
 using NDTensors.TensorAlgebra: TensorAlgebra
 
 include("fusiontrees/clebsch_gordan.jl")

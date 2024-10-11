@@ -81,9 +81,9 @@ function merge_tree_leaves(a::AbstractArray)
 end
 
 function unmerge_tree_leaves(
-  tree::AbstractArray{<:Real,3}, irreps::NTuple{<:Any,<:Sectors.AbstractCategory}
+  tree::AbstractArray{<:Real,3}, irreps::NTuple{<:Any,<:SymmetrySectors.AbstractSector}
 )
-  irreps_shape = Sectors.quantum_dimension.(irreps)
+  irreps_shape = SymmetrySectors.quantum_dimension.(irreps)
   return unmerge_tree_leaves(tree, irreps_shape)
 end
 
@@ -98,7 +98,7 @@ function get_tree!(
   irreps_vectors::NTuple{N,Vector{C}},
   tree_arrows::NTuple{N,Bool},
   allowed_sectors::Vector{C},
-) where {N,C<:Sectors.AbstractCategory}
+) where {N,C<:SymmetrySectors.AbstractSector}
   get!(cache, it) do
     compute_pruned_leavesmerged_fusion_trees(
       getindex.(irreps_vectors, it), tree_arrows, allowed_sectors
@@ -112,7 +112,7 @@ function get_tree!(
   irreps_vectors::NTuple{N,Vector{C}},
   tree_arrows::NTuple{N,Bool},
   allowed_sectors::Vector{C},
-) where {N,C<:Sectors.AbstractCategory}
+) where {N,C<:SymmetrySectors.AbstractSector}
   get!(cache, it) do
     compute_pruned_fusion_trees(getindex.(irreps_vectors, it), tree_arrows, allowed_sectors)
   end
@@ -120,18 +120,20 @@ end
 
 function compute_pruned_leavesmerged_fusion_trees(
   irreps::NTuple{N,C}, tree_arrows::NTuple{N,Bool}, target_sectors::Vector{C}
-) where {N,C<:Sectors.AbstractCategory}
+) where {N,C<:SymmetrySectors.AbstractSector}
   return merge_tree_leaves.(
     compute_pruned_fusion_trees(irreps, tree_arrows, target_sectors)
   )
 end
 
 function compute_pruned_fusion_trees(
-  ::Tuple{}, ::Tuple{}, target_sectors::Vector{<:Sectors.AbstractCategory}
+  ::Tuple{}, ::Tuple{}, target_sectors::Vector{<:SymmetrySectors.AbstractSector}
 )
   @assert issorted(target_sectors, lt=!isless, rev=true)  # strict
-  trees_sector = [zeros((Sectors.quantum_dimension(sec), 0)) for sec in target_sectors]
-  i0 = findfirst(==(Sectors.trivial(eltype(target_sectors))), target_sectors)
+  trees_sector = [
+    zeros((SymmetrySectors.quantum_dimension(sec), 0)) for sec in target_sectors
+  ]
+  i0 = findfirst(==(SymmetrySectors.trivial(eltype(target_sectors))), target_sectors)
   if !isnothing(i0)
     trees_sector[i0] = ones((1, 1))
   end
@@ -140,12 +142,13 @@ end
 
 function compute_pruned_fusion_trees(
   irreps::NTuple{N,C}, tree_arrows::NTuple{N,Bool}, target_sectors::Vector{C}
-) where {N,C<:Sectors.AbstractCategory}
+) where {N,C<:SymmetrySectors.AbstractSector}
   @assert issorted(target_sectors, lt=!isless, rev=true)  # strict
-  irreps_dims = Sectors.quantum_dimension.(irreps)
+  irreps_dims = SymmetrySectors.quantum_dimension.(irreps)
   trees, tree_irreps = fusion_trees(irreps, tree_arrows)
   trees_sector = [
-    zeros((irreps_dims..., Sectors.quantum_dimension(sec), 0)) for sec in target_sectors
+    zeros((irreps_dims..., SymmetrySectors.quantum_dimension(sec), 0)) for
+    sec in target_sectors
   ]
   i_sec, j = 1, 1
   while i_sec <= lastindex(target_sectors) && j <= lastindex(tree_irreps)
@@ -164,39 +167,39 @@ end
 
 # ================================  Low level interface  ===================================
 function fusion_trees(::Tuple{}, ::Tuple{})
-  return [ones((1, 1))], [Sectors.sector()]
+  return [ones((1, 1))], [SymmetrySectors.sector()]
 end
 
 function fusion_trees(
-  ::NTuple{N,Sectors.CategoryProduct{Tuple{}}}, ::NTuple{N,Bool}
+  ::NTuple{N,SymmetrySectors.SectorProduct{Tuple{}}}, ::NTuple{N,Bool}
 ) where {N}
-  return [ones(ntuple(_ -> 1, N + 2))], [Sectors.sector()]
+  return [ones(ntuple(_ -> 1, N + 2))], [SymmetrySectors.sector()]
 end
 
 function fusion_trees(
-  irreps::NTuple{N,<:Sectors.CategoryProduct}, tree_arrows::NTuple{N,Bool}
+  irreps::NTuple{N,<:SymmetrySectors.SectorProduct}, tree_arrows::NTuple{N,Bool}
 ) where {N}
-  # for CategoryProduct, either compute tree(kron( CG tensor for each category))
-  # or kron( tree(CG tensor 1 category) for each category).
-  # second option allows for easy handling of Abelian groups and should be more efficient
-  category_irreps = Sectors.categories.(irreps)
-  n_cat = length(first(category_irreps))
+  # construct fusion_tree(SectorProduct) as kron(fusion_trees(inner_sectors))
 
-  # construct fusion tree for each category
-  transposed_cats = ntuple(c -> getindex.(category_irreps, c), n_cat)
-  category_trees_irreps = fusion_trees.(transposed_cats, Ref(tree_arrows))
+  sector_irreps = SymmetrySectors.product_sectors.(irreps)
+  n_cat = length(first(sector_irreps))
+
+  # construct fusion tree for each sector
+  transposed_cats = ntuple(c -> getindex.(sector_irreps, c), n_cat)
+  sector_trees_irreps = fusion_trees.(transposed_cats, Ref(tree_arrows))
 
   # reconstruct sector for each product tree
+  T = eltype(sector_irreps)
   tree_irreps = map(
-    cats -> Sectors.sector(eltype(category_irreps), cats),
-    Iterators.flatten((Iterators.product((getindex.(category_trees_irreps, 2))...),),),
+    cats -> SymmetrySectors.SectorProduct(T(cats)),
+    Iterators.flatten((Iterators.product((getindex.(sector_trees_irreps, 2))...),),),
   )
 
   # compute Kronecker product of fusion trees
-  trees = trees_kron(getindex.(category_trees_irreps, 1)...)
+  trees = trees_kron(getindex.(sector_trees_irreps, 1)...)
 
-  # sort irreps. Each category is sorted, permutation is obtained by reversing loop order
-  perm = f_to_c_perm(getindex.(category_trees_irreps, 2))
+  # sort irreps. Each sector is sorted, permutation is obtained by reversing loop order
+  perm = f_to_c_perm(getindex.(sector_trees_irreps, 2))
   tree_irreps = getindex.(Ref(tree_irreps), perm)
   trees = getindex.(Ref(trees), perm)
 
@@ -204,27 +207,27 @@ function fusion_trees(
 end
 
 function fusion_trees(
-  irreps::NTuple{N,<:Sectors.AbstractCategory}, tree_arrows::NTuple{N,Bool}
+  irreps::NTuple{N,<:SymmetrySectors.AbstractSector}, tree_arrows::NTuple{N,Bool}
 ) where {N}
-  return fusion_trees(Sectors.SymmetryStyle(first(irreps)), irreps, tree_arrows)
+  return fusion_trees(SymmetrySectors.SymmetryStyle(first(irreps)), irreps, tree_arrows)
 end
 
 # =====================================  Internals  ========================================
 
 # fusion tree for an Abelian group is trivial
 # it does not depend on arrow directions
-function fusion_trees(::Sectors.AbelianGroup, irreps::Tuple, ::Tuple)
+function fusion_trees(::SymmetrySectors.AbelianStyle, irreps::Tuple, ::Tuple)
   irrep_prod = reduce(⊗, irreps)
   return [ones(ntuple(_ -> 1, length(irreps) + 2))], [irrep_prod]
 end
 
 function build_trees(
   old_tree::Matrix,
-  old_irrep::Sectors.AbstractCategory,
-  level_irrep::Sectors.AbstractCategory,
+  old_irrep::SymmetrySectors.AbstractSector,
+  level_irrep::SymmetrySectors.AbstractSector,
   level_arrow::Bool,
   inner_multiplicity::Integer,
-  sec::Sectors.AbstractCategory,
+  sec::SymmetrySectors.AbstractSector,
 )
   sector_trees = Vector{typeof(old_tree)}()
   for inner_mult_index in 1:inner_multiplicity
@@ -241,8 +244,8 @@ end
 
 function build_trees(
   old_tree::Matrix,
-  old_irrep::Sectors.AbstractCategory,
-  level_irrep::Sectors.AbstractCategory,
+  old_irrep::SymmetrySectors.AbstractSector,
+  level_irrep::SymmetrySectors.AbstractSector,
   level_arrow::Bool,
 )
   new_trees = Vector{typeof(old_tree)}()
@@ -260,7 +263,10 @@ function build_trees(
 end
 
 function build_trees(
-  trees::Vector, irreps::Vector, level_irrep::Sectors.AbstractCategory, level_arrow::Bool
+  trees::Vector,
+  irreps::Vector,
+  level_irrep::SymmetrySectors.AbstractSector,
+  level_arrow::Bool,
 )
   next_level_trees = typeof(trees)()
   next_level_irreps = typeof(irreps)()
@@ -286,12 +292,14 @@ end
 function compute_thin_trees(irreps::Tuple, tree_arrows::Tuple)
   # init from trivial, NOT from first(irreps) to get first arrow correct
   thin_trees = [ones((1, 1))]
-  tree_irreps = [Sectors.trivial(first(irreps))]
+  tree_irreps = [SymmetrySectors.trivial(first(irreps))]
   return build_trees(thin_trees, tree_irreps, irreps, tree_arrows)
 end
 
 function cat_thin_trees(
-  thin_trees::Vector, uncat_tree_irreps::Vector, sector_irrep::Sectors.AbstractCategory
+  thin_trees::Vector,
+  uncat_tree_irreps::Vector,
+  sector_irrep::SymmetrySectors.AbstractSector,
 )
   indices_irrep = findall(==(sector_irrep), uncat_tree_irreps)
   thin_trees_irrep = getindex.(Ref(thin_trees), indices_irrep)
@@ -309,14 +317,14 @@ function cat_thin_trees(thin_trees::Vector, uncat_tree_irreps::Vector)
 end
 
 # arrow direction is needed to define CG tensor for Lie groups
-function fusion_trees(::Sectors.NonAbelianGroup, irreps::Tuple, tree_arrows::Tuple)
+function fusion_trees(::SymmetrySectors.NotAbelianStyle, irreps::Tuple, tree_arrows::Tuple)
   # compute "thin" trees: 1 tree = fuses on ONE irrep
   thin_trees, uncat_tree_irreps = compute_thin_trees(irreps, tree_arrows)
 
   # cat thin trees into "thick" trees
   thick_mergedleaves_trees, tree_irreps = cat_thin_trees(thin_trees, uncat_tree_irreps)
 
-  irrep_dims = Sectors.quantum_dimension.(irreps)
+  irrep_dims = SymmetrySectors.quantum_dimension.(irreps)
   thick_trees = map(tree -> unmerge_tree_leaves(tree, irrep_dims), thick_mergedleaves_trees)
   return thick_trees, tree_irreps
 end

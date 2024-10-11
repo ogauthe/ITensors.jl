@@ -3,7 +3,7 @@ using Test: @test, @testset
 
 using NDTensors.FusionTensors: FusionTensor, ndims_domain, check_sanity, matching_axes
 using NDTensors.GradedAxes
-using NDTensors.Sectors: U1
+using NDTensors.SymmetrySectors: U1
 
 @testset "permutedims" begin
   g1 = GradedAxes.gradedrange([U1(0) => 1, U1(1) => 2, U1(2) => 3])

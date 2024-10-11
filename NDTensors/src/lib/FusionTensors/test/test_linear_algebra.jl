@@ -7,7 +7,7 @@ using BlockArrays: BlockArrays
 using NDTensors.BlockSparseArrays: BlockSparseArrays
 using NDTensors.FusionTensors: FusionTensor, check_sanity
 using NDTensors.GradedAxes
-using NDTensors.Sectors: U1, SU2, sector
+using NDTensors.SymmetrySectors: U1, SU2, TrivialSector
 
 @testset "LinearAlgebra interface" begin
   sds22 = [
@@ -18,7 +18,7 @@ using NDTensors.Sectors: U1, SU2, sector
   ]
   sdst = reshape(sds22, (2, 2, 2, 2))
 
-  g0 = GradedAxes.gradedrange([sector() => 2])
+  g0 = GradedAxes.gradedrange([TrivialSector() => 2])
   gu1 = GradedAxes.gradedrange([U1(1) => 1, U1(-1) => 1])
   gsu2 = GradedAxes.gradedrange([SU2(1 / 2) => 1])
 

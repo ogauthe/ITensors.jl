@@ -1,9 +1,9 @@
 # This file defines helper functions to access FusionTensor internal structures
 
-find_category_type(g, x...) = eltype(GradedAxes.blocklabels(g))
-find_category_type() = typeof(Sectors.sector())
+find_sector_type(g, x...) = eltype(GradedAxes.blocklabels(g))
+find_sector_type() = SymmetrySectors.TrivialSector
 function fuse_axes(domain_legs, codomain_legs)
-  cat_type = find_category_type(domain_legs..., codomain_legs...)
+  cat_type = find_sector_type(domain_legs..., codomain_legs...)
   domain_fused_axes = FusedAxes(domain_legs, cat_type)
   codomain_fused_axes = FusedAxes(codomain_legs, cat_type)
   return domain_fused_axes, codomain_fused_axes
@@ -16,7 +16,7 @@ struct FusedAxes{A,B,C,D}
   inner_block_indices::D
 
   function FusedAxes(
-    outer_legs::Tuple{Vararg{AbstractUnitRange}}, t::Type{<:Sectors.AbstractCategory}
+    outer_legs::Tuple{Vararg{AbstractUnitRange}}, t::Type{<:SymmetrySectors.AbstractSector}
   )
     @assert all(eltype.(GradedAxes.blocklabels.(outer_legs)) .== t)
     fused_axis, inner_ranges = compute_inner_ranges(outer_legs)
@@ -28,7 +28,7 @@ struct FusedAxes{A,B,C,D}
     )
   end
 
-  function FusedAxes(::Tuple{}, t::Type{<:Sectors.AbstractCategory})
+  function FusedAxes(::Tuple{}, t::Type{<:SymmetrySectors.AbstractSector})
     fused_axis, inner_ranges = compute_inner_ranges(t)
     inner_block_indices = [()]
     return new{Tuple{},typeof(fused_axis),typeof(inner_ranges),typeof(inner_block_indices)}(
@@ -48,9 +48,9 @@ Base.iterate(fa::FusedAxes) = iterate(inner_block_indices(fa))
 Base.iterate(fa::FusedAxes, x) = iterate(inner_block_indices(fa), x)
 Base.ndims(fa::FusedAxes) = length(outer_axes(fa))
 
-function compute_inner_ranges(t::Type{<:Sectors.AbstractCategory})
-  fused_axis = GradedAxes.gradedrange([Sectors.trivial(t) => 1])
-  inner_ranges = Dict([(1, Sectors.trivial(t)) => 1:1])
+function compute_inner_ranges(t::Type{<:SymmetrySectors.AbstractSector})
+  fused_axis = GradedAxes.gradedrange([SymmetrySectors.trivial(t) => 1])
+  inner_ranges = Dict([(1, SymmetrySectors.trivial(t)) => 1:1])
   return fused_axis, inner_ranges
 end
 
@@ -110,11 +110,13 @@ function find_shared_indices(a::AbstractVector{T}, b::AbstractVector{T}) where {
   return indices1, indices2
 end
 
-function find_block_range(fa::FusedAxes, outer_block, c::Sectors.AbstractCategory)
+function find_block_range(fa::FusedAxes, outer_block, c::SymmetrySectors.AbstractSector)
   i_block = translate_outer_block_to_inner(outer_block, fa)
   return find_block_range(fa, i_block, c)
 end
 
-function find_block_range(fa::FusedAxes, i_block::Integer, c::Sectors.AbstractCategory)
+function find_block_range(
+  fa::FusedAxes, i_block::Integer, c::SymmetrySectors.AbstractSector
+)
   return inner_ranges(fa)[i_block, c]
 end

@@ -139,7 +139,7 @@ function compute_unitaries_CG(
   new_codomain_irreps::NTuple{NewNCoAxes,Vector{C}},
   old_arrows::NTuple{N,Bool},
   flat_permutation::NTuple{N,Int},
-) where {N,OldNDoAxes,OldNCoAxes,NewNDoAxes,NewNCoAxes,C<:Sectors.AbstractCategory}
+) where {N,OldNDoAxes,OldNCoAxes,NewNDoAxes,NewNCoAxes,C<:SymmetrySectors.AbstractSector}
   perm1 = flat_permutation[begin:NewNDoAxes]
   perm2 = flat_permutation[(NewNDoAxes + 1):end]
 
@@ -257,7 +257,7 @@ function compute_unitaries_6j(
   old_codomain_sectors::NTuple{OldNCoAxes,Vector{C}},
   old_domain_sectors::NTuple{OldNDoAxes,Vector{C}},
   old_arrows::NTuple{N,Bool},
-) where {N,OldNCoAxes,OldNDoAxes,C<:Sectors.AbstractCategory}
+) where {N,OldNCoAxes,OldNDoAxes,C<:SymmetrySectors.AbstractSector}
   # this function has the same inputs and the same outputs as compute_unitaries_CG
 
   # dummy
