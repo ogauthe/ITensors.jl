@@ -1,12 +1,11 @@
-using BlockArrays: AbstractBlockedUnitRange
+using BlockArrays: AbstractBlockedUnitRange, blocklengths
 
 # Represents the range `1:1` or `Base.OneTo(1)`.
 struct OneToOne{T} <: AbstractUnitRange{T} end
 OneToOne() = OneToOne{Bool}()
 Base.first(a::OneToOne) = one(eltype(a))
 Base.last(a::OneToOne) = one(eltype(a))
-
-gradedisequal(::OneToOne, ::OneToOne) = true
+BlockArrays.blockaxes(g::OneToOne) = (Block.(g),)  # BlockArrays default crashes for OneToOne{Bool}
 
 # https://github.com/ITensor/ITensors.jl/blob/v0.3.57/NDTensors/src/lib/GradedAxes/src/tensor_product.jl
 # https://en.wikipedia.org/wiki/Tensor_product
@@ -20,8 +19,10 @@ function tensor_product(
   return foldl(tensor_product, (a1, a2, a3, a_rest...))
 end
 
-function tensor_product(::AbstractUnitRange, ::AbstractUnitRange)
-  return error("Not implemented yet.")
+flip_dual(r::AbstractUnitRange) = r
+flip_dual(r::UnitRangeDual) = flip(r)
+function tensor_product(a1::AbstractUnitRange, a2::AbstractUnitRange)
+  return tensor_product(flip_dual(a1), flip_dual(a2))
 end
 
 function tensor_product(a1::Base.OneTo, a2::Base.OneTo)
@@ -40,19 +41,6 @@ function tensor_product(::OneToOne, ::OneToOne)
   return OneToOne()
 end
 
-# Handle dual. Always return a non-dual GradedUnitRange.
-function tensor_product(a1::AbstractUnitRange, a2::UnitRangeDual)
-  return tensor_product(a1, flip(a2))
-end
-
-function tensor_product(a1::UnitRangeDual, a2::AbstractUnitRange)
-  return tensor_product(flip(a1), a2)
-end
-
-function tensor_product(a1::UnitRangeDual, a2::UnitRangeDual)
-  return tensor_product(flip(a1), flip(a2))
-end
-
 function fuse_labels(x, y)
   return error(
     "`fuse_labels` not implemented for object of type `$(typeof(x))` and `$(typeof(y))`."
@@ -60,33 +48,27 @@ function fuse_labels(x, y)
 end
 
 function fuse_blocklengths(x::Integer, y::Integer)
-  return x * y
+  # return blocked unit range to keep non-abelian interface
+  return blockedrange([x * y])
 end
 
 using ..LabelledNumbers: LabelledInteger, label, labelled, unlabel
 function fuse_blocklengths(x::LabelledInteger, y::LabelledInteger)
-  return labelled(unlabel(x) * unlabel(y), fuse_labels(label(x), label(y)))
+  # return blocked unit range to keep non-abelian interface
+  return blockedrange([labelled(x * y, fuse_labels(label(x), label(y)))])
 end
-
-flatten_maybe_nested(v::Vector{<:Integer}) = v
-flatten_maybe_nested(v::Vector{<:AbstractGradedUnitRange}) = reduce(vcat, blocklengths.(v))
 
 using BlockArrays: blockedrange, blocks
 function tensor_product(a1::AbstractBlockedUnitRange, a2::AbstractBlockedUnitRange)
-  maybe_nested = map(
-    it -> mapreduce(length, fuse_blocklengths, it),
-    Iterators.flatten((Iterators.product(blocks(a1), blocks(a2)),)),
-  )
-  blocklengths = flatten_maybe_nested(maybe_nested)
-  return blockedrange(blocklengths)
-end
-
-function blocksortperm(a::AbstractBlockedUnitRange)
-  return Block.(sortperm(blocklabels(a)))
+  nested = map(Iterators.flatten((Iterators.product(blocks(a1), blocks(a2)),))) do it
+    return mapreduce(length, fuse_blocklengths, it)
+  end
+  new_blocklengths = mapreduce(blocklengths, vcat, nested)
+  return blockedrange(new_blocklengths)
 end
 
 # convention: sort UnitRangeDual according to nondual blocks
-function blocksortperm(a::UnitRangeDual)
+function blocksortperm(a::AbstractUnitRange)
   return Block.(sortperm(blocklabels(nondual(a))))
 end
 
@@ -104,29 +86,24 @@ end
 # Used by `TensorAlgebra.splitdims` in `BlockSparseArraysGradedAxesExt`.
 # Get the permutation for sorting, then group by common elements.
 # groupsortperm([2, 1, 2, 3]) == [[2], [1, 3], [4]]
-function blockmergesortperm(a::AbstractBlockedUnitRange)
-  return Block.(groupsortperm(blocklabels(a)))
+function blockmergesortperm(a::AbstractUnitRange)
+  return Block.(groupsortperm(blocklabels(nondual(a))))
 end
 
 # Used by `TensorAlgebra.splitdims` in `BlockSparseArraysGradedAxesExt`.
 invblockperm(a::Vector{<:Block{1}}) = Block.(invperm(Int.(a)))
 
-function blockmergesortperm(a::UnitRangeDual)
-  return Block.(groupsortperm(blocklabels(nondual(a))))
-end
-
 function blockmergesort(g::AbstractGradedUnitRange)
   glabels = blocklabels(g)
   gblocklengths = blocklengths(g)
-  new_blocklengths = map(
-    la -> labelled(sum(gblocklengths[findall(==(la), glabels)]; init=0), la),
-    sort(unique(glabels)),
-  )
-  return GradedAxes.gradedrange(new_blocklengths)
+  new_blocklengths = map(sort(unique(glabels))) do la
+    return labelled(sum(gblocklengths[findall(==(la), glabels)]; init=0), la)
+  end
+  return gradedrange(new_blocklengths)
 end
 
-blockmergesort(g::UnitRangeDual) = dual(blockmergesort(flip(g)))
-blockmergesort(g::OneToOne) = g
+blockmergesort(g::UnitRangeDual) = flip(blockmergesort(flip(g)))
+blockmergesort(g::AbstractUnitRange) = g
 
 # fusion_product produces a sorted, non-dual GradedUnitRange
 function fusion_product(g1, g2)

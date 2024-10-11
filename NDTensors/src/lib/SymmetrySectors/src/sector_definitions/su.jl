@@ -2,7 +2,10 @@
 # Special unitary group SU(N)
 #
 
-struct SU{N,M} <: AbstractCategory
+using HalfIntegers: HalfInteger, half, twice
+using ...GradedAxes: GradedAxes
+
+struct SU{N,M} <: AbstractSector
   # l is the first row of the
   # Gelfand-Tsetlin (GT) pattern describing
   # an SU(N) irrep
@@ -20,9 +23,9 @@ end
 SU{N}(t::Tuple) where {N} = SU{N,length(t)}(t)
 SU(t::Tuple) = SU{length(t) + 1}(t)  # infer N from tuple length
 
-SymmetryStyle(::SU) = NonAbelianGroup()
+SymmetryStyle(::Type{<:SU}) = NotAbelianStyle()
 
-category_label(s::SU) = s.l
+sector_label(s::SU) = s.l
 
 groupdim(::SU{N}) where {N} = N
 
@@ -32,9 +35,9 @@ fundamental(::Type{<:SU{N}}) where {N} = SU{N}(ntuple(i -> i == 1, Val(N - 1)))
 
 adjoint(::Type{<:SU{N}}) where {N} = SU{N}((ntuple(i -> 1 + (i == 1), Val(N - 1))))
 
-function quantum_dimension(::NonAbelianGroup, s::SU)
+function quantum_dimension(::NotAbelianStyle, s::SU)
   N = groupdim(s)
-  l = (category_label(s)..., 0)
+  l = (sector_label(s)..., 0)
   d = 1
   for k1 in 1:N, k2 in (k1 + 1):N
     d *= ((k2 - k1) + (l[k1] - l[k2]))//(k2 - k1)
@@ -43,13 +46,13 @@ function quantum_dimension(::NonAbelianGroup, s::SU)
 end
 
 function GradedAxes.dual(s::SU)
-  l = category_label(s)
+  l = sector_label(s)
   nl = reverse(cumsum((l[begin:(end - 1)] .- l[(begin + 1):end]..., l[end])))
   return typeof(s)(nl)
 end
 
 function Base.show(io::IO, s::SU)
-  disp = join([string(l) for l in category_label(s)], ", ")
+  disp = join([string(l) for l in sector_label(s)], ", ")
   return print(io, "SU(", groupdim(s), ")[", disp, "]")
 end
 
@@ -60,7 +63,7 @@ function Base.show(io::IO, ::MIME"text/plain", s::SU)
   end
 
   N = groupdim(s)
-  l = category_label(s)
+  l = sector_label(s)
   println(io, "┌─" * "┬─"^(l[1] - 1) * "┐")
   i = 1
   while i < N - 1 && l[i + 1] != 0
@@ -84,26 +87,26 @@ end
 #
 
 # optimize implementation
-quantum_dimension(s::SU{2}) = category_label(s)[1] + 1
+quantum_dimension(s::SU{2}) = sector_label(s)[1] + 1
 
 GradedAxes.dual(s::SU{2}) = s
 
 function label_fusion_rule(::Type{<:SU{2}}, s1, s2)
-  labels = collect((i,) for i in (abs(s1[1] - s2[1])):2:(s1[1] + s2[1]))
-  degen = ones(Int, length(labels))
-  return degen, labels
+  irreps = [SU{2}((i,)) for i in (abs(s1[1] - s2[1])):2:(s1[1] + s2[1])]
+  degen = ones(Int, length(irreps))
+  return irreps .=> degen
 end
 
 # define angular momentum-like interface using half-integers
-SU2(h::Number) = SU{2,1}((HalfIntegers.twice(HalfIntegers.HalfInteger(h)),))
+SU2(h::Number) = SU{2}((twice(HalfInteger(h)),))
 
 # display SU2 using half-integers
 function Base.show(io::IO, s::SU{2})
-  return print(io, "SU(2)[S=", HalfIntegers.half(quantum_dimension(s) - 1), "]")
+  return print(io, "SU(2)[S=", half(quantum_dimension(s) - 1), "]")
 end
 
 function Base.show(io::IO, ::MIME"text/plain", s::SU{2})
-  return print(io, "S = ", HalfIntegers.half(quantum_dimension(s) - 1))
+  return print(io, "S = ", half(quantum_dimension(s) - 1))
 end
 
 #
@@ -120,7 +123,7 @@ function label_fusion_rule(::Type{<:SU{3}}, left, right)
   end
 
   if right[1] == 0  # avoid issues with singlet
-    return [1], [left]
+    return [SU{3}(left) => 1]
   end
 
   left_row1 = left[1]
@@ -169,6 +172,6 @@ function label_fusion_rule(::Type{<:SU{3}}, left, right)
 
   unique_labels = sort(unique(irreps))
   degen = [count(==(irr), irreps) for irr in unique_labels]
-
-  return degen, unique_labels
+  sectors = SU{3}.(unique_labels)
+  return sectors .=> degen
 end

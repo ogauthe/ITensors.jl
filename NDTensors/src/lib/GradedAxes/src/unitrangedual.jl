@@ -8,7 +8,7 @@ nondual(a::UnitRangeDual) = a.nondual_unitrange
 dual(a::UnitRangeDual) = nondual(a)
 flip(a::UnitRangeDual) = dual(flip(nondual(a)))
 nondual(a::AbstractUnitRange) = a
-isdual(::AbstractGradedUnitRange) = false
+isdual(::AbstractUnitRange) = false
 isdual(::UnitRangeDual) = true
 ## TODO: Define this to instantiate a dual unit range.
 ## materialize_dual(a::UnitRangeDual) = materialize_dual(nondual(a))
@@ -108,11 +108,6 @@ BlockArrays.findblock(a::UnitRangeDual, index::Integer) = findblock(nondual(a), 
 
 blocklabels(a::UnitRangeDual) = dual.(blocklabels(nondual(a)))
 
-gradedisequal(::UnitRangeDual, ::AbstractGradedUnitRange) = false
-gradedisequal(::AbstractGradedUnitRange, ::UnitRangeDual) = false
-function gradedisequal(a1::UnitRangeDual, a2::UnitRangeDual)
-  return gradedisequal(nondual(a1), nondual(a2))
-end
 function BlockArrays.combine_blockaxes(a1::UnitRangeDual, a2::UnitRangeDual)
   return dual(combine_blockaxes(dual(a1), dual(a2)))
 end
