@@ -3,7 +3,7 @@
 # =================================  High level interface  =================================
 # permutedims with 1 tuple of 2 separate tuples
 function fusiontensor_permutedims(ft::FusionTensor, new_leg_indices::Tuple{NTuple,NTuple})
-  return permutedims(ft, new_leg_indices[1], new_leg_indices[2])
+  return fusiontensor_permutedims(ft, new_leg_indices...)
 end
 
 # permutedims with 2 separate tuples
