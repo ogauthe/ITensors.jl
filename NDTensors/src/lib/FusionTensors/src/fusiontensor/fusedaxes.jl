@@ -16,9 +16,9 @@ struct FusedAxes{A,B,C,D}
   inner_block_indices::D
 
   function FusedAxes(
-    outer_legs::Tuple{Vararg{AbstractUnitRange}}, t::Type{<:SymmetrySectors.AbstractSector}
+    outer_legs::Tuple{Vararg{AbstractUnitRange}}, S::Type{<:SymmetrySectors.AbstractSector}
   )
-    @assert all(eltype.(GradedAxes.blocklabels.(outer_legs)) .== t)
+    @assert all(eltype.(GradedAxes.blocklabels.(outer_legs)) .== S)
     fused_axis, inner_ranges = compute_inner_ranges(outer_legs)
     inner_block_indices = Tuple.(CartesianIndices(BlockArrays.blocklength.(outer_legs)))
     return new{
@@ -28,8 +28,8 @@ struct FusedAxes{A,B,C,D}
     )
   end
 
-  function FusedAxes(::Tuple{}, t::Type{<:SymmetrySectors.AbstractSector})
-    fused_axis, inner_ranges = compute_inner_ranges(t)
+  function FusedAxes(::Tuple{}, S::Type{<:SymmetrySectors.AbstractSector})
+    fused_axis, inner_ranges = compute_inner_ranges(S)
     inner_block_indices = [()]
     return new{Tuple{},typeof(fused_axis),typeof(inner_ranges),typeof(inner_block_indices)}(
       (), fused_axis, inner_ranges, inner_block_indices
@@ -48,9 +48,9 @@ Base.iterate(fa::FusedAxes) = iterate(inner_block_indices(fa))
 Base.iterate(fa::FusedAxes, x) = iterate(inner_block_indices(fa), x)
 Base.ndims(fa::FusedAxes) = length(outer_axes(fa))
 
-function compute_inner_ranges(t::Type{<:SymmetrySectors.AbstractSector})
-  fused_axis = GradedAxes.gradedrange([SymmetrySectors.trivial(t) => 1])
-  inner_ranges = Dict([(1, SymmetrySectors.trivial(t)) => 1:1])
+function compute_inner_ranges(S::Type{<:SymmetrySectors.AbstractSector})
+  fused_axis = GradedAxes.gradedrange([SymmetrySectors.trivial(S) => 1])
+  inner_ranges = Dict([(1, SymmetrySectors.trivial(S)) => 1:1])
   return fused_axis, inner_ranges
 end
 
@@ -110,13 +110,13 @@ function find_shared_indices(a::AbstractVector{T}, b::AbstractVector{T}) where {
   return indices1, indices2
 end
 
-function find_block_range(fa::FusedAxes, outer_block, c::SymmetrySectors.AbstractSector)
+function find_block_range(fa::FusedAxes, outer_block, s::SymmetrySectors.AbstractSector)
   i_block = translate_outer_block_to_inner(outer_block, fa)
-  return find_block_range(fa, i_block, c)
+  return find_block_range(fa, i_block, s)
 end
 
 function find_block_range(
-  fa::FusedAxes, i_block::Integer, c::SymmetrySectors.AbstractSector
+  fa::FusedAxes, i_block::Integer, s::SymmetrySectors.AbstractSector
 )
-  return inner_ranges(fa)[i_block, c]
+  return inner_ranges(fa)[i_block, s]
 end
