@@ -3,43 +3,39 @@
 find_sector_type(g, x...) = eltype(GradedAxes.blocklabels(g))
 find_sector_type() = SymmetrySectors.TrivialSector
 function fuse_axes(domain_legs, codomain_legs)
-  cat_type = find_sector_type(domain_legs..., codomain_legs...)
-  domain_fused_axes = FusedAxes(domain_legs, cat_type)
-  codomain_fused_axes = FusedAxes(codomain_legs, cat_type)
+  domain_fused_axes = FusedAxes(domain_legs)
+  codomain_fused_axes = FusedAxes(codomain_legs)
   return domain_fused_axes, codomain_fused_axes
 end
 
 struct FusedAxes{A,B,C,D}
   outer_axes::A
   fused_axis::B
-  inner_ranges::C
+  index_matrix::C
   inner_block_indices::D
 
-  function FusedAxes(
-    outer_legs::Tuple{Vararg{AbstractUnitRange}}, S::Type{<:SymmetrySectors.AbstractSector}
-  )
-    @assert all(eltype.(GradedAxes.blocklabels.(outer_legs)) .== S)
-    fused_axis, inner_ranges = compute_inner_ranges(outer_legs)
+  function FusedAxes(outer_legs::Tuple{Vararg{AbstractUnitRange}})
+    fused_axis, index_matrix = compute_inner_ranges(outer_legs)
     inner_block_indices = Tuple.(CartesianIndices(BlockArrays.blocklength.(outer_legs)))
     return new{
-      typeof(outer_legs),typeof(fused_axis),typeof(inner_ranges),typeof(inner_block_indices)
+      typeof(outer_legs),typeof(fused_axis),typeof(index_matrix),typeof(inner_block_indices)
     }(
-      outer_legs, fused_axis, inner_ranges, inner_block_indices
+      outer_legs, fused_axis, index_matrix, inner_block_indices
     )
   end
 
-  function FusedAxes(::Tuple{}, S::Type{<:SymmetrySectors.AbstractSector})
-    fused_axis, inner_ranges = compute_inner_ranges(S)
+  function FusedAxes(::Tuple{})
+    fused_axis, index_matrix = compute_inner_ranges(())
     inner_block_indices = [()]
-    return new{Tuple{},typeof(fused_axis),typeof(inner_ranges),typeof(inner_block_indices)}(
-      (), fused_axis, inner_ranges, inner_block_indices
+    return new{Tuple{},typeof(fused_axis),typeof(index_matrix),typeof(inner_block_indices)}(
+      (), fused_axis, index_matrix, inner_block_indices
     )
   end
 end
 
 # getters
 fused_axis(fa::FusedAxes) = fa.fused_axis
-inner_ranges(fa::FusedAxes) = fa.inner_ranges
+index_matrix(fa::FusedAxes) = fa.index_matrix
 inner_block_indices(fa::FusedAxes) = fa.inner_block_indices
 
 # Base interface
@@ -48,10 +44,10 @@ Base.iterate(fa::FusedAxes) = iterate(inner_block_indices(fa))
 Base.iterate(fa::FusedAxes, x) = iterate(inner_block_indices(fa), x)
 Base.ndims(fa::FusedAxes) = length(outer_axes(fa))
 
-function compute_inner_ranges(S::Type{<:SymmetrySectors.AbstractSector})
-  fused_axis = GradedAxes.gradedrange([SymmetrySectors.trivial(S) => 1])
-  inner_ranges = Dict([(1, SymmetrySectors.trivial(S)) => 1:1])
-  return fused_axis, inner_ranges
+function compute_inner_ranges(::Tuple{})
+  fused_axis = GradedAxes.gradedrange([SymmetrySectors.TrivialSector() => 1])
+  index_matrix = range.(ones(Int, 1, 1), ones(Int, 1, 1))
+  return fused_axis, index_matrix
 end
 
 function compute_inner_ranges(outer_legs::Tuple{Vararg{AbstractUnitRange}})
@@ -79,12 +75,7 @@ function compute_inner_ranges(outer_legs::Tuple{Vararg{AbstractUnitRange}})
   mcs = cumsum(m; dims=1)
   index_matrix = range.(mcs[begin:(end - 1), :] .+ 1, mcs[2:end, :])
 
-  inner_ranges = Dict{Tuple{Int,eltype(allowed_sectors)},UnitRange{Int64}}()
-  for it in CartesianIndices(index_matrix)
-    length(index_matrix[it]) < 1 && continue
-    inner_ranges[it[1], allowed_sectors[it[2]]] = index_matrix[it]
-  end
-  return fused_axis, inner_ranges
+  return fused_axis, index_matrix
 end
 
 function translate_inner_block_to_outer(inner_block, fa::FusedAxes)
@@ -118,5 +109,10 @@ end
 function find_block_range(
   fa::FusedAxes, i_block::Integer, s::SymmetrySectors.AbstractSector
 )
-  return inner_ranges(fa)[i_block, s]
+  i_sector = findfirst(==(s), GradedAxes.blocklabels(fused_axis(fa)))
+  return find_block_range(fa, i_block, i_sector)
+end
+
+function find_block_range(fa::FusedAxes, i_block::Integer, i_sector::Integer)
+  return index_matrix(fa)[i_block, i_sector]
 end
