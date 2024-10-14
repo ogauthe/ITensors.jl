@@ -6,24 +6,12 @@ struct FusionTensor{T,N,DomainAxes,CoDomainAxes,Mat} <: AbstractArray{T,N}
   codomain_axes::CoDomainAxes
 
   # inner constructor to impose constraints on types
+  # TBD replace domain_legs with FusedAxes(domain_legs)?
   function FusionTensor(
-    mat::BlockSparseArrays.BlockSparseMatrix,
-    domain_legs::Tuple{Vararg{AbstractUnitRange}},
-    codomain_legs::Tuple{Vararg{AbstractUnitRange}},
-  )
-    return new{
-      eltype(mat),
-      length(domain_legs) + length(codomain_legs),
-      typeof(domain_legs),
-      typeof(codomain_legs),
-      typeof(mat),
-    }(
-      mat, domain_legs, codomain_legs
-    )
-  end
-
-  function FusionTensor(
-    mat::LinearAlgebra.Adjoint{<:Number,<:BlockSparseArrays.BlockSparseMatrix},
+    mat::Union{
+      BlockSparseArrays.BlockSparseMatrix,
+      LinearAlgebra.Adjoint{<:Number,<:BlockSparseArrays.BlockSparseMatrix},
+    },
     domain_legs::Tuple{Vararg{AbstractUnitRange}},
     codomain_legs::Tuple{Vararg{AbstractUnitRange}},
   )
