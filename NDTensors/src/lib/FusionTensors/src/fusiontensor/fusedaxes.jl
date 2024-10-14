@@ -1,13 +1,5 @@
 # This file defines helper functions to access FusionTensor internal structures
 
-find_sector_type(g, x...) = eltype(GradedAxes.blocklabels(g))
-find_sector_type() = SymmetrySectors.TrivialSector
-function fuse_axes(domain_legs, codomain_legs)
-  domain_fused_axes = FusedAxes(domain_legs)
-  codomain_fused_axes = FusedAxes(codomain_legs)
-  return domain_fused_axes, codomain_fused_axes
-end
-
 struct FusedAxes{A,B,C,D}
   outer_axes::A
   fused_axis::B
@@ -109,6 +101,8 @@ end
 function find_block_range(
   fa::FusedAxes, i_block::Integer, s::SymmetrySectors.AbstractSector
 )
+  # use == instead of a hash function to ensure e.g. TrivialSector() can be found from U1(0)
+  # as well as the opposite (evaluate as equal, but hash differ)
   i_sector = findfirst(==(s), GradedAxes.blocklabels(fused_axis(fa)))
   return find_block_range(fa, i_block, i_sector)
 end

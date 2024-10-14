@@ -294,7 +294,9 @@ function fill_matrix_blocks!(
   domain_trees_cache = Dict{NTuple{length(domain_legs),Int},Vector{Array{Float64,3}}}()
 
   # precompute internal structure
-  domain_fused_axes, codomain_fused_axes = fuse_axes(domain_legs, codomain_legs)
+  # TODO cache FusedAxes inside FusionTensor
+  domain_fused_axes = FusedAxes(domain_legs)
+  codomain_fused_axes = FusedAxes(codomain_legs)
 
   # Below, we loop over every allowed outer block, contract domain and codomain fusion trees
   # for each allowed sector and write the result inside a symmetric matrix block
@@ -503,7 +505,8 @@ function fill_blockarray!(
   )
 
   # TODO cache FusedAxes inside FusionTensor
-  domain_fused_axes, codomain_fused_axes = fuse_axes(domain_legs, codomain_legs)
+  domain_fused_axes = FusedAxes(domain_legs)
+  codomain_fused_axes = FusedAxes(codomain_legs)
 
   # cache computed trees
   domain_trees_cache = Dict{NTuple{length(domain_legs),Int},Vector{Array{Float64,3}}}()
