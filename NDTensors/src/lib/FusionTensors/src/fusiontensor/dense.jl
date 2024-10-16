@@ -57,24 +57,23 @@ end
 ##################################  utility tools  #########################################
 
 function find_allowed_blocks(data_mat::BlockSparseArrays.AbstractBlockSparseMatrix)
-  return find_allowed_blocks(axes(data_mat)...)
-end
-
-function find_allowed_blocks(row_axis::AbstractUnitRange, col_axis::AbstractUnitRange)
+  row_axis, col_axis = axes(data_mat)
   col_sectors = GradedAxes.blocklabels(col_axis)
   dual_row_sectors = GradedAxes.blocklabels(GradedAxes.dual(row_axis))
   allowed_sectors = intersect_sectors(dual_row_sectors, col_sectors)
   col_shared_indices = findall(in(allowed_sectors), col_sectors)
   row_shared_indices = findall(in(allowed_sectors), dual_row_sectors)
   allowed_blocks = BlockArrays.Block.(row_shared_indices, col_shared_indices)
-  return allowed_sectors, allowed_blocks
+  allowed_matrix_blocks = [BlockSparseArrays.view!(data_mat, b) for b in allowed_blocks]
+  return allowed_sectors, allowed_matrix_blocks
 end
 
 function find_existing_blocks(data_mat::AbstractMatrix)
   col_sectors = GradedAxes.blocklabels(axes(data_mat, 2))
   existing_blocks = sort(collect(BlockSparseArrays.block_stored_indices(data_mat)))
   existing_sectors = [col_sectors[Int(Tuple(b)[2])] for b in existing_blocks]
-  return existing_sectors, existing_blocks
+  existing_matrix_blocks = [view(data_mat, b) for b in existing_blocks]
+  return existing_sectors, existing_matrix_blocks
 end
 
 function split_axes(legs::Tuple)
@@ -279,8 +278,7 @@ function fill_matrix_blocks!(
   codomain_legs::Tuple,
 )
   # find sectors
-  allowed_sectors, allowed_blocks = find_allowed_blocks(data_mat)
-  allowed_matrix_blocks = [BlockSparseArrays.view!(data_mat, b) for b in allowed_blocks]
+  allowed_sectors, allowed_matrix_blocks = find_allowed_blocks(data_mat)
 
   # domain needs to be dualed in fusion tree
   domain_arrows, domain_irreps, domain_degens, domain_dims = split_axes(
@@ -482,20 +480,8 @@ function fill_blockarray!(
   domain_legs::Tuple,
   codomain_legs::Tuple,
 )
-  existing_sectors, existing_blocks = find_existing_blocks(data_mat)
-  existing_matrix_blocks = [view(data_mat, b) for b in existing_blocks]
-  return fill_blockarray!(
-    blockarray, existing_sectors, existing_matrix_blocks, domain_legs, codomain_legs
-  )
-end
+  existing_sectors, existing_matrix_blocks = find_existing_blocks(data_mat)
 
-function fill_blockarray!(
-  blockarray::BlockArrays.AbstractBlockArray,
-  existing_sectors::Vector{<:SymmetrySectors.AbstractSector},
-  existing_matrix_blocks::Vector{<:AbstractMatrix},
-  domain_legs::Tuple,
-  codomain_legs::Tuple,
-)
   # domain needs to be dualed in fusion tree
   domain_arrows, domain_irreps, domain_degens, domain_dims = split_axes(
     GradedAxes.dual.(domain_legs)
