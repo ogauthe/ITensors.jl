@@ -4,8 +4,27 @@
 # * Unitary = BlockMatrix
 # * no unitary cache
 
+# ======================================  Interface  =======================================
+function compute_unitaries(
+  old_domain_irreps::Tuple{Vararg{Vector{C}}},
+  old_codomain_irreps::Tuple{Vararg{Vector{C}}},
+  new_domain_irreps::Tuple{Vararg{Vector{C}}},
+  new_codomain_irreps::Tuple{Vararg{Vector{C}}},
+  old_arrows::NTuple{N,Bool},
+  flat_permutation::NTuple{N,Int},
+) where {N,C<:SymmetrySectors.AbstractSector}
+  return compute_unitaries_CG(
+    old_domain_irreps,
+    old_codomain_irreps,
+    new_domain_irreps,
+    new_codomain_irreps,
+    old_arrows,
+    flat_permutation,
+  )
+end
+
 # ===========================  Constructor from Clebsch-Gordan  ============================
-function contract_projector(
+function contract_singlet_space_projector(
   domain_tree::AbstractArray{<:Real},
   codomain_tree::AbstractArray{<:Real},
   irreps_perm::NTuple{N,Int},
@@ -81,17 +100,19 @@ function overlap_cg_trees(
 
   # contract domain and codomain CG trees to construct projector on each allowed sector
   new_projectors =
-    contract_projector.(
+    contract_singlet_space_projector.(
       new_domain_block_trees, new_codomain_block_trees, Ref(ntuple(identity, N))
     )
   old_projectors =
-    contract_projector.(old_domain_block_trees, old_codomain_block_trees, Ref(irreps_perm))
+    contract_singlet_space_projector.(
+      old_domain_block_trees, old_codomain_block_trees, Ref(irreps_perm)
+    )
 
   for (i, j) in Iterators.product(eachindex.((new_projectors, old_projectors))...)
     # Contract new and old projectors to construct singlet space basis change matrix.
     # Construction is blockwise. One block (i,j) corresponds to fusing old axes
     # over sector sec_j and new axes over sector sec_i. It has a 4-dim tensor
-    # internal structure which is compressed into a matrix.
+    # internal structure which is reshaped into a matrix.
     #
     #          --------------dim_sec_j---------
     #          |                              |
@@ -157,23 +178,14 @@ function compute_unitaries_CG(
   )
 
   # initialize output
-  old_block_indices = Vector{NTuple{N,Int}}()
-  old_domain_structural_multiplicities = Matrix{Int}(undef, length(old_allowed_sectors), 0)
-  old_codomain_structural_multiplicities = Matrix{Int}(
-    undef, length(old_allowed_sectors), 0
-  )
-  new_domain_structural_multiplicities = Matrix{Int}(undef, length(new_allowed_sectors), 0)
-  new_codomain_structural_multiplicities = Matrix{Int}(
-    undef, length(new_allowed_sectors), 0
-  )
-
-  unitaries = Vector{
+  unitaries = Dict{
+    NTuple{N,Int64},
     BlockArrays.BlockMatrix{   # TBD use BlockSparseArray 4-dim?
       Float64,
       Matrix{Matrix{Float64}},
       Tuple{
-        BlockArrays.BlockedUnitRange{Vector{Int64}},
-        BlockArrays.BlockedUnitRange{Vector{Int64}},
+        BlockArrays.BlockedOneTo{Int64,Vector{Int64}},
+        BlockArrays.BlockedOneTo{Int64,Vector{Int64}},
       },
     },
   }()
@@ -186,10 +198,10 @@ function compute_unitaries_CG(
     NTuple{OldNDoAxes,Int},Vector{Array{Float64,OldNDoAxes + 2}}
   }()
   new_domain_trees_cache = Dict{
-    NTuple{NCoAxesNew,Int},Vector{Array{Float64,NewNDoAxes + 2}}
+    NTuple{NewNDoAxes,Int},Vector{Array{Float64,NewNDoAxes + 2}}
   }()
   new_codomain_trees_cache = Dict{
-    NTuple{NDoAxesNew,Int},Vector{Array{Float64,NewNCoAxes + 2}}
+    NTuple{NewNCoAxes,Int},Vector{Array{Float64,NewNCoAxes + 2}}
   }()
 
   # loop over all sector configuration
@@ -229,36 +241,18 @@ function compute_unitaries_CG(
       new_allowed_sectors,
     )
 
-    unitary = overlap_cg_trees(
+    u = overlap_cg_trees(
       old_domain_block_trees,
       old_codomain_block_trees,
       new_domain_block_trees,
       new_codomain_block_trees,
       flat_permutation,
     )
-    push!(old_block_indices, it)
-    push!(unitaries, unitary)
-    # TODO update multiplicities
+    unitaries[it] = u
   end
 
-  return (
-    old_block_indices,
-    old_domain_structural_multiplicities,
-    old_codomain_structural_multiplicities,
-    new_domain_structural_multiplicities,
-    new_codomain_structural_multiplicities,
-    unitaries,
-  )
+  return unitaries
 end
 
 # =================================  Constructor from 6j  ==================================
-function compute_unitaries_6j(
-  perm::TensorAlgebra.BlockedPermutation{2,N},
-  old_codomain_sectors::NTuple{OldNCoAxes,Vector{C}},
-  old_domain_sectors::NTuple{OldNDoAxes,Vector{C}},
-  old_arrows::NTuple{N,Bool},
-) where {N,OldNCoAxes,OldNDoAxes,C<:SymmetrySectors.AbstractSector}
-  # this function has the same inputs and the same outputs as compute_unitaries_CG
-
-  # dummy
-end
+# dummy
