@@ -6,21 +6,16 @@ struct FusedAxes{A,B,C,D}
   index_matrix::C
   inner_block_indices::D
 
-  function FusedAxes(outer_legs::Tuple{Vararg{AbstractUnitRange}})
-    fused_axis, index_matrix = compute_inner_ranges(outer_legs)
-    inner_block_indices = Tuple.(CartesianIndices(BlockArrays.blocklength.(outer_legs)))
+  function FusedAxes(
+    outer_legs::NTuple{N,AbstractUnitRange},
+    fused_axis::AbstractUnitRange,
+    index_matrix::Matrix{UnitRange{Int64}},
+    inner_block_indices::CartesianIndices{N},
+  ) where {N}
     return new{
       typeof(outer_legs),typeof(fused_axis),typeof(index_matrix),typeof(inner_block_indices)
     }(
       outer_legs, fused_axis, index_matrix, inner_block_indices
-    )
-  end
-
-  function FusedAxes(::Tuple{})
-    fused_axis, index_matrix = compute_inner_ranges(())
-    inner_block_indices = [()]
-    return new{Tuple{},typeof(fused_axis),typeof(index_matrix),typeof(inner_block_indices)}(
-      (), fused_axis, index_matrix, inner_block_indices
     )
   end
 end
@@ -34,12 +29,30 @@ inner_block_indices(fa::FusedAxes) = fa.inner_block_indices
 Base.axes(fa::FusedAxes) = fa.outer_axes
 Base.iterate(fa::FusedAxes) = iterate(inner_block_indices(fa))
 Base.iterate(fa::FusedAxes, x) = iterate(inner_block_indices(fa), x)
-Base.ndims(fa::FusedAxes) = length(outer_axes(fa))
+Base.ndims(fa::FusedAxes) = length(axes(fa))
 
-function compute_inner_ranges(::Tuple{})
+# constructors
+function FusedAxes(outer_legs::Tuple{Vararg{AbstractUnitRange}})
+  fused_axis, index_matrix = compute_inner_ranges(outer_legs)
+  inner_block_indices = CartesianIndices(BlockArrays.blocklength.(outer_legs))
+  return FusedAxes(outer_legs, fused_axis, index_matrix, inner_block_indices)
+end
+
+function FusedAxes(::Tuple{})
   fused_axis = GradedAxes.gradedrange([SymmetrySectors.TrivialSector() => 1])
   index_matrix = range.(ones(Int, 1, 1), ones(Int, 1, 1))
-  return fused_axis, index_matrix
+  inner_block_indices = CartesianIndices(())
+  return new{Tuple{},typeof(fused_axis),typeof(index_matrix),typeof(inner_block_indices)}(
+    (), fused_axis, index_matrix, inner_block_indices
+  )
+end
+
+function GradedAxes.dual(fa::FusedAxes)
+  outer_legs = axes(fa)
+  dual_fused_axis = GradedAxes.dual(fused_axis(fa))
+  dual_inner_block_indices = inner_block_indices(fa)
+  dual_index_matrix = index_matrix(fa)
+  return FusedAxes(outer_legs, dual_fused_axis, dual_index_matrix, dual_inner_block_indices)
 end
 
 function compute_inner_ranges(outer_legs::Tuple{Vararg{AbstractUnitRange}})
@@ -75,7 +88,7 @@ function translate_inner_block_to_outer(inner_block, fa::FusedAxes)
 end
 
 function translate_inner_block_to_outer(inner_block::Tuple{Int}, fa::FusedAxes)
-  return inner_block_indices(fa)[inner_block...]
+  return Tuple(inner_block_indices(fa)[inner_block...])
 end
 
 function translate_outer_block_to_inner(outer_block, fa::FusedAxes)
@@ -109,4 +122,63 @@ end
 
 function find_block_range(fa::FusedAxes, i_block::Integer, i_sector::Integer)
   return index_matrix(fa)[i_block, i_sector]
+end
+
+function Base.intersect(left::FusedAxes, right::FusedAxes)
+  left_labels = GradedAxes.blocklabels(fused_axis(left))  # TBD dual
+  right_labels = GradedAxes.blocklabels(fused_axis(right))
+
+  # cannot use intersect/searchsort in case e.g. left = Trivial, right = U1(0)
+  matches = reshape(left_labels, (1, :)) .== right_labels
+  kept_left_label_indices = findall(>(0), vec(sum(matches; dims=1)))
+  kept_right_label_indices = findall(>(0), vec(sum(matches; dims=2)))
+
+  return existing_outer_blocks_sectors(
+    left, right, kept_left_label_indices, kept_right_label_indices
+  )
+end
+
+function existing_outer_blocks_sectors(
+  left, right, kept_left_label_indices, kept_right_label_indices
+)
+  left_labels = GradedAxes.blocklabels(fused_axis(left))  # TBD dual
+  reduced_left = .!isempty.(index_matrix(left)[:, kept_left_label_indices])
+  reduced_right = .!isempty.(index_matrix(right)[:, kept_right_label_indices])
+
+  existing_outer_blocks = Vector{NTuple{ndims(left) + ndims(right),Int}}()
+  existing_outer_block_sectors = Vector{Vector{eltype(left_labels)}}()
+  for i in 1:size(reduced_left, 1), j in 1:size(reduced_left, 1)
+    intersection = findall(>(0), reduced_left[i, :] .* reduced_right[j, :])
+    isempty(intersection) && continue
+    push!(
+      existing_outer_blocks,
+      (
+        translate_inner_block_to_outer(i, left)...,
+        translate_inner_block_to_outer(j, right)...,
+      ),
+    )
+    push!(existing_outer_block_sectors, left_labels[kept_left_label_indices[intersection]])
+  end
+  return existing_outer_blocks, existing_outer_block_sectors
+end
+
+function Base.intersect(
+  left::FusedAxes,
+  right::FusedAxes,
+  existing_sectors::Vector{<:SymmetrySectors.AbstractSector},
+)
+  left_labels = GradedAxes.blocklabels(fused_axis(left))  # TBD dual
+  right_labels = GradedAxes.blocklabels(fused_axis(right))
+
+  # cannot use intersect/searchsort in case e.g. left = Trivial, right = U1(0)
+  left_matches = reshape(existing_sectors, (1, :)) .== left_labels
+  right_matches = reshape(existing_sectors, (1, :)) .== right_labels
+  kept_left = vec(sum(left_matches; dims=1))
+  kept_right = vec(sum(right_matches; dims=1))
+  matches = reshape(kept_left, (1, :)) .== kept_right
+  kept_left_label_indices = kept_left[findall(>(0), vec(sum(matches; dims=1)))]
+  kept_right_label_indices = kept_right[findall(>(0), vec(sum(matches; dims=2)))]
+  return existing_outer_blocks_sectors(
+    left, right, kept_left_label_indices, kept_right_label_indices
+  )
 end
