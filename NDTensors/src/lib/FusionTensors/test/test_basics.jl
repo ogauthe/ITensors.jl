@@ -15,33 +15,35 @@ using NDTensors.FusionTensors:
   ndims_domain,
   ndims_codomain,
   check_sanity
-using NDTensors.GradedAxes: dual, fusion_product, space_isequal, gradedrange
+using NDTensors.GradedAxes:
+  blockmergesort, dual, flip, fusion_product, gradedrange, space_isequal
 using NDTensors.SymmetrySectors: U1
 
 @testset "Fusion matrix" begin
   g1 = gradedrange([U1(0) => 1, U1(1) => 2, U1(2) => 3])
-  g2 = gradedrange([U1(0) => 2, U1(1) => 2, U1(3) => 1])
+  g2 = dual(gradedrange([U1(0) => 2, U1(1) => 2, U1(3) => 1]))
+  g2s = blockmergesort(g2)
 
   # check dual convention when initializing data_matrix
-  ft0 = FusionTensor(Float64, (dual(g1),), (g2,))
-  @test space_isequal(matrix_row_axis(ft0), dual(g1))
-  @test space_isequal(matrix_column_axis(ft0), g2)
+  ft0 = FusionTensor(Float64, (g1,), (g2,))
+  @test space_isequal(matrix_row_axis(ft0), g1)
+  @test space_isequal(matrix_column_axis(ft0), g2s)
 
-  m = BlockSparseArray{Float64}(dual(g1), g2)
-  ft1 = FusionTensor(m, (dual(g1),), (g2,))
+  m = BlockSparseArray{Float64}(g1, g2s)
+  ft1 = FusionTensor(m, (g1,), (g2,))
 
   # getters
   @test data_matrix(ft1) === m
-  @test matching_axes(domain_axes(ft1), (dual(g1),))
+  @test matching_axes(domain_axes(ft1), (g1,))
   @test matching_axes(codomain_axes(ft1), (g2,))
 
   # misc
-  @test matching_axes(axes(ft1), (dual(g1), g2))
+  @test matching_axes(axes(ft1), (g1, g2))
   @test ndims_domain(ft1) == 1
   @test ndims_codomain(ft1) == 1
   @test matrix_size(ft1) == (6, 5)
-  @test space_isequal(matrix_row_axis(ft1), dual((g1)))
-  @test space_isequal(matrix_column_axis(ft1), g2)
+  @test space_isequal(matrix_row_axis(ft1), g1)
+  @test space_isequal(matrix_column_axis(ft1), g2s)
   @test isnothing(check_sanity(ft0))
   @test isnothing(check_sanity(ft1))
 
@@ -93,15 +95,15 @@ end
 @testset "More than 2 axes" begin
   g1 = gradedrange([U1(0) => 1, U1(1) => 2, U1(2) => 3])
   g2 = gradedrange([U1(0) => 2, U1(1) => 2, U1(3) => 1])
-  g3 = gradedrange([U1(-1) => 1, U1(0) => 2, U1(1) => 1])
-  g4 = gradedrange([U1(-1) => 1, U1(0) => 1, U1(1) => 1])
-  gr = dual(fusion_product(g1, g2))
-  gc = fusion_product(g3, g4)
+  g3 = dual(gradedrange([U1(-1) => 1, U1(0) => 2, U1(1) => 1]))
+  g4 = dual(gradedrange([U1(-1) => 1, U1(0) => 1, U1(1) => 1]))
+  gr = fusion_product(g1, g2)
+  gc = flip(fusion_product(g3, g4))
   m2 = BlockSparseArray{Float64}(gr, gc)
-  ft = FusionTensor(m2, (dual(g1), dual(g2)), (g3, g4))
+  ft = FusionTensor(m2, (g1, g2), (g3, g4))
 
   @test data_matrix(ft) === m2
-  @test matching_axes(domain_axes(ft), (dual(g1), dual(g2)))
+  @test matching_axes(domain_axes(ft), (g1, g2))
   @test matching_axes(codomain_axes(ft), (g3, g4))
 
   @test axes(ft) == (g1, g2, g3, g4)

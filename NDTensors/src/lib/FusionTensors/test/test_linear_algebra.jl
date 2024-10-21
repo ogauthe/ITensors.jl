@@ -23,12 +23,12 @@ using NDTensors.SymmetrySectors: U1, SU2, TrivialSector
   gsu2 = GradedAxes.gradedrange([SU2(1 / 2) => 1])
 
   for g in [g0, gu1, gsu2]
-    ft0 = FusionTensor(Float64, (GradedAxes.dual(g), GradedAxes.dual(g)), (g, g))
+    ft0 = FusionTensor(Float64, (g, g), (GradedAxes.dual(g), GradedAxes.dual(g)))
     @test isnothing(check_sanity(ft0))
     @test norm(ft0) == 0
     @test tr(ft0) == 0
 
-    ft = FusionTensor(sdst, (GradedAxes.dual(g), GradedAxes.dual(g)), (g, g))
+    ft = FusionTensor(sdst, (g, g), (GradedAxes.dual(g), GradedAxes.dual(g)))
     @test isnothing(check_sanity(ft))
     @test norm(ft) ≈ √3 / 2
     @test isapprox(tr(ft), 0; atol=eps(Float64))

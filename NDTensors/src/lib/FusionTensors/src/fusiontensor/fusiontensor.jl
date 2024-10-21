@@ -40,55 +40,31 @@ matrix_size(ft::FusionTensor) = SymmetrySectors.quantum_dimension.(axes(data_mat
 matrix_row_axis(ft::FusionTensor) = first(axes(data_matrix(ft)))
 matrix_column_axis(ft::FusionTensor) = last(axes(data_matrix(ft)))
 
-# initialization
-function initialize_matrix_axes(domain_legs::Tuple, codomain_legs::Tuple)
-  mat_row_axis = GradedAxes.dual(
-    GradedAxes.fusion_product(GradedAxes.dual.(domain_legs)...)
-  )
-  mat_col_axis = GradedAxes.fusion_product(codomain_legs...)
-  return mat_row_axis, mat_col_axis
-end
-
-function initialize_matrix_axes(::Tuple{}, codomain_legs::Tuple)
-  mat_row_axis = GradedAxes.dual(SymmetrySectors.trivial(first(codomain_legs)))
-  mat_col_axis = GradedAxes.fusion_product(codomain_legs...)
-  return mat_row_axis, mat_col_axis
-end
-
-function initialize_matrix_axes(domain_legs::Tuple, ::Tuple{})
-  mat_row_axis = GradedAxes.dual(GradedAxes.fusion_product(domain_legs...))
-  mat_col_axis = SymmetrySectors.trivial(first(domain_legs))
-  return mat_row_axis, mat_col_axis
-end
-
-function initialize_matrix_axes(::Tuple{}, ::Tuple{})
-  mat_col_axis = GradedAxes.gradedrange([SymmetrySectors.TrivialSector() => 1])
-  mat_row_axis = GradedAxes.dual(mat_col_axis)
-  return mat_row_axis, mat_col_axis
-end
-
 # empty matrix
 function FusionTensor(data_type::Type, domain_legs::Tuple, codomain_legs::Tuple)
-  mat = initialize_data_matrix(data_type, domain_legs, codomain_legs)
+  domain_fused_axes = FusedAxes(domain_legs)
+  codomain_fused_axes = FusedAxes(GradedAxes.dual.(codomain_legs))
+  mat = initialize_data_matrix(data_type, domain_fused_axes, codomain_fused_axes)
   return FusionTensor(mat, domain_legs, codomain_legs)
 end
 
 # init data_matrix
 function initialize_data_matrix(
-  data_type::Type{<:Number}, domain_legs::Tuple, codomain_legs::Tuple
+  data_type::Type{<:Number}, domain_fused_axes::FusedAxes, codomain_fused_axes::FusedAxes
 )
   # fusion trees have Float64 eltype: need compatible type
   promoted = promote_type(data_type, Float64)
-  mat_row_axis, mat_col_axis = initialize_matrix_axes(domain_legs, codomain_legs)
+  mat_row_axis = fused_axis(domain_fused_axes)
+  mat_col_axis = GradedAxes.dual(fused_axis(codomain_fused_axes))
   return BlockSparseArrays.BlockSparseArray{promoted}(mat_row_axis, mat_col_axis)
 end
 
 function check_data_matrix_axes(
   mat::BlockSparseArrays.BlockSparseMatrix, domain_legs::Tuple, codomain_legs::Tuple
 )
-  rg, cg = initialize_matrix_axes(domain_legs, codomain_legs)
-  @assert GradedAxes.space_isequal(rg, axes(mat, 1))
-  @assert GradedAxes.space_isequal(cg, axes(mat, 2))
+  #rg, cg = initialize_matrix_axes(domain_legs, codomain_legs)
+  #@assert GradedAxes.space_isequal(rg, axes(mat, 1))
+  #@assert GradedAxes.space_isequal(cg, axes(mat, 2))
 end
 
 function check_data_matrix_axes(

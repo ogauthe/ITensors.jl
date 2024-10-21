@@ -42,14 +42,13 @@ function FusedAxes(::Tuple{})
   fused_axis = GradedAxes.gradedrange([SymmetrySectors.TrivialSector() => 1])
   index_matrix = range.(ones(Int, 1, 1), ones(Int, 1, 1))
   inner_block_indices = CartesianIndices(())
-  return new{Tuple{},typeof(fused_axis),typeof(index_matrix),typeof(inner_block_indices)}(
-    (), fused_axis, index_matrix, inner_block_indices
-  )
+  return FusedAxes((), fused_axis, index_matrix, inner_block_indices)
 end
 
 function GradedAxes.dual(fa::FusedAxes)
-  outer_legs = axes(fa)
+  outer_legs = GradedAxes.dual.(axes(fa))
   dual_fused_axis = GradedAxes.dual(fused_axis(fa))
+  # once dualed, dual_fused_axis != fusion_product(dual_outer_legs). TBD change this?
   dual_inner_block_indices = inner_block_indices(fa)
   dual_index_matrix = index_matrix(fa)
   return FusedAxes(outer_legs, dual_fused_axis, dual_index_matrix, dual_inner_block_indices)
@@ -125,14 +124,13 @@ function find_block_range(fa::FusedAxes, i_block::Integer, i_sector::Integer)
 end
 
 function Base.intersect(left::FusedAxes, right::FusedAxes)
-  left_labels = GradedAxes.blocklabels(fused_axis(left))  # TBD dual
+  left_labels = GradedAxes.blocklabels(fused_axis(left))
   right_labels = GradedAxes.blocklabels(fused_axis(right))
 
   # cannot use intersect/searchsort in case e.g. left = Trivial, right = U1(0)
   matches = reshape(left_labels, (1, :)) .== right_labels
   kept_left_label_indices = findall(>(0), vec(sum(matches; dims=1)))
   kept_right_label_indices = findall(>(0), vec(sum(matches; dims=2)))
-
   return existing_outer_blocks_sectors(
     left, right, kept_left_label_indices, kept_right_label_indices
   )
@@ -141,14 +139,14 @@ end
 function existing_outer_blocks_sectors(
   left, right, kept_left_label_indices, kept_right_label_indices
 )
-  left_labels = GradedAxes.blocklabels(fused_axis(left))  # TBD dual
+  left_labels = GradedAxes.blocklabels(fused_axis(left))
   reduced_left = .!isempty.(index_matrix(left)[:, kept_left_label_indices])
   reduced_right = .!isempty.(index_matrix(right)[:, kept_right_label_indices])
 
   existing_outer_blocks = Vector{NTuple{ndims(left) + ndims(right),Int}}()
   existing_outer_block_sectors = Vector{Vector{eltype(left_labels)}}()
   for i in 1:size(reduced_left, 1), j in 1:size(reduced_left, 1)
-    intersection = findall(>(0), reduced_left[i, :] .* reduced_right[j, :])
+    intersection = findall(>(0), reduced_left[i, :] .* reduced_right[j, :])  #  ASSUME SORTED LABELS ON BOTH SIDES
     isempty(intersection) && continue
     push!(
       existing_outer_blocks,
@@ -167,14 +165,15 @@ function Base.intersect(
   right::FusedAxes,
   existing_sectors::Vector{<:SymmetrySectors.AbstractSector},
 )
-  left_labels = GradedAxes.blocklabels(fused_axis(left))  # TBD dual
+  left_labels = GradedAxes.blocklabels(fused_axis(left))
   right_labels = GradedAxes.blocklabels(fused_axis(right))
 
-  # cannot use intersect/searchsort in case e.g. left = Trivial, right = U1(0)
+  # cannot use intersect in case e.g. left = Trivial, right = U1(0)
+  # TBD use searchsort? What of adjoint?
   left_matches = reshape(existing_sectors, (1, :)) .== left_labels
   right_matches = reshape(existing_sectors, (1, :)) .== right_labels
-  kept_left = vec(sum(left_matches; dims=1))
-  kept_right = vec(sum(right_matches; dims=1))
+  kept_left = findall(>(0), vec(sum(left_matches; dims=2)))
+  kept_right = findall(>(0), vec(sum(right_matches; dims=2)))
   matches = reshape(kept_left, (1, :)) .== kept_right
   kept_left_label_indices = kept_left[findall(>(0), vec(sum(matches; dims=1)))]
   kept_right_label_indices = kept_right[findall(>(0), vec(sum(matches; dims=2)))]

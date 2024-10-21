@@ -4,15 +4,7 @@
 
 #### cast from dense to symmetric
 function FusionTensor(dense::AbstractArray, domain_legs::Tuple, codomain_legs::Tuple)
-  bounds = SymmetrySectors.block_dimensions.((domain_legs..., codomain_legs...))
-  blockarray = BlockArrays.BlockedArray(dense, bounds...)
-  return FusionTensor(blockarray, domain_legs, codomain_legs)
-end
-
-function FusionTensor(
-  blockarray::BlockArrays.AbstractBlockArray, domain_legs::Tuple, codomain_legs::Tuple
-)
-  data_mat = cast_from_dense(blockarray, domain_legs, codomain_legs)
+  data_mat = cast_from_dense(dense, domain_legs, codomain_legs)
   return FusionTensor(data_mat, domain_legs, codomain_legs)
 end
 
@@ -22,6 +14,12 @@ function BlockSparseArrays.BlockSparseArray(ft::FusionTensor)
 end
 
 # =================================  Low level interface  ==================================
+function cast_from_dense(dense::AbstractArray, domain_legs::Tuple, codomain_legs::Tuple)
+  bounds = SymmetrySectors.block_dimensions.((domain_legs..., codomain_legs...))
+  blockarray = BlockArrays.BlockedArray(dense, bounds...)
+  return cast_from_dense(blockarray, domain_legs, codomain_legs)
+end
+
 function cast_from_dense(
   blockarray::BlockArrays.AbstractBlockArray, domain_legs::Tuple, codomain_legs::Tuple
 )
@@ -34,8 +32,15 @@ function cast_from_dense(
     throw(DomainError("legs dimensions are incompatible with array"))
   end
 
-  data_mat = initialize_data_matrix(eltype(blockarray), domain_legs, codomain_legs)
-  fill_matrix_blocks!(data_mat, blockarray, domain_legs, codomain_legs)
+  # precompute internal structure
+  # TODO cache FusedAxes inside FusionTensor
+  domain_fused_axes = FusedAxes(domain_legs)
+  codomain_fused_axes = FusedAxes(GradedAxes.dual.(codomain_legs))
+  data_mat = initialize_data_matrix(
+    eltype(blockarray), domain_fused_axes, codomain_fused_axes
+  )
+
+  fill_matrix_blocks!(data_mat, blockarray, domain_fused_axes, codomain_fused_axes)
   return data_mat
 end
 
@@ -43,12 +48,29 @@ function cast_to_dense(ft::FusionTensor)
   return cast_to_dense(data_matrix(ft), domain_axes(ft), codomain_axes(ft))
 end
 
-function cast_to_dense(data_mat::AbstractMatrix, domain_legs::Tuple, codomain_legs::Tuple)
+function cast_to_dense(
+  data_mat::LinearAlgebra.Adjoint, domain_legs::Tuple, codomain_legs::Tuple
+)
+  blockarray = cast_to_dense(
+    adjoint(data_mat), GradedAxes.dual.(codomain_legs), GradedAxes.dual.(domain_legs)
+  )
+  NCO = length(codomain_legs)
+  return permutedims(
+    conj(blockarray),
+    (ntuple(i -> NCO + i, length(domain_legs))..., ntuple(identity, NCO)...),
+  )
+end
+
+function cast_to_dense(
+  data_mat::BlockSparseArrays.BlockSparseMatrix, domain_legs::Tuple, codomain_legs::Tuple
+)
   bounds = SymmetrySectors.block_dimensions.((domain_legs..., codomain_legs...))
   blockarray = BlockSparseArrays.BlockSparseArray{eltype(data_mat)}(
     BlockArrays.blockedrange.(bounds)
   )
-  fill_blockarray!(blockarray, data_mat, domain_legs, codomain_legs)
+  domain_fused_axes = FusedAxes(domain_legs)
+  codomain_fused_axes = FusedAxes(GradedAxes.dual.(codomain_legs))
+  fill_blockarray!(blockarray, data_mat, domain_fused_axes, codomain_fused_axes)
   return blockarray
 end
 
@@ -56,22 +78,23 @@ end
 
 ##################################  utility tools  #########################################
 
+# TODO replace with FusedAxes method
 function find_allowed_blocks(data_mat::BlockSparseArrays.AbstractBlockSparseMatrix)
   row_axis, col_axis = axes(data_mat)
-  col_sectors = GradedAxes.blocklabels(col_axis)
-  dual_row_sectors = GradedAxes.blocklabels(GradedAxes.dual(row_axis))
-  allowed_sectors = intersect_sectors(dual_row_sectors, col_sectors)
-  col_shared_indices = findall(in(allowed_sectors), col_sectors)
-  row_shared_indices = findall(in(allowed_sectors), dual_row_sectors)
+  row_sectors = GradedAxes.blocklabels(row_axis)
+  dual_col_sectors = GradedAxes.blocklabels(GradedAxes.dual(col_axis))
+  allowed_sectors = intersect_sectors(row_sectors, dual_col_sectors)
+  row_shared_indices = findall(in(allowed_sectors), row_sectors)
+  col_shared_indices = findall(in(allowed_sectors), dual_col_sectors)
   allowed_blocks = BlockArrays.Block.(row_shared_indices, col_shared_indices)
   allowed_matrix_blocks = [BlockSparseArrays.view!(data_mat, b) for b in allowed_blocks]
   return allowed_sectors, allowed_matrix_blocks
 end
 
 function find_existing_blocks(data_mat::AbstractMatrix)
-  col_sectors = GradedAxes.blocklabels(axes(data_mat, 2))
+  row_sectors = GradedAxes.blocklabels(axes(data_mat, 1))
   existing_blocks = sort(collect(BlockSparseArrays.block_stored_indices(data_mat)))
-  existing_sectors = [col_sectors[Int(Tuple(b)[2])] for b in existing_blocks]
+  existing_sectors = [row_sectors[Int(Tuple(b)[2])] for b in existing_blocks]
   existing_matrix_blocks = [view(data_mat, b) for b in existing_blocks]
   return existing_sectors, existing_matrix_blocks
 end
@@ -274,31 +297,28 @@ end
 function fill_matrix_blocks!(
   data_mat::BlockSparseArrays.AbstractBlockSparseMatrix,
   blockarray::BlockArrays.AbstractBlockArray,
-  domain_legs::Tuple,
-  codomain_legs::Tuple,
+  domain_fused_axes::FusedAxes,
+  codomain_fused_axes::FusedAxes,
 )
   # find sectors
   allowed_sectors, allowed_matrix_blocks = find_allowed_blocks(data_mat)
 
-  # domain needs to be dualed in fusion tree
   domain_arrows, domain_irreps, domain_degens, domain_dims = split_axes(
-    GradedAxes.dual.(domain_legs)
+    axes(domain_fused_axes)
   )
   codomain_arrows, codomain_irreps, codomain_degens, codomain_dims = split_axes(
-    codomain_legs
-  )
+    axes(codomain_fused_axes)
+  )  # codomain needs to be dualed in fusion tree
 
-  # cache computed trees
-  domain_trees_cache = Dict{NTuple{length(domain_legs),Int},Vector{Array{Float64,3}}}()
-  codomain_trees_cache = Dict{NTuple{length(codomain_legs),Int},Vector{Array{Float64,3}}}()
-
-  # precompute internal structure
-  # TODO cache FusedAxes inside FusionTensor
-  domain_fused_axes = GradedAxes.dual(FusedAxes(domain_legs))
-  codomain_fused_axes = FusedAxes(codomain_legs)
   existing_outer_blocks, existing_outer_block_sectors = intersect(
     domain_fused_axes, codomain_fused_axes
-  )   # TBD vector of pairs instead of pair ov vectors?
+  )   # TBD vector of pairs instead of pair of vectors?
+
+  # cache computed trees
+  domain_trees_cache = Dict{NTuple{ndims(domain_fused_axes),Int},Vector{Array{Float64,3}}}()
+  codomain_trees_cache = Dict{
+    NTuple{ndims(codomain_fused_axes),Int},Vector{Array{Float64,3}}
+  }()
 
   # Below, we loop over every allowed outer block, contract domain and codomain fusion trees
   # for each allowed sector and write the result inside a symmetric matrix block
@@ -323,8 +343,8 @@ function fill_matrix_blocks!(
   # loop for each allowed outer block
   for (outer_block, outer_block_sectors) in
       zip(existing_outer_blocks, existing_outer_block_sectors)
-    iter_do = outer_block[begin:length(domain_legs)]
-    iter_co = outer_block[(length(domain_legs) + 1):end]
+    iter_do = outer_block[begin:ndims(domain_fused_axes)]
+    iter_co = outer_block[(ndims(domain_fused_axes) + 1):end]
 
     domain_block_trees = get_tree!(
       domain_trees_cache, iter_do, domain_irreps, domain_arrows, allowed_sectors
@@ -471,35 +491,34 @@ end
 function fill_blockarray!(
   blockarray::BlockArrays.AbstractBlockArray,
   data_mat::AbstractMatrix,
-  domain_legs::Tuple,
-  codomain_legs::Tuple,
+  domain_fused_axes::FusedAxes,
+  codomain_fused_axes::FusedAxes,
 )
   existing_sectors, existing_matrix_blocks = find_existing_blocks(data_mat)
 
   # domain needs to be dualed in fusion tree
   domain_arrows, domain_irreps, domain_degens, domain_dims = split_axes(
-    GradedAxes.dual.(domain_legs)
+    axes(domain_fused_axes)
   )
   codomain_arrows, codomain_irreps, codomain_degens, codomain_dims = split_axes(
-    codomain_legs
+    axes(codomain_fused_axes)
   )
 
-  # TODO cache FusedAxes inside FusionTensor
-  domain_fused_axes = GradedAxes.dual(FusedAxes(domain_legs))
-  codomain_fused_axes = FusedAxes(codomain_legs)
   existing_outer_blocks, existing_outer_block_sectors = intersect(
     domain_fused_axes, codomain_fused_axes, existing_sectors
   )
 
   # cache computed trees
-  domain_trees_cache = Dict{NTuple{length(domain_legs),Int},Vector{Array{Float64,3}}}()
-  codomain_trees_cache = Dict{NTuple{length(domain_legs),Int},Vector{Array{Float64,3}}}()
+  domain_trees_cache = Dict{NTuple{ndims(domain_fused_axes),Int},Vector{Array{Float64,3}}}()
+  codomain_trees_cache = Dict{
+    NTuple{ndims(codomain_fused_axes),Int},Vector{Array{Float64,3}}
+  }()
 
   # loop for each existing outer block
   for (outer_block, outer_block_sectors) in
       zip(existing_outer_blocks, existing_outer_block_sectors)
-    iter_do = outer_block[begin:length(domain_legs)]
-    iter_co = outer_block[(length(domain_legs) + 1):end]
+    iter_do = outer_block[begin:ndims(domain_fused_axes)]
+    iter_co = outer_block[(ndims(domain_fused_axes) + 1):end]
 
     codomain_block_trees = get_tree!(
       codomain_trees_cache, iter_co, codomain_irreps, codomain_arrows, existing_sectors
