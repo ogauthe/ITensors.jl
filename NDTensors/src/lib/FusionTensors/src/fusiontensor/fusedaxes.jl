@@ -145,7 +145,7 @@ function existing_outer_blocks_sectors(
 
   existing_outer_blocks = Vector{NTuple{ndims(left) + ndims(right),Int}}()
   existing_outer_block_sectors = Vector{Vector{eltype(left_labels)}}()
-  for i in 1:size(reduced_left, 1), j in 1:size(reduced_left, 1)
+  for i in 1:size(reduced_left, 1), j in 1:size(reduced_right, 1)
     intersection = findall(>(0), reduced_left[i, :] .* reduced_right[j, :])  #  ASSUME SORTED LABELS ON BOTH SIDES
     isempty(intersection) && continue
     push!(
