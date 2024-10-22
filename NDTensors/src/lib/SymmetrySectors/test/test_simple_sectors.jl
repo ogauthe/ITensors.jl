@@ -9,13 +9,12 @@ using NDTensors.SymmetrySectors:
   TrivialSector,
   U1,
   Z,
-  adjoint,
   quantum_dimension,
   fundamental,
   istrivial,
   trivial
 using Test: @inferred, @test, @testset, @test_throws
-@testset "Test Category Types" begin
+@testset "Test SymmetrySectors Types" begin
   @testset "TrivialSector" begin
     q = TrivialSector()
 
@@ -40,12 +39,18 @@ using Test: @inferred, @test, @testset, @test_throws
     @test trivial(q1) == U1(0)
     @test trivial(U1) == U1(0)
     @test istrivial(U1(0))
-    @test U1(0) == TrivialSector()
-    @test TrivialSector() == U1(0)
 
     @test dual(U1(2)) == U1(-2)
     @test isless(U1(1), U1(2))
     @test !isless(U1(2), U1(1))
+    @test U1(Int8(1)) == U1(1)
+    @test U1(UInt32(1)) == U1(1)
+
+    @test U1(0) == TrivialSector()
+    @test TrivialSector() == U1(0)
+    @test U1(-1) < TrivialSector()
+    @test TrivialSector() < U1(1)
+    @test U1(Int8(1)) < U1(Int32(2))
   end
 
   @testset "Z₂" begin
@@ -54,7 +59,6 @@ using Test: @inferred, @test, @testset, @test_throws
 
     @test trivial(Z{2}) == Z{2}(0)
     @test istrivial(Z{2}(0))
-    @test Z{2}(0) == TrivialSector()
 
     @test quantum_dimension(z0) == 1
     @test quantum_dimension(z1) == 1
@@ -66,6 +70,15 @@ using Test: @inferred, @test, @testset, @test_throws
     @test dual(Z{2}(1)) == Z{2}(1)
     @test isless(Z{2}(0), Z{2}(1))
     @test !isless(Z{2}(1), Z{2}(0))
+    @test Z{2}(0) == z0
+    @test Z{2}(-3) == z1
+
+    @test Z{2}(0) == TrivialSector()
+    @test TrivialSector() < Z{2}(1)
+    @test_throws MethodError U1(0) < Z{2}(1)
+    @test Z{2}(0) != Z{2}(1)
+    @test Z{2}(0) != Z{3}(0)
+    @test Z{2}(0) != U1(0)
   end
 
   @testset "O(2)" begin
@@ -76,7 +89,6 @@ using Test: @inferred, @test, @testset, @test_throws
 
     @test trivial(O2) == s0e
     @test istrivial(s0e)
-    @test s0e == TrivialSector()
 
     @test (@inferred quantum_dimension(s0e)) == 1
     @test (@inferred quantum_dimension(s0o)) == 1
@@ -87,6 +99,11 @@ using Test: @inferred, @test, @testset, @test_throws
     @test (@inferred dual(s0o)) == s0o
     @test (@inferred dual(s12)) == s12
     @test (@inferred dual(s1)) == s1
+
+    @test s0o < s0e < s12 < s1
+    @test s0e == TrivialSector()
+    @test s0o < TrivialSector()
+    @test TrivialSector() < s12
   end
 
   @testset "SU(2)" begin
@@ -107,10 +124,7 @@ using Test: @inferred, @test, @testset, @test_throws
 
     @test trivial(SU{2}) == SU2(0)
     @test istrivial(SU2(0))
-    @test SU2(0) == TrivialSector()
-
     @test fundamental(SU{2}) == SU2(1//2)
-    @test adjoint(SU{2}) == SU2(1)
 
     @test quantum_dimension(j1) == 1
     @test quantum_dimension(j2) == 2
@@ -122,6 +136,11 @@ using Test: @inferred, @test, @testset, @test_throws
     @test dual(j2) == j2
     @test dual(j3) == j3
     @test dual(j4) == j4
+
+    @test j1 < j2 < j3 < j4
+    @test SU2(0) == TrivialSector()
+    @test !(j2 < TrivialSector())
+    @test TrivialSector() < j2
   end
 
   @testset "SU(N)" begin
@@ -138,9 +157,7 @@ using Test: @inferred, @test, @testset, @test_throws
     @test SU{4}((0, 0, 0)) == TrivialSector()
 
     @test fundamental(SU{3}) == f3
-    @test adjoint(SU{3}) == ad3
     @test fundamental(SU{4}) == f4
-    @test adjoint(SU{4}) == ad4
 
     @test dual(f3) == SU{3}((1, 1))
     @test dual(f4) == SU{4}((1, 1, 1))
@@ -171,6 +188,8 @@ using Test: @inferred, @test, @testset, @test_throws
 
     @test (@inferred quantum_dimension(ı)) == 1.0
     @test (@inferred quantum_dimension(τ)) == ((1 + √5) / 2)
+
+    @test ı < τ
   end
 
   @testset "Ising" begin
@@ -189,6 +208,8 @@ using Test: @inferred, @test, @testset, @test_throws
     @test (@inferred quantum_dimension(ı)) == 1.0
     @test (@inferred quantum_dimension(σ)) == √2
     @test (@inferred quantum_dimension(ψ)) == 1.0
+
+    @test ı < σ < ψ
   end
 end
 end
