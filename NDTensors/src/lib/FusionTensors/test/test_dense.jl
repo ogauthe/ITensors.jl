@@ -128,15 +128,15 @@ end
     g4 = GradedAxes.gradedrange([U1(-1) => 1, U1(0) => 2, U1(1) => 1])
     domain_legs = (g1,)
     codomain_legs = (GradedAxes.dual(g2), GradedAxes.dual(g3), g4)
-    dense = zeros((3, 6, 5, 4))
-    dense[2:2, 1:1, 1:2, 2:3] .= 1.0
+    dense = zeros(ComplexF64, (3, 6, 5, 4))
+    dense[2:2, 1:1, 1:2, 2:3] .= 1.0im
     ft = FusionTensor(dense, domain_legs, codomain_legs)
     @test size(data_matrix(ft)) == (3, 120)
     @test BlockArrays.blocksize(data_matrix(ft)) == (3, 8)
     @test LinearAlgebra.norm(ft) ≈ LinearAlgebra.norm(dense)
     @test isnothing(check_sanity(ft))
     @test Array(ft) ≈ dense
-    @test Array(adjoint(ft)) ≈ permutedims(dense, (2, 3, 4, 1))
+    @test_broken Array(adjoint(ft)) ≈ conj(permutedims(dense, (2, 3, 4, 1)))  # permutedims(BlockSparseArray) issue
   end
 
   @testset "Less than 2 axes" begin

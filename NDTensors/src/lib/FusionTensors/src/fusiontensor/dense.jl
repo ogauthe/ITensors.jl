@@ -48,17 +48,13 @@ function cast_to_dense(ft::FusionTensor)
   return cast_to_dense(data_matrix(ft), domain_axes(ft), codomain_axes(ft))
 end
 
-function cast_to_dense(
-  data_mat::LinearAlgebra.Adjoint, domain_legs::Tuple, codomain_legs::Tuple
-)
-  blockarray = cast_to_dense(
-    adjoint(data_mat), GradedAxes.dual.(codomain_legs), GradedAxes.dual.(domain_legs)
+function cast_to_dense(ft::FusionTensor{<:Any,<:Any,<:Any,<:Any,<:LinearAlgebra.Adjoint})
+  blockarray = cast_to_dense(adjoint(ft))
+  perm = (
+    ntuple(i -> ndims_codomain(ft) + i, ndims_domain(ft))...,
+    ntuple(identity, ndims_codomain(ft))...,
   )
-  NCO = length(codomain_legs)
-  return permutedims(
-    conj(blockarray),
-    (ntuple(i -> NCO + i, length(domain_legs))..., ntuple(identity, NCO)...),
-  )
+  return permutedims(conj(blockarray), perm)
 end
 
 function cast_to_dense(
