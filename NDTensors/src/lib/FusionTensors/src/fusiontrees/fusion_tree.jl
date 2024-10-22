@@ -95,10 +95,10 @@ end
 function get_tree!(
   cache::Dict{NTuple{N,Int},<:Vector{<:Array{<:Real,3}}},
   it::NTuple{N,Int},
-  irreps_vectors::NTuple{N,Vector{C}},
+  irreps_vectors::NTuple{N,Vector{<:SymmetrySectors.AbstractSector}},
   tree_arrows::NTuple{N,Bool},
-  allowed_sectors::Vector{C},
-) where {N,C<:SymmetrySectors.AbstractSector}
+  allowed_sectors::Vector{<:SymmetrySectors.AbstractSector},
+) where {N}
   get!(cache, it) do
     compute_pruned_leavesmerged_fusion_trees(
       getindex.(irreps_vectors, it), tree_arrows, allowed_sectors
@@ -109,18 +109,20 @@ end
 function get_tree!(
   cache::Dict{NTuple{N,Int},<:Vector{<:Array{<:Real}}},
   it::NTuple{N,Int},
-  irreps_vectors::NTuple{N,Vector{C}},
+  irreps_vectors::NTuple{N,Vector{<:SymmetrySectors.AbstractSector}},
   tree_arrows::NTuple{N,Bool},
-  allowed_sectors::Vector{C},
-) where {N,C<:SymmetrySectors.AbstractSector}
+  allowed_sectors::Vector{<:SymmetrySectors.AbstractSector},
+) where {N}
   get!(cache, it) do
     compute_pruned_fusion_trees(getindex.(irreps_vectors, it), tree_arrows, allowed_sectors)
   end
 end
 
 function compute_pruned_leavesmerged_fusion_trees(
-  irreps::NTuple{N,C}, tree_arrows::NTuple{N,Bool}, target_sectors::Vector{C}
-) where {N,C<:SymmetrySectors.AbstractSector}
+  irreps::NTuple{N,<:SymmetrySectors.AbstractSector},
+  tree_arrows::NTuple{N,Bool},
+  target_sectors::Vector{<:SymmetrySectors.AbstractSector},
+) where {N}
   return merge_tree_leaves.(
     compute_pruned_fusion_trees(irreps, tree_arrows, target_sectors)
   )
@@ -141,8 +143,10 @@ function compute_pruned_fusion_trees(
 end
 
 function compute_pruned_fusion_trees(
-  irreps::NTuple{N,C}, tree_arrows::NTuple{N,Bool}, target_sectors::Vector{C}
-) where {N,C<:SymmetrySectors.AbstractSector}
+  irreps::NTuple{N,<:SymmetrySectors.AbstractSector},
+  tree_arrows::NTuple{N,Bool},
+  target_sectors::Vector{<:SymmetrySectors.AbstractSector},
+) where {N}
   @assert issorted(target_sectors, lt=!isless, rev=true)  # strict
   irreps_dims = SymmetrySectors.quantum_dimension.(irreps)
   trees, tree_irreps = fusion_trees(irreps, tree_arrows)

@@ -73,20 +73,6 @@ end
 # =====================================  Internals  ========================================
 
 ##################################  utility tools  #########################################
-
-# TODO replace with FusedAxes method
-function find_allowed_blocks(data_mat::BlockSparseArrays.AbstractBlockSparseMatrix)
-  row_axis, col_axis = axes(data_mat)
-  row_sectors = GradedAxes.blocklabels(row_axis)
-  dual_col_sectors = GradedAxes.blocklabels(GradedAxes.dual(col_axis))
-  allowed_sectors = intersect_sectors(row_sectors, dual_col_sectors)
-  row_shared_indices = findall(in(allowed_sectors), row_sectors)
-  col_shared_indices = findall(in(allowed_sectors), dual_col_sectors)
-  allowed_blocks = BlockArrays.Block.(row_shared_indices, col_shared_indices)
-  allowed_matrix_blocks = [BlockSparseArrays.view!(data_mat, b) for b in allowed_blocks]
-  return allowed_sectors, allowed_matrix_blocks
-end
-
 function find_existing_blocks(data_mat::AbstractMatrix)
   row_sectors = GradedAxes.blocklabels(axes(data_mat, 1))
   existing_blocks = sort(collect(BlockSparseArrays.block_stored_indices(data_mat)))
@@ -296,9 +282,6 @@ function fill_matrix_blocks!(
   domain_fused_axes::FusedAxes,
   codomain_fused_axes::FusedAxes,
 )
-  # find sectors
-  allowed_sectors, allowed_matrix_blocks = find_allowed_blocks(data_mat)
-
   domain_arrows, domain_irreps, domain_degens, domain_dims = split_axes(
     axes(domain_fused_axes)
   )
@@ -306,8 +289,13 @@ function fill_matrix_blocks!(
     axes(codomain_fused_axes)
   )  # codomain needs to be dualed in fusion tree
 
-  existing_outer_blocks, existing_outer_block_sectors = intersect(
-    domain_fused_axes, codomain_fused_axes
+  kept_inds = intersect(domain_fused_axes, codomain_fused_axes)
+  allowed_matrix_blocks = [
+    BlockSparseArrays.view!(data_mat, BlockArrays.Block(k)) for k in kept_inds
+  ]
+  allowed_sectors = GradedAxes.blocklabels(axes(data_mat, 1))[first.(kept_inds)]
+  allowed_outer_blocks = allowed_outer_blocks_sectors(
+    domain_fused_axes, codomain_fused_axes, kept_inds
   )   # TBD vector of pairs instead of pair of vectors?
 
   # cache computed trees
@@ -337,8 +325,7 @@ function fill_matrix_blocks!(
   #     ext1 ext2 ext3                 ext4 ext5 ext6
 
   # loop for each allowed outer block
-  for (outer_block, outer_block_sectors) in
-      zip(existing_outer_blocks, existing_outer_block_sectors)
+  for (outer_block, outer_block_sectors) in allowed_outer_blocks
     iter_do = outer_block[begin:ndims(domain_fused_axes)]
     iter_co = outer_block[(ndims(domain_fused_axes) + 1):end]
 
@@ -500,8 +487,9 @@ function fill_blockarray!(
     axes(codomain_fused_axes)
   )
 
-  existing_outer_blocks, existing_outer_block_sectors = intersect(
-    domain_fused_axes, codomain_fused_axes, existing_sectors
+  kept_inds = intersect(domain_fused_axes, codomain_fused_axes, existing_sectors)
+  existing_outer_blocks = allowed_outer_blocks_sectors(
+    domain_fused_axes, codomain_fused_axes, kept_inds
   )
 
   # cache computed trees
@@ -511,8 +499,7 @@ function fill_blockarray!(
   }()
 
   # loop for each existing outer block
-  for (outer_block, outer_block_sectors) in
-      zip(existing_outer_blocks, existing_outer_block_sectors)
+  for (outer_block, outer_block_sectors) in existing_outer_blocks
     iter_do = outer_block[begin:ndims(domain_fused_axes)]
     iter_co = outer_block[(ndims(domain_fused_axes) + 1):end]
 

@@ -146,6 +146,7 @@ end
 
     ft1 = FusionTensor(v1, (g1,), ())
     @test isnothing(check_sanity(ft1))
+    @test ndims(ft1) == 1
     @test Array(ft1) ≈ v1
 
     ft2 = FusionTensor(v1, (), (g1,))

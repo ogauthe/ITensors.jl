@@ -27,8 +27,6 @@ inner_block_indices(fa::FusedAxes) = fa.inner_block_indices
 
 # Base interface
 Base.axes(fa::FusedAxes) = fa.outer_axes
-Base.iterate(fa::FusedAxes) = iterate(inner_block_indices(fa))
-Base.iterate(fa::FusedAxes, x) = iterate(inner_block_indices(fa), x)
 Base.ndims(fa::FusedAxes) = length(axes(fa))
 
 # constructors
@@ -123,41 +121,18 @@ function find_block_range(fa::FusedAxes, i_block::Integer, i_sector::Integer)
   return index_matrix(fa)[i_block, i_sector]
 end
 
+function kept_indices(left_labels::AbstractVector, right_labels::AbstractVector)
+  # cannot use intersect/searchsort in case e.g. left = Trivial, right = U1(0)
+  # TBD use searchsort? What of adjoint?
+  matches = left_labels .== reshape(right_labels, (1, :))
+  kept_ind = reinterpret(Tuple{Int,Int}, findall(matches))
+  return kept_ind
+end
+
 function Base.intersect(left::FusedAxes, right::FusedAxes)
   left_labels = GradedAxes.blocklabels(fused_axis(left))
   right_labels = GradedAxes.blocklabels(fused_axis(right))
-
-  # cannot use intersect/searchsort in case e.g. left = Trivial, right = U1(0)
-  matches = reshape(left_labels, (1, :)) .== right_labels
-  kept_left_label_indices = findall(>(0), vec(sum(matches; dims=1)))
-  kept_right_label_indices = findall(>(0), vec(sum(matches; dims=2)))
-  return existing_outer_blocks_sectors(
-    left, right, kept_left_label_indices, kept_right_label_indices
-  )
-end
-
-function existing_outer_blocks_sectors(
-  left, right, kept_left_label_indices, kept_right_label_indices
-)
-  left_labels = GradedAxes.blocklabels(fused_axis(left))
-  reduced_left = .!isempty.(index_matrix(left)[:, kept_left_label_indices])
-  reduced_right = .!isempty.(index_matrix(right)[:, kept_right_label_indices])
-
-  existing_outer_blocks = Vector{NTuple{ndims(left) + ndims(right),Int}}()
-  existing_outer_block_sectors = Vector{Vector{eltype(left_labels)}}()
-  for i in 1:size(reduced_left, 1), j in 1:size(reduced_right, 1)
-    intersection = findall(>(0), reduced_left[i, :] .* reduced_right[j, :])  #  ASSUME SORTED LABELS ON BOTH SIDES
-    isempty(intersection) && continue
-    push!(
-      existing_outer_blocks,
-      (
-        translate_inner_block_to_outer(i, left)...,
-        translate_inner_block_to_outer(j, right)...,
-      ),
-    )
-    push!(existing_outer_block_sectors, left_labels[kept_left_label_indices[intersection]])
-  end
-  return existing_outer_blocks, existing_outer_block_sectors
+  return kept_indices(left_labels, right_labels)
 end
 
 function Base.intersect(
@@ -165,19 +140,38 @@ function Base.intersect(
   right::FusedAxes,
   existing_sectors::Vector{<:SymmetrySectors.AbstractSector},
 )
+  # assume existing_sectors ⊂ left_labels && existing_sectors ⊂ right_labels
   left_labels = GradedAxes.blocklabels(fused_axis(left))
   right_labels = GradedAxes.blocklabels(fused_axis(right))
 
-  # cannot use intersect in case e.g. left = Trivial, right = U1(0)
-  # TBD use searchsort? What of adjoint?
-  left_matches = reshape(existing_sectors, (1, :)) .== left_labels
-  right_matches = reshape(existing_sectors, (1, :)) .== right_labels
-  kept_left = findall(>(0), vec(sum(left_matches; dims=2)))
-  kept_right = findall(>(0), vec(sum(right_matches; dims=2)))
-  matches = reshape(kept_left, (1, :)) .== kept_right
-  kept_left_label_indices = kept_left[findall(>(0), vec(sum(matches; dims=1)))]
-  kept_right_label_indices = kept_right[findall(>(0), vec(sum(matches; dims=2)))]
-  return existing_outer_blocks_sectors(
-    left, right, kept_left_label_indices, kept_right_label_indices
-  )
+  kept_left = kept_indices(left_labels, existing_sectors)
+  kept_right = kept_indices(right_labels, existing_sectors)
+  matches = kept_indices(last.(kept_left), last.(kept_right))
+  kept_inds = map(c -> (first(kept_left[first(c)]), first(kept_right[last(c)])), matches)
+  return kept_inds
+end
+
+function allowed_outer_blocks_sectors(
+  left::FusedAxes, right::FusedAxes, kept_indices::AbstractVector
+)
+  left_labels = GradedAxes.blocklabels(fused_axis(left))
+  left_indices = first.(kept_indices)
+  reduced_left = .!isempty.(index_matrix(left)[:, left_indices])
+  reduced_right = .!isempty.(index_matrix(right)[:, last.(kept_indices)])
+
+  allowed_outer_blocks = Vector{NTuple{ndims(left) + ndims(right),Int}}()
+  allowed_outer_block_sectors = Vector{Vector{eltype(left_labels)}}()
+  for i in 1:size(reduced_left, 1), j in 1:size(reduced_right, 1)
+    intersection = findall(>(0), reduced_left[i, :] .* reduced_right[j, :])  #  ASSUME SORTED LABELS ON BOTH SIDES
+    isempty(intersection) && continue
+    push!(
+      allowed_outer_blocks,
+      (
+        translate_inner_block_to_outer(i, left)...,
+        translate_inner_block_to_outer(j, right)...,
+      ),
+    )
+    push!(allowed_outer_block_sectors, left_labels[left_indices[intersection]])
+  end
+  return allowed_outer_blocks .=> allowed_outer_block_sectors
 end
