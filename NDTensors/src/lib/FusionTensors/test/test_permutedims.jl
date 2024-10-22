@@ -1,11 +1,19 @@
 @eval module $(gensym())
 using Test: @test, @testset
 
-using NDTensors.FusionTensors: FusionTensor, ndims_domain, check_sanity, matching_axes
+using NDTensors.FusionTensors:
+  FusionTensor, check_sanity, data_matrix, matching_axes, ndims_domain
 using NDTensors.GradedAxes
 using NDTensors.SymmetrySectors: U1
 
 @testset "permutedims" begin
+  if VERSION >= v"1.11"
+    ft0 = FusionTensor(ones(()), (), ())
+    ft0p = permutedims(ft0, (), ())
+    @test ft0p isa FusionTensor{Float64,0}
+    @test data_matrix(ft0p) ≈ data_matrix(ft0)
+  end
+
   g1 = GradedAxes.gradedrange([U1(0) => 1, U1(1) => 2, U1(2) => 3])
   g2 = GradedAxes.gradedrange([U1(0) => 2, U1(1) => 2, U1(3) => 1])
   g3 = GradedAxes.gradedrange([U1(-1) => 1, U1(0) => 2, U1(1) => 1])

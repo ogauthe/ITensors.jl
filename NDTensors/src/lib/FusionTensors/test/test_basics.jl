@@ -22,14 +22,13 @@ using NDTensors.SymmetrySectors: U1
 @testset "Fusion matrix" begin
   g1 = gradedrange([U1(0) => 1, U1(1) => 2, U1(2) => 3])
   g2 = dual(gradedrange([U1(0) => 2, U1(1) => 2, U1(3) => 1]))
-  g2s = blockmergesort(g2)
 
   # check dual convention when initializing data_matrix
   ft0 = FusionTensor(Float64, (g1,), (g2,))
   @test space_isequal(matrix_row_axis(ft0), g1)
-  @test space_isequal(matrix_column_axis(ft0), g2s)
+  @test space_isequal(matrix_column_axis(ft0), g2)
 
-  m = BlockSparseArray{Float64}(g1, g2s)
+  m = BlockSparseArray{Float64}(g1, g2)
   ft1 = FusionTensor(m, (g1,), (g2,))
 
   # getters
@@ -43,7 +42,7 @@ using NDTensors.SymmetrySectors: U1
   @test ndims_codomain(ft1) == 1
   @test matrix_size(ft1) == (6, 5)
   @test space_isequal(matrix_row_axis(ft1), g1)
-  @test space_isequal(matrix_column_axis(ft1), g2s)
+  @test space_isequal(matrix_column_axis(ft1), g2)
   @test isnothing(check_sanity(ft0))
   @test isnothing(check_sanity(ft1))
 

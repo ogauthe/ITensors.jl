@@ -142,14 +142,12 @@ function fill_data_matrix!(
   # loop for each codomain irrep configuration
   for old_iter_co in old_codomain_fused_axes
     #old_codomain_block_irreps = getindex.(old_codomain_irreps, old_iter_co)
-    old_codomain_block_existing_sectors = intersect_sectors(
-      codomain_block_irreps, existing_sectors
-    )
+    old_codomain_block_existing_sectors = intersect(codomain_block_irreps, existing_sectors)
     isempty(old_codomain_block_existing_sectors) && continue
 
     # loop for each domain irrep configuration
     for old_iter_do in old_domain_fused_axes
-      old_block_existing_sectors = intersect_sectors(
+      old_block_existing_sectors = intersect(
         getindex.(old_domain_irreps, old_iter_do), old_codomain_block_existing_sectors
       )
       isempty(old_block_existing_sectors) && continue

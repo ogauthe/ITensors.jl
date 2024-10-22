@@ -48,18 +48,7 @@ function cast_to_dense(ft::FusionTensor)
   return cast_to_dense(data_matrix(ft), domain_axes(ft), codomain_axes(ft))
 end
 
-function cast_to_dense(ft::FusionTensor{<:Any,<:Any,<:Any,<:Any,<:LinearAlgebra.Adjoint})
-  blockarray = cast_to_dense(adjoint(ft))
-  perm = (
-    ntuple(i -> ndims_codomain(ft) + i, ndims_domain(ft))...,
-    ntuple(identity, ndims_codomain(ft))...,
-  )
-  return permutedims(conj(blockarray), perm)
-end
-
-function cast_to_dense(
-  data_mat::BlockSparseArrays.BlockSparseMatrix, domain_legs::Tuple, codomain_legs::Tuple
-)
+function cast_to_dense(data_mat::AbstractMatrix, domain_legs::Tuple, codomain_legs::Tuple)
   bounds = SymmetrySectors.block_dimensions.((domain_legs..., codomain_legs...))
   blockarray = BlockSparseArrays.BlockSparseArray{eltype(data_mat)}(
     BlockArrays.blockedrange.(bounds)
@@ -73,14 +62,6 @@ end
 # =====================================  Internals  ========================================
 
 ##################################  utility tools  #########################################
-function find_existing_blocks(data_mat::AbstractMatrix)
-  row_sectors = GradedAxes.blocklabels(axes(data_mat, 1))
-  existing_blocks = sort(collect(BlockSparseArrays.block_stored_indices(data_mat)))
-  existing_sectors = [row_sectors[Int(Tuple(b)[2])] for b in existing_blocks]
-  existing_matrix_blocks = [view(data_mat, b) for b in existing_blocks]
-  return existing_sectors, existing_matrix_blocks
-end
-
 function split_axes(legs::Tuple)
   arrows = GradedAxes.isdual.(legs)
   irreps = GradedAxes.blocklabels.(legs)
@@ -287,16 +268,16 @@ function fill_matrix_blocks!(
   )
   codomain_arrows, codomain_irreps, codomain_degens, codomain_dims = split_axes(
     axes(codomain_fused_axes)
-  )  # codomain needs to be dualed in fusion tree
+  )
 
-  kept_inds = intersect(domain_fused_axes, codomain_fused_axes)
+  matrix_block_indices = intersect(domain_fused_axes, codomain_fused_axes)
   allowed_matrix_blocks = [
-    BlockSparseArrays.view!(data_mat, BlockArrays.Block(k)) for k in kept_inds
+    BlockSparseArrays.view!(data_mat, BlockArrays.Block(bi)) for bi in matrix_block_indices
   ]
-  allowed_sectors = GradedAxes.blocklabels(axes(data_mat, 1))[first.(kept_inds)]
+  allowed_sectors = GradedAxes.blocklabels(domain_fused_axes)[first.(matrix_block_indices)]
   allowed_outer_blocks = allowed_outer_blocks_sectors(
-    domain_fused_axes, codomain_fused_axes, kept_inds
-  )   # TBD vector of pairs instead of pair of vectors?
+    domain_fused_axes, codomain_fused_axes, matrix_block_indices
+  )
 
   # cache computed trees
   domain_trees_cache = Dict{NTuple{ndims(domain_fused_axes),Int},Vector{Array{Float64,3}}}()
@@ -477,8 +458,6 @@ function fill_blockarray!(
   domain_fused_axes::FusedAxes,
   codomain_fused_axes::FusedAxes,
 )
-  existing_sectors, existing_matrix_blocks = find_existing_blocks(data_mat)
-
   # domain needs to be dualed in fusion tree
   domain_arrows, domain_irreps, domain_degens, domain_dims = split_axes(
     axes(domain_fused_axes)
@@ -487,9 +466,12 @@ function fill_blockarray!(
     axes(codomain_fused_axes)
   )
 
-  kept_inds = intersect(domain_fused_axes, codomain_fused_axes, existing_sectors)
+  matrix_block_blocks = sort(collect(BlockSparseArrays.block_stored_indices(data_mat)))
+  existing_matrix_blocks = [view(data_mat, b) for b in matrix_block_blocks]
+  matrix_block_indices = reinterpret(Tuple{Int,Int}, matrix_block_blocks)
+  existing_sectors = GradedAxes.blocklabels(domain_fused_axes)[first.(matrix_block_indices)]
   existing_outer_blocks = allowed_outer_blocks_sectors(
-    domain_fused_axes, codomain_fused_axes, kept_inds
+    domain_fused_axes, codomain_fused_axes, matrix_block_indices
   )
 
   # cache computed trees

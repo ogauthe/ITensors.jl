@@ -85,7 +85,7 @@ function Base.deepcopy(ft::FusionTensor)
   return FusionTensor(new_data_matrix, new_domain_axes, new_codomain_axes)
 end
 
-# eachindex is automatically defined for AbstractArray. We do now want it.
+# eachindex is automatically defined for AbstractArray. We do not want it.
 function Base.eachindex(::FusionTensor)
   throw(DomainError("eachindex", "eachindex not defined for FusionTensor"))
 end

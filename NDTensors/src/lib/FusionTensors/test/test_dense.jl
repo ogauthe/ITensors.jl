@@ -136,28 +136,49 @@ end
     @test LinearAlgebra.norm(ft) ≈ LinearAlgebra.norm(dense)
     @test isnothing(check_sanity(ft))
     @test Array(ft) ≈ dense
-    @test_broken Array(adjoint(ft)) ≈ conj(permutedims(dense, (2, 3, 4, 1)))  # permutedims(BlockSparseArray) issue
+    @test Array(adjoint(ft)) ≈ conj(permutedims(dense, (2, 3, 4, 1)))
   end
 
   @testset "Less than 2 axes" begin
-    g1 = GradedAxes.gradedrange([U1(0) => 1, U1(1) => 2, U1(2) => 3])
-    v1 = zeros((6,))
-    v1[1] = 1.0
+    g = GradedAxes.gradedrange([U1(0) => 1, U1(1) => 2, U1(2) => 3])
+    v = zeros((6,))
+    v[1] = 1.0
 
-    ft1 = FusionTensor(v1, (g1,), ())
+    ft1 = FusionTensor(v, (g,), ())
     @test isnothing(check_sanity(ft1))
     @test ndims(ft1) == 1
-    @test Array(ft1) ≈ v1
+    @test vec(Array(data_matrix(ft1))) ≈ v
+    @test Array(ft1) ≈ v
+    @test Array(adjoint(ft1)) ≈ v
 
-    ft2 = FusionTensor(v1, (), (g1,))
+    ft2 = FusionTensor(v, (), (GradedAxes.dual(g),))
     @test isnothing(check_sanity(ft2))
-    @test Array(ft2) ≈ v1
+    @test ndims(ft2) == 1
+    @test vec(Array(data_matrix(ft2))) ≈ v
+    @test Array(ft2) ≈ v
+    @test Array(adjoint(ft2)) ≈ v
+
+    ft3 = FusionTensor(v, (GradedAxes.dual(g),), ())
+    @test isnothing(check_sanity(ft3))
+    @test Array(ft3) ≈ v
+    @test Array(adjoint(ft3)) ≈ v
+
+    ft4 = FusionTensor(v, (), (g,))
+    @test isnothing(check_sanity(ft4))
+    @test Array(ft4) ≈ v
+    @test Array(adjoint(ft4)) ≈ v
 
     zerodim = ones(())
     if VERSION < v"1.11"
       @test_broken FusionTensor(zerodim, (), ()) isa FusionTensor  # https://github.com/JuliaLang/julia/issues/52615
     else
-      @test FusionTensor(zerodim, (), ()) isa FusionTensor
+      ft = FusionTensor(zerodim, (), ())
+      @test ft isa FusionTensor
+      @test ndims(ft) == 0
+      @test isnothing(check_sanity(ft))
+      @test size(data_matrix(ft)) == (1, 1)
+      @test data_matrix(ft)[1, 1] ≈ 1.0
+      @test_broken Array(ft) ≈ zerodim  # cannot create zerodim BlockSparseArray
     end
   end
 end
