@@ -47,14 +47,6 @@ function braid_tuples(t1::Tuple{Vararg{<:Any,N}}, t2::Tuple{Vararg{<:Any,N}}) wh
   return TensorAlgebra.flatten_tuples(nested)
 end
 
-function f_to_c_perm(iterable_product)
-  tstrides = (reverse(cumprod(length.(iterable_product)[begin:(end - 1)]))..., 1)
-  return map(
-    (t,) -> sum((t .- 1) .* tstrides) + 1,
-    Iterators.flatten((Iterators.product(eachindex.(reverse(iterable_product))...),),),
-  )
-end
-
 # compute Kronecker product of fusion trees
 # more efficient with recursive construction
 trees_kron(a, b, c...) = trees_kron(trees_kron(a, b), c...)
@@ -129,40 +121,30 @@ function compute_pruned_leavesmerged_fusion_trees(
 end
 
 function compute_pruned_fusion_trees(
-  ::Tuple{}, ::Tuple{}, target_sectors::Vector{<:SymmetrySectors.AbstractSector}
-)
-  trees_sector = [
-    zeros((SymmetrySectors.quantum_dimension(sec), 0)) for sec in target_sectors
-  ]
-  i0 = findfirst(==(SymmetrySectors.trivial(eltype(target_sectors))), target_sectors)
-  if !isnothing(i0)
-    trees_sector[i0] = ones((1, 1))
-  end
-  return trees_sector
-end
-
-function compute_pruned_fusion_trees(
   irreps::NTuple{N,<:SymmetrySectors.AbstractSector},
   tree_arrows::NTuple{N,Bool},
   target_sectors::Vector{<:SymmetrySectors.AbstractSector},
 ) where {N}
-  @assert issorted(target_sectors, lt=!isless, rev=true)  # strict
-  irreps_dims = SymmetrySectors.quantum_dimension.(irreps)
+
+  # it is possible to prune trees during the construction process and to avoid constructing
+  # trees that will never fuse to target_sectors
+  # currently this is not implemented and no pruning is done inside fusion_trees
   trees, tree_irreps = fusion_trees(irreps, tree_arrows)
-  trees_sector = [
+
+  # pruning is only done here by discarding irreps that are not in target_sectors
+  # also insert dummy trees in sectors that did not appear in the fusion product of irreps
+
+  irreps_dims = SymmetrySectors.quantum_dimension.(irreps)
+  trees_sector = [   # fill with dummy
     zeros((irreps_dims..., SymmetrySectors.quantum_dimension(sec), 0)) for
     sec in target_sectors
   ]
-  i_sec, j = 1, 1
-  while i_sec <= lastindex(target_sectors) && j <= lastindex(tree_irreps)
-    if target_sectors[i_sec] < tree_irreps[j]
-      i_sec += 1
-    elseif tree_irreps[j] < target_sectors[i_sec]
-      j += 1
-    else
-      trees_sector[i_sec] = trees[j]
-      i_sec += 1
-      j += 1
+
+  # set trees at their correct position
+  for (i, s) in enumerate(target_sectors)
+    j = findfirst(==(s), tree_irreps)
+    if !isnothing(j)
+      trees_sector[i] = trees[j]
     end
   end
   return trees_sector
@@ -196,10 +178,9 @@ function fusion_trees(
   trees = trees_kron(getindex.(sector_trees_irreps, 1)...)
 
   # sort irreps. Each sector is sorted, permutation is obtained by reversing loop order
-  perm = f_to_c_perm(getindex.(sector_trees_irreps, 2))
-  tree_irreps = getindex.(Ref(tree_irreps), perm)
-  trees = getindex.(Ref(trees), perm)
-
+  perm = sortperm(tree_irreps)
+  permute!(tree_irreps, perm)
+  permute!(trees, perm)
   return trees, tree_irreps
 end
 
@@ -218,65 +199,68 @@ function fusion_trees(::SymmetrySectors.AbelianStyle, irreps::Tuple, ::Tuple)
   return [ones(ntuple(_ -> 1, length(irreps) + 2))], [irrep_prod]
 end
 
-function build_trees(
-  old_tree::Matrix,
-  old_irrep::SymmetrySectors.AbstractSector,
+function build_children_trees(
+  parent_tree::Matrix,
+  parent_irrep::SymmetrySectors.AbstractSector,
   level_irrep::SymmetrySectors.AbstractSector,
   level_arrow::Bool,
   inner_multiplicity::Integer,
   sec::SymmetrySectors.AbstractSector,
 )
-  sector_trees = Vector{typeof(old_tree)}()
+  sector_trees = Vector{typeof(parent_tree)}()
   for inner_mult_index in 1:inner_multiplicity
     cgt_inner_mult = clebsch_gordan_tensor(
-      old_irrep, level_irrep, sec, false, level_arrow, inner_mult_index
+      parent_irrep, level_irrep, sec, false, level_arrow, inner_mult_index
     )
-    dim_old_irrep, dim_level_irrep, dim_sec = size(cgt_inner_mult)
-    tree = old_tree * reshape(cgt_inner_mult, (dim_old_irrep, dim_level_irrep * dim_sec))
-    new_tree = reshape(tree, (size(old_tree, 1) * dim_level_irrep, dim_sec))
-    push!(sector_trees, new_tree)
+    dim_parent_irrep, dim_level_irrep, dim_sec = size(cgt_inner_mult)
+    tree =
+      parent_tree * reshape(cgt_inner_mult, (dim_parent_irrep, dim_level_irrep * dim_sec))
+    child_tree = reshape(tree, (size(parent_tree, 1) * dim_level_irrep, dim_sec))
+    push!(sector_trees, child_tree)
   end
   return sector_trees
 end
 
-function build_trees(
-  old_tree::Matrix,
-  old_irrep::SymmetrySectors.AbstractSector,
+function build_children_trees(
+  parent_tree::Matrix,
+  parent_irrep::SymmetrySectors.AbstractSector,
   level_irrep::SymmetrySectors.AbstractSector,
   level_arrow::Bool,
 )
-  new_trees = Vector{typeof(old_tree)}()
-  new_irreps = Vector{typeof(old_irrep)}()
-  rep = GradedAxes.fusion_product(old_irrep, level_irrep)
+  children_trees = Vector{typeof(parent_tree)}()
+  children_irreps = Vector{typeof(parent_irrep)}()
+  rep = GradedAxes.fusion_product(parent_irrep, level_irrep)
   for (inner_multiplicity, sec) in
       zip(BlockArrays.blocklengths(rep), GradedAxes.blocklabels(rep))
-    sector_trees = build_trees(
-      old_tree, old_irrep, level_irrep, level_arrow, inner_multiplicity, sec
+    sector_trees = build_children_trees(
+      parent_tree, parent_irrep, level_irrep, level_arrow, inner_multiplicity, sec
     )
-    append!(new_trees, sector_trees)
-    append!(new_irreps, repeat([sec], inner_multiplicity))
+    append!(children_trees, sector_trees)
+    append!(children_irreps, repeat([sec], inner_multiplicity))
   end
-  return new_trees, new_irreps
+  return children_trees, children_irreps
 end
 
-function build_trees(
-  trees::Vector,
-  irreps::Vector,
+function build_next_level_trees(
+  parent_trees::Vector,
+  parent_trees_irreps::Vector,
   level_irrep::SymmetrySectors.AbstractSector,
   level_arrow::Bool,
 )
-  next_level_trees = typeof(trees)()
-  next_level_irreps = typeof(irreps)()
-  for (old_tree, old_irrep) in zip(trees, irreps)
-    new_trees, new_irreps = build_trees(old_tree, old_irrep, level_irrep, level_arrow)
-    append!(next_level_trees, new_trees)
-    append!(next_level_irreps, new_irreps)
+  next_level_trees = empty(parent_trees)
+  next_level_irreps = empty(parent_trees_irreps)
+  for (parent_tree, parent_irrep) in zip(parent_trees, parent_trees_irreps)
+    children_trees, children_irreps = build_children_trees(
+      parent_tree, parent_irrep, level_irrep, level_arrow
+    )
+    append!(next_level_trees, children_trees)
+    append!(next_level_irreps, children_irreps)
   end
   return next_level_trees, next_level_irreps
 end
 
 function build_trees(trees::Vector, tree_irreps::Vector, irreps::Tuple, tree_arrows::Tuple)
-  next_level_trees, next_level_irreps = build_trees(
+  next_level_trees, next_level_irreps = build_next_level_trees(
     trees, tree_irreps, first(irreps), first(tree_arrows)
   )
   return build_trees(next_level_trees, next_level_irreps, irreps[2:end], tree_arrows[2:end])
