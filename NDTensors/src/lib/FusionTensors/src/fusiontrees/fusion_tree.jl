@@ -171,13 +171,7 @@ end
 
 # ================================  Low level interface  ===================================
 function fusion_trees(::Tuple{}, ::Tuple{})
-  return [ones((1, 1))], [SymmetrySectors.sector()]
-end
-
-function fusion_trees(
-  ::NTuple{N,SymmetrySectors.SectorProduct{Tuple{}}}, ::NTuple{N,Bool}
-) where {N}
-  return [ones(ntuple(_ -> 1, N + 2))], [SymmetrySectors.sector()]
+  return [ones((1, 1))], [SymmetrySectors.TrivialSector()]
 end
 
 function fusion_trees(

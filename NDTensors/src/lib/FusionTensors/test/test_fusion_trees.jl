@@ -8,7 +8,11 @@ using NDTensors.FusionTensors: fusion_trees
 using NDTensors.GradedAxes: GradedAxes
 using NDTensors.SymmetrySectors: SymmetrySectors, SU, SU2, TrivialSector, U1, Z
 
-@testset "Empty fusion trees" begin
+@testset "Trivial fusion trees" begin
+  trees1, tree_irreps1 = fusion_trees((), ())
+  @test tree_irreps1 == [TrivialSector()]
+  @test trees1 == [ones((1, 1))]
+
   trees2, tree_irreps2 = fusion_trees((TrivialSector(), TrivialSector()), (false, false))
   @test tree_irreps2 == [TrivialSector()]
   @test trees2 == [ones((1, 1, 1, 1))]
