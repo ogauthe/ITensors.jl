@@ -62,12 +62,11 @@ end
 # =====================================  Internals  ========================================
 
 ##################################  utility tools  #########################################
-function split_axes(legs::Tuple)
-  arrows = GradedAxes.isdual.(legs)
-  irreps = GradedAxes.blocklabels.(legs)
+function split_axes(fa::FusedAxes)
+  legs = axes(fa)
   degens = BlockArrays.blocklengths.(legs)
-  dimensions = broadcast.(SymmetrySectors.quantum_dimension, irreps)
-  return arrows, irreps, degens, dimensions
+  dimensions = broadcast.(SymmetrySectors.quantum_dimension, GradedAxes.blocklabels.(legs))
+  return legs, degens, dimensions
 end
 
 function split_degen_dims(
@@ -263,12 +262,8 @@ function fill_matrix_blocks!(
   domain_fused_axes::FusedAxes,
   codomain_fused_axes::FusedAxes,
 )
-  domain_arrows, domain_irreps, domain_degens, domain_dims = split_axes(
-    axes(domain_fused_axes)
-  )
-  codomain_arrows, codomain_irreps, codomain_degens, codomain_dims = split_axes(
-    axes(codomain_fused_axes)
-  )
+  domain_legs, domain_degens, domain_dims = split_axes(domain_fused_axes)
+  codomain_legs, codomain_degens, codomain_dims = split_axes(codomain_fused_axes)
 
   matrix_block_indices = intersect(domain_fused_axes, codomain_fused_axes)
   allowed_matrix_blocks = [
@@ -308,14 +303,15 @@ function fill_matrix_blocks!(
   # loop for each allowed outer block
   for (outer_block, outer_block_sectors) in allowed_outer_blocks
     iter_do = outer_block[begin:ndims(domain_fused_axes)]
-    iter_co = outer_block[(ndims(domain_fused_axes) + 1):end]
-
     domain_block_trees = get_tree!(
-      domain_trees_cache, iter_do, domain_irreps, domain_arrows, allowed_sectors
+      domain_trees_cache, iter_do, domain_legs, allowed_sectors
     )
+
+    iter_co = outer_block[(ndims(domain_fused_axes) + 1):end]
     codomain_block_trees = get_tree!(
-      codomain_trees_cache, iter_co, codomain_irreps, codomain_arrows, allowed_sectors
+      codomain_trees_cache, iter_co, codomain_legs, allowed_sectors
     )
+
     fused_dense_block = fuse_dense_block(
       view(blockarray, BlockArrays.Block(iter_do..., iter_co...)),
       getindex.(domain_degens, iter_do),
@@ -345,7 +341,6 @@ function fill_matrix_blocks!(
       # contract fusion trees and reshape symmetric block as a matrix
       # Note: a final permutedims is needed after the last contract
       # therefore cannot efficiently use contract!(allowed_matrix_blocks[...], ...)
-      # TBD something like permutedims!(reshape(view), sym_block, (1,3,2,4))?
       i_sec = findfirst(==(sect), allowed_sectors)
       sym_block_sec = contract_fusion_trees(
         fused_dense_block, domain_block_trees[i_sec], codomain_block_trees[i_sec]
@@ -458,13 +453,8 @@ function fill_blockarray!(
   domain_fused_axes::FusedAxes,
   codomain_fused_axes::FusedAxes,
 )
-  # domain needs to be dualed in fusion tree
-  domain_arrows, domain_irreps, domain_degens, domain_dims = split_axes(
-    axes(domain_fused_axes)
-  )
-  codomain_arrows, codomain_irreps, codomain_degens, codomain_dims = split_axes(
-    axes(codomain_fused_axes)
-  )
+  domain_legs, domain_degens, domain_dims = split_axes(domain_fused_axes)
+  codomain_legs, codomain_degens, codomain_dims = split_axes(codomain_fused_axes)
 
   matrix_block_blocks = sort(collect(BlockSparseArrays.block_stored_indices(data_mat)))
   existing_matrix_blocks = [view(data_mat, b) for b in matrix_block_blocks]
@@ -483,19 +473,18 @@ function fill_blockarray!(
   # loop for each existing outer block
   for (outer_block, outer_block_sectors) in existing_outer_blocks
     iter_do = outer_block[begin:ndims(domain_fused_axes)]
-    iter_co = outer_block[(ndims(domain_fused_axes) + 1):end]
-
-    codomain_block_trees = get_tree!(
-      codomain_trees_cache, iter_co, codomain_irreps, codomain_arrows, existing_sectors
-    )
-    codomain_block_degens = getindex.(codomain_degens, iter_co)
-    codomain_block_dims = getindex.(codomain_dims, iter_co)
-
-    domain_block_trees = get_tree!(
-      domain_trees_cache, iter_do, domain_irreps, domain_arrows, existing_sectors
-    )
     domain_block_degens = getindex.(domain_degens, iter_do)
     domain_block_dims = getindex.(domain_dims, iter_do)
+    domain_block_trees = get_tree!(
+      domain_trees_cache, iter_do, domain_legs, existing_sectors
+    )
+
+    iter_co = outer_block[(ndims(domain_fused_axes) + 1):end]
+    codomain_block_degens = getindex.(codomain_degens, iter_co)
+    codomain_block_dims = getindex.(codomain_dims, iter_co)
+    codomain_block_trees = get_tree!(
+      codomain_trees_cache, iter_co, codomain_legs, existing_sectors
+    )
 
     #        ---------------------fused_dense_block--------------------
     #        |                   |                 |                  |

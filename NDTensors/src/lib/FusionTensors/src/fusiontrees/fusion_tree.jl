@@ -95,26 +95,26 @@ end
 function get_tree!(
   cache::Dict{NTuple{N,Int},<:Vector{<:Array{<:Real,3}}},
   it::NTuple{N,Int},
-  irreps_vectors::NTuple{N,Vector{<:SymmetrySectors.AbstractSector}},
-  tree_arrows::NTuple{N,Bool},
+  legs::NTuple{N,AbstractUnitRange},
   allowed_sectors::Vector{<:SymmetrySectors.AbstractSector},
 ) where {N}
   get!(cache, it) do
-    compute_pruned_leavesmerged_fusion_trees(
-      getindex.(irreps_vectors, it), tree_arrows, allowed_sectors
-    )
+    tree_arrows = GradedAxes.isdual.(legs)
+    irreps = getindex.(GradedAxes.blocklabels.(legs), it)
+    return compute_pruned_leavesmerged_fusion_trees(irreps, tree_arrows, allowed_sectors)
   end
 end
 
 function get_tree!(
   cache::Dict{NTuple{N,Int},<:Vector{<:Array{<:Real}}},
   it::NTuple{N,Int},
-  irreps_vectors::NTuple{N,Vector{<:SymmetrySectors.AbstractSector}},
-  tree_arrows::NTuple{N,Bool},
+  legs::NTuple{N,AbstractUnitRange},
   allowed_sectors::Vector{<:SymmetrySectors.AbstractSector},
 ) where {N}
   get!(cache, it) do
-    compute_pruned_fusion_trees(getindex.(irreps_vectors, it), tree_arrows, allowed_sectors)
+    tree_arrows = GradedAxes.isdual.(legs)
+    irreps = getindex.(GradedAxes.blocklabels.(legs), it)
+    return compute_pruned_fusion_trees(irreps, tree_arrows, allowed_sectors)
   end
 end
 
@@ -131,7 +131,6 @@ end
 function compute_pruned_fusion_trees(
   ::Tuple{}, ::Tuple{}, target_sectors::Vector{<:SymmetrySectors.AbstractSector}
 )
-  @assert issorted(target_sectors, lt=!isless, rev=true)  # strict
   trees_sector = [
     zeros((SymmetrySectors.quantum_dimension(sec), 0)) for sec in target_sectors
   ]
