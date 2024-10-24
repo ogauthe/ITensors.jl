@@ -160,17 +160,17 @@ function fusion_trees(
 ) where {N}
   # construct fusion_tree(SectorProduct) as kron(fusion_trees(inner_sectors))
 
-  sector_irreps = SymmetrySectors.product_sectors.(irreps)
-  n_cat = length(first(sector_irreps))
+  argument_irreps = SymmetrySectors.arguments.(irreps)
+  n_args = length(first(argument_irreps))
 
   # construct fusion tree for each sector
-  transposed_cats = ntuple(c -> getindex.(sector_irreps, c), n_cat)
-  sector_trees_irreps = fusion_trees.(transposed_cats, Ref(tree_arrows))
+  transposed_args = ntuple(s -> getindex.(argument_irreps, s), n_args)
+  sector_trees_irreps = fusion_trees.(transposed_args, Ref(tree_arrows))
 
   # reconstruct sector for each product tree
-  T = eltype(sector_irreps)
+  T = eltype(argument_irreps)
   tree_irreps = map(
-    cats -> SymmetrySectors.SectorProduct(T(cats)),
+    args -> SymmetrySectors.SectorProduct(T(args)),
     Iterators.flatten((Iterators.product((getindex.(sector_trees_irreps, 2))...),),),
   )
 
@@ -297,7 +297,7 @@ function cat_thin_trees(thin_trees::Vector, uncat_tree_irreps::Vector)
   return thick_trees, tree_irreps
 end
 
-# arrow direction is needed to define CG tensor for Lie groups
+# arrow direction is needed to define non-trivial CG tensor
 function fusion_trees(::SymmetrySectors.NotAbelianStyle, irreps::Tuple, tree_arrows::Tuple)
   # compute "thin" trees: 1 tree = fuses on ONE irrep
   thin_trees, uncat_tree_irreps = compute_thin_trees(irreps, tree_arrows)
