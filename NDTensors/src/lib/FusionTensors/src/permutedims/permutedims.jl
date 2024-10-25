@@ -14,19 +14,12 @@ function fusiontensor_permutedims(
   return permutedims(ft, biperm)
 end
 
-# 0-dim case
-function fusiontensor_permutedims(
-  ft::FusionTensor{<:Any,0}, ::TensorAlgebra.BlockedPermutation{2,0}
-)
-  return ft
-end
-
 function fusiontensor_permutedims(
   ft::FusionTensor, biperm::TensorAlgebra.BlockedPermutation{2}
 )
   @assert ndims(ft) == length(biperm)
 
-  # early return for identity operation. Do not copy.
+  # early return for identity operation. Do not copy. Also handle tricky 0-dim case.
   if ndims_domain(ft) == first(BlockArrays.blocklengths(biperm))  # compile time
     if Tuple(biperm) == ntuple(identity, ndims(ft))
       return ft
