@@ -13,7 +13,6 @@ using NDTensors.TensorAlgebra: TensorAlgebra
 
 include("fusiontrees/clebsch_gordan.jl")
 include("fusiontrees/fusion_tree.jl")
-include("fusiontrees/intersect_sectors.jl")
 
 include("fusiontensor/fusedaxes.jl")
 include("fusiontensor/fusiontensor.jl")
