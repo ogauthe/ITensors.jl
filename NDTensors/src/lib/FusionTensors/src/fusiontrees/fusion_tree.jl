@@ -129,7 +129,9 @@ function compute_pruned_fusion_trees(
   # it is possible to prune trees during the construction process and to avoid constructing
   # trees that will never fuse to target_sectors
   # currently this is not implemented and no pruning is done inside fusion_trees
-  trees, tree_irreps = fusion_trees(irreps, tree_arrows)
+  tree_irreps_pairs = fusion_trees(irreps, tree_arrows)
+  tree_irreps = first.(tree_irreps_pairs)
+  trees = last.(tree_irreps_pairs)
 
   # pruning is only done here by discarding irreps that are not in target_sectors
   # also insert dummy trees in sectors that did not appear in the fusion product of irreps
@@ -152,7 +154,7 @@ end
 
 # ================================  Low level interface  ===================================
 function fusion_trees(::Tuple{}, ::Tuple{})
-  return [ones((1, 1))], [SymmetrySectors.TrivialSector()]
+  return [SymmetrySectors.TrivialSector() => ones((1, 1))]
 end
 
 function fusion_trees(
@@ -165,23 +167,24 @@ function fusion_trees(
 
   # construct fusion tree for each sector
   transposed_args = ntuple(s -> getindex.(argument_irreps, s), n_args)
-  sector_trees_irreps = fusion_trees.(transposed_args, Ref(tree_arrows))
+  sector_trees_irreps = map(a -> fusion_trees(a, tree_arrows), transposed_args)
 
   # reconstruct sector for each product tree
   T = eltype(argument_irreps)
+  fused_arguments = broadcast.(first, sector_trees_irreps)
   tree_irreps = map(
-    args -> SymmetrySectors.SectorProduct(T(args)),
-    Iterators.flatten((Iterators.product((getindex.(sector_trees_irreps, 2))...),),),
+    SymmetrySectors.SectorProduct ∘ T,
+    Iterators.flatten((Iterators.product(fused_arguments...),)),
   )
 
   # compute Kronecker product of fusion trees
-  trees = trees_kron(getindex.(sector_trees_irreps, 1)...)
+  trees = trees_kron(broadcast.(last, sector_trees_irreps)...)
 
   # sort irreps. Each sector is sorted, permutation is obtained by reversing loop order
   perm = sortperm(tree_irreps)
   permute!(tree_irreps, perm)
   permute!(trees, perm)
-  return trees, tree_irreps
+  return tree_irreps .=> trees
 end
 
 function fusion_trees(
@@ -196,7 +199,7 @@ end
 # it does not depend on arrow directions
 function fusion_trees(::SymmetrySectors.AbelianStyle, irreps::Tuple, ::Tuple)
   irrep_prod = reduce(⊗, irreps)
-  return [ones(ntuple(_ -> 1, length(irreps) + 2))], [irrep_prod]
+  return [irrep_prod => ones(ntuple(_ -> 1, length(irreps) + 2))]
 end
 
 function build_children_trees(
@@ -307,5 +310,5 @@ function fusion_trees(::SymmetrySectors.NotAbelianStyle, irreps::Tuple, tree_arr
 
   irrep_dims = SymmetrySectors.quantum_dimension.(irreps)
   thick_trees = map(tree -> unmerge_tree_leaves(tree, irrep_dims), thick_mergedleaves_trees)
-  return thick_trees, tree_irreps
+  return tree_irreps .=> thick_trees
 end
