@@ -8,15 +8,10 @@
 function compute_unitaries(
   old_domain_legs::Tuple{Vararg{AbstractUnitRange}},
   old_codomain_legs::Tuple{Vararg{AbstractUnitRange}},
-  new_domain_legs::Tuple{Vararg{AbstractUnitRange}},
-  new_codomain_legs::Tuple{Vararg{AbstractUnitRange}},
-  flat_permutation::Tuple{Vararg{Int}},
+  biperm::TensorAlgebra.BlockedPermutation{2},
 )
-  @assert length(old_domain_legs) + length(old_codomain_legs) == length(flat_permutation)
-  @assert length(new_domain_legs) + length(new_codomain_legs) == length(flat_permutation)
-  return compute_unitaries_clebsch_gordan(
-    old_domain_legs, old_codomain_legs, new_domain_legs, new_codomain_legs, flat_permutation
-  )
+  @assert length(old_domain_legs) + length(old_codomain_legs) == length(biperm)
+  return compute_unitaries_clebsch_gordan(old_domain_legs, old_codomain_legs, biperm)
 end
 
 # ===========================  Constructor from Clebsch-Gordan  ============================
@@ -67,6 +62,14 @@ function contract_singlet_space_projector(
   return reshape(projector, (irrep_dims_prod, :))
 end
 
+function intersect_trees(
+  domain_trees::Vector{<:AbstractArray{<:Real}},
+  codomain_trees::Vector{<:AbstractArray{<:Real}},
+)
+  kept_indices = findall(.!isempty.(domain_trees) .* .!isempty.(codomain_trees))
+  return domain_trees[kept_indices] .=> codomain_trees[kept_indices]
+end
+
 function overlap_fusion_trees(
   old_domain_block_trees::Vector{<:AbstractArray{<:Real}},
   old_codomain_block_trees::Vector{<:AbstractArray{<:Real}},
@@ -74,7 +77,23 @@ function overlap_fusion_trees(
   new_codomain_block_trees::Vector{<:AbstractArray{<:Real}},
   irreps_perm::NTuple{N,Int},
 ) where {N}
+  # filter trees that do not share the same sectors
+  old_trees = intersect_trees(old_domain_block_trees, old_codomain_block_trees)
+  new_trees = intersect_trees(new_domain_block_trees, new_codomain_block_trees)
+  return overlap_filtered_fusion_trees(old_trees, new_trees, irreps_perm)
+end
+
+function overlap_filtered_fusion_trees(
+  old_trees::Vector{<:Pair{<:AbstractArray{<:Real},<:AbstractArray{<:Real}}},
+  new_trees::Vector{<:Pair{<:AbstractArray{<:Real},<:AbstractArray{<:Real}}},
+  irreps_perm::NTuple{N,Int},
+) where {N}
+  old_domain_block_trees = first.(old_trees)
+  old_codomain_block_trees = last.(old_trees)
+  new_domain_block_trees = first.(new_trees)
+  new_codomain_block_trees = last.(new_trees)
   # compile time
+
   OldNCoAxes = ndims(eltype(old_domain_block_trees)) - 2
   OldNDoAxes = ndims(eltype(old_codomain_block_trees)) - 2
   NCoAxesNew = ndims(eltype(new_domain_block_trees)) - 2
@@ -99,51 +118,51 @@ function overlap_fusion_trees(
     contract_singlet_space_projector.(
       new_domain_block_trees, new_codomain_block_trees, Ref(ntuple(identity, N))
     )
-  old_projectors =
-    contract_singlet_space_projector.(
-      old_domain_block_trees, old_codomain_block_trees, Ref(irreps_perm)
-    )
 
-  for (i, j) in Iterators.product(eachindex.((new_projectors, old_projectors))...)
-    # Contract new and old projectors to construct singlet space basis change matrix.
-    # Construction is blockwise. One block (i,j) corresponds to fusing old axes
-    # over sector sec_j and new axes over sector sec_i. It has a 4-dim tensor
-    # internal structure which is reshaped into a matrix.
-    #
-    #          --------------dim_sec_j---------
-    #          |                              |
-    #          |   struct_mult                |   struct_mult_old_codomain_sec_j
-    #           \  / _old_domain_sec_j         \  /
-    #            \/                             \/
-    #            /                              /
-    #           /                              /
-    #          /\                             /\
-    #         /  \                           /  \
-    #        /\   \                         /\   \
-    #       /  \   \                       /  \   \
-    #     dim1 dim2 dim3                 dim4 dim5 dim6
-    #      |    |   |                      |   |    |
-    #      ----------------- irreps_perm ------------
-    #      |    |    |    |              |     |
-    #     dim4 dim1 dim2 dim6           dim3  dim5
-    #       \   /   /    /                \   /
-    #        \ /   /    /                  \ /
-    #         \   /    /                    \
-    #          \ /    /                      \
-    #           \    /                        \
-    #            \  /                          \
-    #             \/                            \
-    #              \                             \
-    #               \                             \
-    #               /\                            /\
-    #              /  \                          /  \
-    #             | struct_mult                 |  struct_mult_new_codomain_sec_i
-    #             |   _old_domain_sec_j         |
-    #             |                             |
-    #             -------------dim_sec_i---------
-    #
-    dim_sec_i = size(new_domain_block_trees[i], NCoAxesNew + 1)
-    unitary[BlockArrays.Block(i, j)] = (new_projectors[i]'old_projectors[j]) / dim_sec_i
+  for j in eachindex(block_rows)
+    old_proj = contract_singlet_space_projector(
+      old_domain_block_trees[j], old_codomain_block_trees[j], irreps_perm
+    )
+    for (i, new_proj) in enumerate(new_projectors)
+
+      # Contract new and old projectors to construct singlet space basis change matrix.
+      # Construction is blockwise. One block (i,j) corresponds to fusing old axes
+      # over sector sec_j and new axes over sector sec_i. It has a 4-dim tensor
+      # internal structure which is reshaped into a matrix.
+      #
+      #         --------------dim_sec_j---------
+      #         |                              |
+      #         |   struct_mult                |   struct_mult_old_codomain_sec_j
+      #          \  / _old_domain_sec_j         \  /
+      #           \/                             \/
+      #           /                              /
+      #          /\                             /\
+      #         /  \                           /  \
+      #        /\   \                         /\   \
+      #       /  \   \                       /  \   \
+      #     dim1 dim2 dim3                 dim4 dim5 dim6
+      #      |    |   |                      |   |    |
+      #      ----------------- irreps_perm ------------
+      #      |    |    |    |              |     |
+      #     dim4 dim1 dim2 dim6           dim3  dim5
+      #       \   /   /    /                \   /
+      #        \ /   /    /                  \ /
+      #         \   /    /                    \
+      #          \ /    /                      \
+      #           \    /                        \
+      #            \  /                          \
+      #             \/                            \
+      #              \                             \
+      #              /\                            /\
+      #             /  \                          /  \
+      #            | struct_mult                 |  struct_mult_new_codomain_sec_i
+      #            |   _old_domain_sec_j         |
+      #            |                             |
+      #            -------------dim_sec_i---------
+      #
+      dim_sec_i = size(new_domain_block_trees[i], NCoAxesNew + 1)
+      unitary[BlockArrays.Block(i, j)] = (new_proj'old_proj) / dim_sec_i
+    end
   end
 
   return unitary
@@ -152,13 +171,14 @@ end
 function compute_unitaries_clebsch_gordan(
   old_domain_legs::NTuple{OldNDoAxes,AbstractUnitRange},
   old_codomain_legs::NTuple{OldNCoAxes,AbstractUnitRange},
-  new_domain_legs::NTuple{NewNDoAxes,AbstractUnitRange},
-  new_codomain_legs::NTuple{NewNCoAxes,AbstractUnitRange},
-  flat_permutation::NTuple{N,Int},
-) where {N,OldNDoAxes,OldNCoAxes,NewNDoAxes,NewNCoAxes}
-  perm1 = flat_permutation[begin:NewNDoAxes]
-  perm2 = flat_permutation[(NewNDoAxes + 1):end]
+  biperm::TensorAlgebra.BlockedPermutation{2,N},
+) where {OldNDoAxes,OldNCoAxes,N}
+  @assert OldNDoAxes + OldNCoAxes == N
 
+  new_domain_legs, nondual_new_codomain_legs = TensorAlgebra.blockpermute(
+    (old_domain_legs..., old_codomain_legs...), biperm
+  )
+  new_codomain_legs = GradedAxes.dual.(nondual_new_codomain_legs)
   new_row_labels = GradedAxes.blocklabels(GradedAxes.fusion_product(new_domain_legs...))
   new_column_labels = GradedAxes.blocklabels(
     GradedAxes.fusion_product(new_codomain_legs...)
@@ -199,29 +219,38 @@ function compute_unitaries_clebsch_gordan(
     NTuple{OldNCoAxes,Int},Vector{Array{Float64,OldNCoAxes + 2}}
   }()
   new_domain_trees_cache = Dict{
-    NTuple{NewNDoAxes,Int},Vector{Array{Float64,NewNDoAxes + 2}}
+    NTuple{length(new_domain_legs),Int},Vector{Array{Float64,length(new_domain_legs) + 2}}
   }()
   new_codomain_trees_cache = Dict{
-    NTuple{NewNCoAxes,Int},Vector{Array{Float64,NewNCoAxes + 2}}
+    NTuple{length(new_codomain_legs),Int},
+    Vector{Array{Float64,length(new_codomain_legs) + 2}},
   }()
 
+  flat_permutation = Tuple(biperm)
+
   # loop over all allowed outer blocks.
-  for (it, _) in old_allowed_outer_blocks
+  for (old_outer_block, _) in old_allowed_outer_blocks
+    new_domain_outer_block, new_codomain_outer_block = TensorAlgebra.blockpermute(
+      old_outer_block, biperm
+    )
     old_domain_block_trees = get_tree!(
-      old_domain_trees_cache, it[begin:OldNDoAxes], old_domain_legs, old_allowed_sectors
+      old_domain_trees_cache,
+      old_outer_block[begin:OldNDoAxes],
+      old_domain_legs,
+      old_allowed_sectors,
     )
     old_codomain_block_trees = get_tree!(
       old_codomain_trees_cache,
-      it[(OldNDoAxes + 1):end],
-      old_codomain_legs,
+      old_outer_block[(OldNDoAxes + 1):end],
+      GradedAxes.dual.(old_codomain_legs),
       old_allowed_sectors,
     )
     new_domain_block_trees = get_tree!(
-      new_domain_trees_cache, map(i -> it[i], perm1), new_domain_legs, new_allowed_sectors
+      new_domain_trees_cache, new_domain_outer_block, new_domain_legs, new_allowed_sectors
     )
     new_codomain_block_trees = get_tree!(
       new_codomain_trees_cache,
-      map(i -> it[i], perm2),
+      new_codomain_outer_block,
       new_codomain_legs,
       new_allowed_sectors,
     )
@@ -233,7 +262,7 @@ function compute_unitaries_clebsch_gordan(
       new_codomain_block_trees,
       flat_permutation,
     )
-    unitaries[it] = u
+    unitaries[old_outer_block] = u
   end
 
   return unitaries
