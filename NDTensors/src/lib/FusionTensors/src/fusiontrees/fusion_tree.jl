@@ -25,8 +25,8 @@
 #     dim1 dim2 dim3
 #
 #
-# It is convenient to "fuse" the tree by merging together the dimension legs to yield a
-# 3-dim tensor with size (dim1*dim2*...*dimN, dim_sec, struct_mult_sec)
+# It is convenient to "merge the tree leaves" by merging together the dimension legs to
+# yield a 3-dim tensor with size (dim1*dim2*...*dimN, dim_sec, struct_mult_sec)
 #
 #             ---------------------------
 #             |             |           |
@@ -37,7 +37,7 @@
 # sector but carry a scaling factor sqrt(dim_sec)
 #
 # convention: irreps are already dualed if needed, arrows do not affect them. They only
-# affect the basis on which the tree acts for self-dual irreps.
+# affect the basis on which the tree projects for self-dual irreps.
 #
 
 # ===================================  Utility tools  ======================================
@@ -125,7 +125,6 @@ function compute_pruned_fusion_trees(
 
   # pruning is only done here by discarding irreps that are not in target_sectors
   # also insert dummy trees in sectors that did not appear in the fusion product of irreps
-
   irreps_dims = SymmetrySectors.quantum_dimension.(irreps)
   trees_sector = [   # fill with dummy
     zeros((irreps_dims..., SymmetrySectors.quantum_dimension(sec), 0)) for
