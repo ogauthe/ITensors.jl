@@ -85,42 +85,32 @@ function unmerge_tree_leaves(tree::AbstractArray{<:Real,3}, irreps_shape::NTuple
 end
 
 function get_tree!(
-  cache::Dict{NTuple{N,Int},<:Vector{<:Array{<:Real,3}}},
+  cache::Dict{NTuple{N,Int},<:Vector{A}},
   it::NTuple{N,Int},
   legs::NTuple{N,AbstractUnitRange},
   allowed_sectors::Vector{<:SymmetrySectors.AbstractSector},
-) where {N}
+) where {N,A<:Array{<:Real}}
   get!(cache, it) do
     tree_arrows = GradedAxes.isdual.(legs)
     irreps = getindex.(GradedAxes.blocklabels.(legs), it)
-    return compute_pruned_leavesmerged_fusion_trees(irreps, tree_arrows, allowed_sectors)
+    return compute_pruned_fusion_trees(A, irreps, tree_arrows, allowed_sectors)
   end
 end
 
-function get_tree!(
-  cache::Dict{NTuple{N,Int},<:Vector{<:Array{<:Real}}},
-  it::NTuple{N,Int},
-  legs::NTuple{N,AbstractUnitRange},
-  allowed_sectors::Vector{<:SymmetrySectors.AbstractSector},
-) where {N}
-  get!(cache, it) do
-    tree_arrows = GradedAxes.isdual.(legs)
-    irreps = getindex.(GradedAxes.blocklabels.(legs), it)
-    return compute_pruned_fusion_trees(irreps, tree_arrows, allowed_sectors)
-  end
-end
-
-function compute_pruned_leavesmerged_fusion_trees(
+# explicitly cast trees to 3 leg format
+function compute_pruned_fusion_trees(
+  ::Type{<:Array{<:Real,3}},
   irreps::NTuple{N,<:SymmetrySectors.AbstractSector},
   tree_arrows::NTuple{N,Bool},
   target_sectors::Vector{<:SymmetrySectors.AbstractSector},
 ) where {N}
   return merge_tree_leaves.(
-    compute_pruned_fusion_trees(irreps, tree_arrows, target_sectors)
+    compute_pruned_fusion_trees(Any, irreps, tree_arrows, target_sectors)
   )
 end
 
 function compute_pruned_fusion_trees(
+  ::Type,
   irreps::NTuple{N,<:SymmetrySectors.AbstractSector},
   tree_arrows::NTuple{N,Bool},
   target_sectors::Vector{<:SymmetrySectors.AbstractSector},
