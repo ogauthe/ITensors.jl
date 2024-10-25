@@ -62,9 +62,9 @@ end
 function check_data_matrix_axes(
   mat::BlockSparseArrays.BlockSparseMatrix, domain_legs::Tuple, codomain_legs::Tuple
 )
-  #rg, cg = initialize_matrix_axes(domain_legs, codomain_legs)
-  #@assert GradedAxes.space_isequal(rg, axes(mat, 1))
-  #@assert GradedAxes.space_isequal(cg, axes(mat, 2))
+  ft0 = FusionTensor(Float64, domain_legs, codomain_legs)
+  @assert GradedAxes.space_isequal(matrix_row_axis(ft0), axes(mat, 1))
+  @assert GradedAxes.space_isequal(matrix_column_axis(ft0), axes(mat, 2))
 end
 
 function check_data_matrix_axes(

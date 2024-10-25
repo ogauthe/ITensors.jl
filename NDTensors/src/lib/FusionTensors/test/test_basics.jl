@@ -97,7 +97,7 @@ end
   g3 = dual(gradedrange([U1(-1) => 1, U1(0) => 2, U1(1) => 1]))
   g4 = dual(gradedrange([U1(-1) => 1, U1(0) => 1, U1(1) => 1]))
   gr = fusion_product(g1, g2)
-  gc = flip(fusion_product(g3, g4))
+  gc = dual(fusion_product(dual(g3), dual(g4)))
   m2 = BlockSparseArray{Float64}(gr, gc)
   ft = FusionTensor(m2, (g1, g2), (g3, g4))
 
