@@ -39,6 +39,9 @@
 # convention: irreps are already dualed if needed, arrows do not affect them. They only
 # affect the basis on which the tree projects for self-dual irreps.
 #
+#
+# The interface uses AbstractGradedUnitRanges as input for interface simplicity
+# however only blocklabels are used and blocklengths are never used.
 
 # ===================================  Utility tools  ======================================
 function braid_tuples(t1::Tuple{Vararg{<:Any,N}}, t2::Tuple{Vararg{<:Any,N}}) where {N}

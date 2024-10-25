@@ -4,6 +4,10 @@
 # * Unitary = BlockMatrix
 # * no unitary cache
 
+# Notes:
+# - The interface uses AbstractGradedUnitRanges as input for interface simplicity
+#   however only blocklabels are used and blocklengths are never used.
+
 # ======================================  Interface  =======================================
 function compute_unitaries(
   old_domain_legs::Tuple{Vararg{AbstractUnitRange}},
