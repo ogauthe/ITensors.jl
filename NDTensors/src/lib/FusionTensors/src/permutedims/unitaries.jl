@@ -6,20 +6,16 @@
 
 # ======================================  Interface  =======================================
 function compute_unitaries(
-  old_domain_irreps::Tuple{Vararg{Vector{C}}},
-  old_codomain_irreps::Tuple{Vararg{Vector{C}}},
-  new_domain_irreps::Tuple{Vararg{Vector{C}}},
-  new_codomain_irreps::Tuple{Vararg{Vector{C}}},
-  old_arrows::NTuple{N,Bool},
-  flat_permutation::NTuple{N,Int},
-) where {N,C<:SymmetrySectors.AbstractSector}
-  return compute_unitaries_CG(
-    old_domain_irreps,
-    old_codomain_irreps,
-    new_domain_irreps,
-    new_codomain_irreps,
-    old_arrows,
-    flat_permutation,
+  old_domain_legs::Tuple{Vararg{AbstractUnitRange}},
+  old_codomain_legs::Tuple{Vararg{AbstractUnitRange}},
+  new_domain_legs::Tuple{Vararg{AbstractUnitRange}},
+  new_codomain_legs::Tuple{Vararg{AbstractUnitRange}},
+  flat_permutation::Tuple{Vararg{Int}},
+)
+  @assert length(old_domain_legs) + length(old_codomain_legs) == length(flat_permutation)
+  @assert length(new_domain_legs) + length(new_codomain_legs) == length(flat_permutation)
+  return compute_unitaries_clebsch_gordan(
+    old_domain_legs, old_codomain_legs, new_domain_legs, new_codomain_legs, flat_permutation
   )
 end
 
@@ -71,7 +67,7 @@ function contract_singlet_space_projector(
   return reshape(projector, (irrep_dims_prod, :))
 end
 
-function overlap_cg_trees(
+function overlap_fusion_trees(
   old_domain_block_trees::Vector{<:AbstractArray{<:Real}},
   old_codomain_block_trees::Vector{<:AbstractArray{<:Real}},
   new_domain_block_trees::Vector{<:AbstractArray{<:Real}},
@@ -89,7 +85,7 @@ function overlap_cg_trees(
 
   # initialize output as a BlockArray with
   # blocksize: (n_new_sectors, n_old_sectors)
-  # blocksizes: (ndof_new_block_sectors, ndof_old_block_sectors)
+  # blocksizes: (struct_mult_new_block_sectors, struct_mult_old_block_sectors)
   block_rows =
     size.(new_domain_block_trees, NCoAxesNew + 2) .*
     size.(new_codomain_block_trees, NDoAxesNew + 2)
@@ -98,7 +94,7 @@ function overlap_cg_trees(
     size.(old_codomain_block_trees, OldNDoAxes + 2)
   unitary = BlockArrays.BlockArray{Float64}(undef, block_rows, block_cols)
 
-  # contract domain and codomain CG trees to construct projector on each allowed sector
+  # contract domain and codomain fusion trees to construct projector on each allowed sector
   new_projectors =
     contract_singlet_space_projector.(
       new_domain_block_trees, new_codomain_block_trees, Ref(ntuple(identity, N))
@@ -153,28 +149,33 @@ function overlap_cg_trees(
   return unitary
 end
 
-function compute_unitaries_CG(
-  old_domain_irreps::NTuple{OldNDoAxes,Vector{C}},
-  old_codomain_irreps::NTuple{OldNCoAxes,Vector{C}},
-  new_domain_irreps::NTuple{NewNDoAxes,Vector{C}},
-  new_codomain_irreps::NTuple{NewNCoAxes,Vector{C}},
-  old_arrows::NTuple{N,Bool},
+function compute_unitaries_clebsch_gordan(
+  old_domain_legs::NTuple{OldNDoAxes,AbstractUnitRange},
+  old_codomain_legs::NTuple{OldNCoAxes,AbstractUnitRange},
+  new_domain_legs::NTuple{NewNDoAxes,AbstractUnitRange},
+  new_codomain_legs::NTuple{NewNCoAxes,AbstractUnitRange},
   flat_permutation::NTuple{N,Int},
-) where {N,OldNDoAxes,OldNCoAxes,NewNDoAxes,NewNCoAxes,C<:SymmetrySectors.AbstractSector}
+) where {N,OldNDoAxes,OldNCoAxes,NewNDoAxes,NewNCoAxes}
   perm1 = flat_permutation[begin:NewNDoAxes]
   perm2 = flat_permutation[(NewNDoAxes + 1):end]
 
-  # define axes, isdual and allowed sectors
-  old_allowed_sectors = intersect_sectors(
-    broadcast.(GradedAxes.dual, old_domain_irreps), old_codomain_irreps
+  new_row_labels = GradedAxes.blocklabels(GradedAxes.fusion_product(new_domain_legs...))
+  new_column_labels = GradedAxes.blocklabels(
+    GradedAxes.fusion_product(new_codomain_legs...)
   )
-  in_irreps = (old_domain_irreps..., old_codomain_irreps...)
-  old_domain_arrows = .!old_arrows[begin:OldNCoAxes]
-  old_codomain_arrows = old_arrows[(OldNCoAxes + 1):end]
-  new_domain_arrows = .!map(i -> old_arrows[i], perm1)
-  new_codomain_arrows = map(i -> old_arrows[i], perm2)
-  new_allowed_sectors = intersect_sectors(
-    broadcast.(GradedAxes.dual, new_domain_irreps), new_codomain_irreps
+  new_allowed_sectors = new_row_labels[first.(
+    find_shared_indices(new_row_labels, new_column_labels)
+  )]
+
+  # TBD use FusedAxes as input?
+  old_domain_fused_axes = FusedAxes(old_domain_legs)
+  old_codomain_fused_axes = FusedAxes(GradedAxes.dual.(old_codomain_legs))
+  old_matrix_block_indices = intersect(old_domain_fused_axes, old_codomain_fused_axes)
+  old_allowed_sectors = GradedAxes.blocklabels(old_domain_fused_axes)[first.(
+    old_matrix_block_indices
+  )]
+  old_allowed_outer_blocks = allowed_outer_blocks_sectors(
+    old_domain_fused_axes, old_codomain_fused_axes, old_matrix_block_indices
   )
 
   # initialize output
@@ -192,10 +193,10 @@ function compute_unitaries_CG(
 
   # cache computed Clebsch-Gordan trees.
   old_domain_trees_cache = Dict{
-    NTuple{OldNCoAxes,Int},Vector{Array{Float64,OldNCoAxes + 2}}
+    NTuple{OldNDoAxes,Int},Vector{Array{Float64,OldNDoAxes + 2}}
   }()
   old_codomain_trees_cache = Dict{
-    NTuple{OldNDoAxes,Int},Vector{Array{Float64,OldNDoAxes + 2}}
+    NTuple{OldNCoAxes,Int},Vector{Array{Float64,OldNCoAxes + 2}}
   }()
   new_domain_trees_cache = Dict{
     NTuple{NewNDoAxes,Int},Vector{Array{Float64,NewNDoAxes + 2}}
@@ -204,44 +205,28 @@ function compute_unitaries_CG(
     NTuple{NewNCoAxes,Int},Vector{Array{Float64,NewNCoAxes + 2}}
   }()
 
-  # loop over all sector configuration
-  for it in Iterators.product(eachindex.(in_irreps)...)
-    isempty(
-      intersect_sectors(
-        map(i -> old_domain_irreps[i], it[begin:OldNCoAxes]),
-        map(i -> old_codomain_irreps[i], it[(OldNCoAxes + 1):end]),
-      ),
-    ) && continue
+  # loop over all allowed outer blocks.
+  for (it, _) in old_allowed_outer_blocks
     old_domain_block_trees = get_tree!(
-      old_domain_trees_cache,
-      it[begin:OldNCoAxes],
-      old_domain_irreps,
-      old_domain_arrows,
-      old_allowed_sectors,
+      old_domain_trees_cache, it[begin:OldNDoAxes], old_domain_legs, old_allowed_sectors
     )
     old_codomain_block_trees = get_tree!(
       old_codomain_trees_cache,
-      it[(OldNCoAxes + 1):end],
-      old_codomain_irreps,
-      old_codomain_arrows,
+      it[(OldNDoAxes + 1):end],
+      old_codomain_legs,
       old_allowed_sectors,
     )
     new_domain_block_trees = get_tree!(
-      new_domain_trees_cache,
-      map(i -> it[i], perm1),
-      new_domain_irreps,
-      new_domain_arrows,
-      new_allowed_sectors,
+      new_domain_trees_cache, map(i -> it[i], perm1), new_domain_legs, new_allowed_sectors
     )
     new_codomain_block_trees = get_tree!(
       new_codomain_trees_cache,
       map(i -> it[i], perm2),
-      new_codomain_irreps,
-      new_codomain_arrows,
+      new_codomain_legs,
       new_allowed_sectors,
     )
 
-    u = overlap_cg_trees(
+    u = overlap_fusion_trees(
       old_domain_block_trees,
       old_codomain_block_trees,
       new_domain_block_trees,

@@ -62,11 +62,10 @@ function permute_data_matrix(
   # TBD use FusedAxes as input?
 
   unitaries = compute_unitaries(  # TODO cache me
-    GradedAxes.blocklabels.(old_domain_legs),
-    GradedAxes.blocklabels.(old_codomain_legs),
-    GradedAxes.blocklabels.(new_domain_legs),
-    GradedAxes.blocklabels.(new_codomain_legs),
-    (GradedAxes.isdual.(old_domain_legs)..., GradedAxes.isdual(old_codomain_legs)...),
+    old_domain_legs,
+    old_codomain_legs,
+    new_domain_legs,
+    new_codomain_legs,
     flat_permutation,
   )
 
