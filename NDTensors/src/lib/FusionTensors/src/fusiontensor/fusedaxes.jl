@@ -91,6 +91,10 @@ function ravel_multi_index(outer_block, fa::FusedAxes)
   return LinearIndices(inner_block_indices(fa))[Tuple(outer_block)...]
 end
 
+function find_sector_index(s::SymmetrySectors.AbstractSector, fa::FusedAxes)
+  return findfirst(==(s), GradedAxes.blocklabels(fa))
+end
+
 function find_block_range(fa::FusedAxes, outer_block, s::SymmetrySectors.AbstractSector)
   i_block = ravel_multi_index(outer_block, fa)
   return find_block_range(fa, i_block, s)
@@ -101,13 +105,35 @@ function find_block_range(
 )
   # use == instead of a hash function to ensure e.g. TrivialSector() can be found from U1(0)
   # as well as the opposite (evaluate as equal, but hash differ)
-  i_sector = findfirst(==(s), GradedAxes.blocklabels(fa))
-  return find_block_range(fa, i_block, i_sector)
+
+  return find_block_range(fa, i_block, find_sector_index(s, fa))
 end
 
 function find_block_range(fa::FusedAxes, i_block::Integer, i_sector::Integer)
   return index_matrix(fa)[i_block, i_sector]
 end
+
+function block_external_multiplicities(fa::FusedAxes, outer_block)
+  return block_external_multiplicities(fa, Int.(Tuple(outer_block)))
+end
+function block_external_multiplicities(fa::FusedAxes, outer_block::NTuple{N,Int}) where {N}
+  return map(
+    i -> length(axes(fa)[i][BlockArrays.Block(outer_block[i])]), ntuple(identity, N)
+  )
+end
+
+function block_structural_multiplicity(
+  fa::FusedAxes, outer_block, s::SymmetrySectors.AbstractSector
+)
+  i_outer_block = ravel_multi_index(outer_block, fa)
+  i_sec = find_sector_index(s, fa)
+  return block_structural_multiplicity(fa, i_outer_block, i_sec)
+end
+function block_structural_multiplicity(fa::FusedAxes, i_outer_block::Int, i_sec::Int)
+  return length(index_matrix(fa)[i_outer_block, i_sec]) ÷
+         prod(block_external_multiplicities(fa, i_sec))
+end
+block_structural_multiplicity(::FusedAxes, ::Int, ::Nothing) = 0
 
 function find_shared_indices(left_labels::AbstractVector, right_labels::AbstractVector)
   # cannot use intersect in case e.g. left = Trivial, right = U1(0)
