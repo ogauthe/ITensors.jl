@@ -110,7 +110,7 @@ function fill_data_matrix!(
   new_codomain_fused_axes::FusedAxes,
   biperm::TensorAlgebra.BlockedPermutation{2},
   unitaries::Dict,
-) where {N}
+)
   @assert ndims(old_domain_fused_axes) + ndims(old_codomain_fused_axes) == N
   @assert ndims(new_domain_fused_axes) + ndims(new_codomain_fused_axes) == N
 

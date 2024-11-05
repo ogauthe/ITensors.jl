@@ -49,7 +49,7 @@ function Base.:/(ft::FusionTensor, x::Number)
   return FusionTensor(data_matrix(ft) / x, domain_axes(ft), codomain_axes(ft))
 end
 
-Base.Array(ft::FusionTensor) = Array(cast_to_dense(ft))
+Base.Array(ft::FusionTensor) = Array(cast_to_array(ft))
 
 # adjoint is costless: dual axes, swap domain and codomain, take data_matrix adjoint.
 # data_matrix coeff are not modified (beyond complex conjugation)

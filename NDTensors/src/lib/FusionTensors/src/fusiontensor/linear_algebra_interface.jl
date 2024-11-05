@@ -3,6 +3,7 @@
 # allow to contract with different eltype and let BlockSparseArray ensure compatibility
 # impose matching type and number of axes at compile time
 # impose matching axes at run time
+# TODO remove this once TensorAlgebra.contract can be used?
 function LinearAlgebra.mul!(
   C::FusionTensor, A::FusionTensor, B::FusionTensor, α::Number, β::Number
 )
@@ -31,8 +32,6 @@ function LinearAlgebra.mul!(
   LinearAlgebra.mul!(data_matrix(C), data_matrix(A), data_matrix(B), α, β)
   return C
 end
-
-# the compiler automatically defines LinearAlgebra.mul!(C,A,B)
 
 function LinearAlgebra.norm(ft::FusionTensor)
   m = data_matrix(ft)
