@@ -202,7 +202,7 @@ function build_children_trees(
   inner_multiplicity::Integer,
   sec::SymmetrySectors.AbstractSector,
 )
-  sector_trees = Vector{typeof(parent_tree)}()
+  sector_trees = typeof(parent_tree)[]
   for inner_mult_index in 1:inner_multiplicity
     cgt_inner_mult = clebsch_gordan_tensor(
       parent_irrep, level_irrep, sec, false, level_arrow, inner_mult_index
@@ -222,8 +222,8 @@ function build_children_trees(
   level_irrep::SymmetrySectors.AbstractSector,
   level_arrow::Bool,
 )
-  children_trees = Vector{typeof(parent_tree)}()
-  children_irreps = Vector{typeof(parent_irrep)}()
+  children_trees = typeof(parent_tree)[]
+  children_irreps = typeof(parent_irrep)[]
   rep = GradedAxes.fusion_product(parent_irrep, level_irrep)
   for (inner_multiplicity, sec) in
       zip(BlockArrays.blocklengths(rep), GradedAxes.blocklabels(rep))
