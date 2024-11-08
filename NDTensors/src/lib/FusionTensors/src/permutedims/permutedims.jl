@@ -91,10 +91,13 @@ function permute_data_matrix(
 end
 
 # =====================================  Internals  ========================================
-function add_structural_axes(biperm::TensorAlgebra.BlockedPermutation{2})
-  block1 = biperm[BlockArrays.Block(1)]
-  # TODO
-  extended_perm = (1, block1..., length(block1), biperm[BlockArrays.Block(2)]...)
+function add_structural_axes(
+  biperm::TensorAlgebra.BlockedPermutation{2}, ::Val{OldNDoAxes}
+) where {OldNDoAxes}
+  flat = Tuple(biperm)
+  extended_perm = (
+    OldNDoAxes + 1, length(biperm) + 2, (flat .+ (flat .>= OldNDoAxes + 1))...
+  )
   return extended_perm
 end
 
@@ -127,17 +130,14 @@ function fill_data_matrix!(
     old_domain_fused_axes, old_codomain_fused_axes, old_matrix_block_indices
   )
 
-  extended_perm = add_structural_axes(biperm)
-
   # loop for each existing outer block TODO parallelize
-  for (old_outer_block, old_outer_block_sectors) in old_existing_outer_blocks
+  for old_outer_block in old_existing_outer_blocks
     write_new_outer_block!(
       new_data_matrix,
       old_outer_block,
-      old_outer_block_sectors,
       old_existing_matrix_blocks,
-      unitaries[old_outer_block],
-      extended_perm,
+      unitaries[first(old_outer_block)],
+      biperm,
       old_domain_fused_axes,
       old_codomain_fused_axes,
       new_domain_fused_axes,
@@ -148,11 +148,10 @@ end
 
 function write_new_outer_block!(
   new_data_matrix::BlockSparseArrays.AbstractBlockSparseMatrix,
-  old_outer_block::Tuple{Vararg{Int}},
-  old_outer_block_sectors::Vector{<:SymmetrySectors.AbstractSector},
+  old_outer_block::Pair{Tuple{Vararg{Int}},Vector{<:SymmetrySectors.AbstractSector}},
   old_existing_matrix_blocks::Vector{<:Matrix},
   unitary::BlockArrays.AbstractBlockMatrix,
-  extended_perm::Tuple{Vararg{Int}},
+  biperm::TensorAlgebra.BlockedPermutation{2},
   old_domain_fused_axes::FusedAxes,
   old_codomain_fused_axes::FusedAxes,
   new_domain_fused_axes::FusedAxes,
@@ -161,16 +160,15 @@ function write_new_outer_block!(
   new_outer_array = permute_outer_block(
     old_existing_matrix_blocks,
     old_outer_block,
-    old_outer_block_sectors,
     old_domain_fused_axes,
     old_codomain_fused_axes,
-    extended_perm,
+    add_structural_axes(biperm, Val(ndims(old_domain_fused_axes))),
     unitary,
   )
-  new_outer_block = map(i -> old_outer_block[i], flat_permutation)
+  new_outer_block = map(i -> first(old_outer_block[i]), Tuple(biperm))
   return write_new_outer_block!(
     new_data_matrix,
-    new_outer_block_array,
+    new_outer_array,
     new_outer_block,
     new_domain_fused_axes,
     new_codomain_fused_axes,
