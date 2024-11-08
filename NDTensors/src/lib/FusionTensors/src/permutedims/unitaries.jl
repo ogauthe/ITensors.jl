@@ -125,7 +125,7 @@ function overlap_filtered_fusion_trees(
       new_domain_block_trees, new_codomain_block_trees, Ref(ntuple(identity, N))
     )
 
-  for j in eachindex(block_rows)
+  for j in eachindex(block_cols)
     old_proj = contract_singlet_space_projector(
       old_domain_block_trees[j], old_codomain_block_trees[j], irreps_perm
     )
