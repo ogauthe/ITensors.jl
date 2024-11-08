@@ -35,13 +35,11 @@ end
 
 function LinearAlgebra.norm(ft::FusionTensor)
   m = data_matrix(ft)
-  row_sectors = GradedAxes.blocklabels(matrix_row_axis(ft))
+  row_sectors = blocklabels(matrix_row_axis(ft))
   n2 = mapreduce(
-    idx ->
-      SymmetrySectors.quantum_dimension(row_sectors[idx[1]]) *
-      LinearAlgebra.norm(m[BlockArrays.Block(Tuple(idx))])^2,
+    idx -> quantum_dimension(row_sectors[idx[1]]) * norm(m[Block(Tuple(idx))])^2,
     +,
-    BlockSparseArrays.stored_indices(BlockArrays.blocks(m));
+    stored_indices(blocks(m));
     init=0.0,
   )
   return sqrt(n2)
@@ -49,13 +47,11 @@ end
 
 function LinearAlgebra.tr(ft::FusionTensor)
   m = data_matrix(ft)
-  row_sectors = GradedAxes.blocklabels(matrix_row_axis(ft))
+  row_sectors = blocklabels(matrix_row_axis(ft))
   return mapreduce(
-    idx ->
-      SymmetrySectors.quantum_dimension(row_sectors[idx[1]]) *
-      LinearAlgebra.tr(m[BlockArrays.Block(Tuple(idx))]),
+    idx -> quantum_dimension(row_sectors[idx[1]]) * tr(m[Block(Tuple(idx))]),
     +,
-    BlockSparseArrays.stored_indices(BlockArrays.blocks(m));
+    stored_indices(blocks(m));
     init=eltype(ft)(0),
   )
 end

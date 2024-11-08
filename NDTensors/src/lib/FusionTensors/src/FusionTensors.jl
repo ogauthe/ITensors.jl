@@ -1,15 +1,33 @@
 module FusionTensors
 
-using LinearAlgebra: LinearAlgebra
+using LinearAlgebra: LinearAlgebra, Adjoint, norm, tr
 
-using BlockArrays: BlockArrays
-using HalfIntegers: HalfIntegers
-using WignerSymbols: WignerSymbols
+using BlockArrays:
+  AbstractBlockArray,
+  AbstractBlockMatrix,
+  Block,
+  BlockArray,
+  BlockedArray,
+  BlockMatrix,
+  blockedrange,
+  blocklength,
+  blocklengths,
+  blocks
 
-using NDTensors.BlockSparseArrays: BlockSparseArrays
-using NDTensors.GradedAxes: GradedAxes, AbstractGradedUnitRange
-using NDTensors.SymmetrySectors: SymmetrySectors, ⊗
-using NDTensors.TensorAlgebra: TensorAlgebra
+using NDTensors.BlockSparseArrays:
+  BlockSparseArrays, BlockSparseArray, BlockSparseMatrix, stored_indices
+using NDTensors.GradedAxes:
+  GradedAxes,
+  AbstractGradedUnitRange,
+  blocklabels,
+  dual,
+  fusion_product,
+  gradedrange,
+  isdual,
+  space_isequal
+using NDTensors.SymmetrySectors:
+  AbstractSector, TrivialSector, block_dimensions, istrivial, quantum_dimension, trivial
+using NDTensors.TensorAlgebra: TensorAlgebra, BlockedPermutation
 
 include("fusiontrees/clebsch_gordan.jl")
 include("fusiontrees/fusion_tree.jl")

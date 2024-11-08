@@ -2,7 +2,7 @@
 using Test: @test, @testset
 using LinearAlgebra: LinearAlgebra
 
-using BlockArrays: BlockArrays
+using BlockArrays: AbstractBlockMatrix, blocksize
 
 using NDTensors.FusionTensors:
   FusionTensor,
@@ -31,8 +31,8 @@ using NDTensors.TensorAlgebra: blockedperm, TensorAlgebra
 
 @testset "Trivial unitaries" begin
   function check_trivial_unitary(u)
-    @test u isa BlockArrays.AbstractBlockMatrix
-    @test BlockArrays.blocksize(u) == (1, 1)
+    @test u isa AbstractBlockMatrix
+    @test blocksize(u) == (1, 1)
     @test size(u) == (1, 1)
     @test u[1, 1] == 1.0
   end

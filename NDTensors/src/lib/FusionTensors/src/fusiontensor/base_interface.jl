@@ -55,9 +55,7 @@ Base.Array(ft::FusionTensor) = Array(cast_to_array(ft))
 # data_matrix coeff are not modified (beyond complex conjugation)
 function Base.adjoint(ft::FusionTensor)
   return FusionTensor(
-    adjoint(data_matrix(ft)),
-    GradedAxes.dual.(codomain_axes(ft)),
-    GradedAxes.dual.(domain_axes(ft)),
+    adjoint(data_matrix(ft)), dual.(codomain_axes(ft)), dual.(domain_axes(ft))
   )
 end
 
@@ -118,4 +116,4 @@ function Base.show(io::IO, ::MIME"text/plain", ft::FusionTensor)
   return nothing
 end
 
-Base.size(ft::FusionTensor) = SymmetrySectors.quantum_dimension.(axes(ft))
+Base.size(ft::FusionTensor) = quantum_dimension.(axes(ft))

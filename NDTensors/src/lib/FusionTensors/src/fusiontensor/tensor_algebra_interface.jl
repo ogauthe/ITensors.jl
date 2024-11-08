@@ -41,8 +41,7 @@ function TensorAlgebra.allocate_output(
   α::Number=true,
 ) where {T1,T2,N,M}
   axes_dest = (
-    (i -> axes(a1)[i]).(biperm1[BlockArrays.Block(1)]),
-    (i -> axes(a2)[i]).(biperm2[BlockArrays.Block(2)]),
+    (i -> axes(a1)[i]).(biperm1[Block(1)]), (i -> axes(a2)[i]).(biperm2[Block(2)])
   )
   return similar(a1, promote_type(eltype(a1), eltype(a2), typeof(α)), axes_dest)
 end

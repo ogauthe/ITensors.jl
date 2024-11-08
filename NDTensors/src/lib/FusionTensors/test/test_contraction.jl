@@ -4,20 +4,20 @@ using Test: @test, @testset, @test_broken
 
 using NDTensors.BlockSparseArrays: BlockSparseArray
 using NDTensors.FusionTensors: FusionTensor, domain_axes, codomain_axes, check_sanity
-using NDTensors.GradedAxes: GradedAxes
+using NDTensors.GradedAxes: dual, gradedrange
 using NDTensors.SymmetrySectors: U1
-using NDTensors.TensorAlgebra: TensorAlgebra
+using NDTensors.TensorAlgebra: contract
 
 @testset "contraction" begin
-  g1 = GradedAxes.gradedrange([U1(0) => 1, U1(1) => 2, U1(2) => 3])
-  g2 = GradedAxes.gradedrange([U1(0) => 2, U1(1) => 2, U1(3) => 1])
-  g3 = GradedAxes.gradedrange([U1(-1) => 1, U1(0) => 2, U1(1) => 1])
-  g4 = GradedAxes.gradedrange([U1(-1) => 1, U1(0) => 1, U1(1) => 1])
+  g1 = gradedrange([U1(0) => 1, U1(1) => 2, U1(2) => 3])
+  g2 = gradedrange([U1(0) => 2, U1(1) => 2, U1(3) => 1])
+  g3 = gradedrange([U1(-1) => 1, U1(0) => 2, U1(1) => 1])
+  g4 = gradedrange([U1(-1) => 1, U1(0) => 1, U1(1) => 1])
 
   ft1 = FusionTensor(Float64, (g1, g2), (g3, g4))
   @test isnothing(check_sanity(ft1))
 
-  ft2 = FusionTensor(Float64, GradedAxes.dual.((g3, g4)), (g1,))
+  ft2 = FusionTensor(Float64, dual.((g3, g4)), (g1,))
   @test isnothing(check_sanity(ft2))
 
   ft3 = ft1 * ft2  # tensor contraction
@@ -38,30 +38,30 @@ using NDTensors.TensorAlgebra: TensorAlgebra
 end
 
 @testset "TensorAlgebra interface" begin
-  g1 = GradedAxes.gradedrange([U1(0) => 1, U1(1) => 2, U1(2) => 3])
-  g2 = GradedAxes.gradedrange([U1(0) => 2, U1(1) => 2, U1(3) => 1])
-  g3 = GradedAxes.gradedrange([U1(-1) => 1, U1(0) => 2, U1(1) => 1])
-  g4 = GradedAxes.gradedrange([U1(-1) => 1, U1(0) => 1, U1(1) => 1])
+  g1 = gradedrange([U1(0) => 1, U1(1) => 2, U1(2) => 3])
+  g2 = gradedrange([U1(0) => 2, U1(1) => 2, U1(3) => 1])
+  g3 = gradedrange([U1(-1) => 1, U1(0) => 2, U1(1) => 1])
+  g4 = gradedrange([U1(-1) => 1, U1(0) => 1, U1(1) => 1])
 
   ft1 = FusionTensor(Float64, (g1, g2), (g3, g4))
-  ft2 = FusionTensor(Float64, GradedAxes.dual.((g3, g4)), (GradedAxes.dual(g1),))
-  ft3 = FusionTensor(Float64, GradedAxes.dual.((g3, g4)), GradedAxes.dual.((g1, g2)))
+  ft2 = FusionTensor(Float64, dual.((g3, g4)), (dual(g1),))
+  ft3 = FusionTensor(Float64, dual.((g3, g4)), dual.((g1, g2)))
 
-  ft4, legs = TensorAlgebra.contract(ft1, (1, 2, 3, 4), ft2, (3, 4, 5))
+  ft4, legs = contract(ft1, (1, 2, 3, 4), ft2, (3, 4, 5))
   @test legs == (1, 2, 5)
   @test isnothing(check_sanity(ft4))
   @test domain_axes(ft4) === domain_axes(ft1)
   @test codomain_axes(ft4) === codomain_axes(ft2)
 
-  ft5 = TensorAlgebra.contract((1, 2, 5), ft1, (1, 2, 3, 4), ft2, (3, 4, 5))
+  ft5 = contract((1, 2, 5), ft1, (1, 2, 3, 4), ft2, (3, 4, 5))
   @test isnothing(check_sanity(ft5))
 
   # biperm is not allowed
-  @test_broken TensorAlgebra.contract(((1, 2), (5,)), ft1, (1, 2, 3, 4), ft2, (3, 4, 5))
+  @test_broken contract(((1, 2), (5,)), ft1, (1, 2, 3, 4), ft2, (3, 4, 5))
 
   # issue with 0 axis
   @test permutedims(ft1, (), (1, 2, 3, 4)) * permutedims(ft3, (3, 4, 1, 2), ()) isa
     FusionTensor{Float64,0}
-  @test_broken TensorAlgebra.contract(ft1, (1, 2, 3, 4), ft3, (3, 4, 1, 2))
+  @test_broken contract(ft1, (1, 2, 3, 4), ft3, (3, 4, 1, 2))
 end
 end

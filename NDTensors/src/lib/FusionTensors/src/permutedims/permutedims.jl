@@ -14,13 +14,11 @@ function fusiontensor_permutedims(
   return permutedims(ft, biperm)
 end
 
-function fusiontensor_permutedims(
-  ft::FusionTensor, biperm::TensorAlgebra.BlockedPermutation{2}
-)
+function fusiontensor_permutedims(ft::FusionTensor, biperm::BlockedPermutation{2})
   @assert ndims(ft) == length(biperm)
 
   # early return for identity operation. Do not copy. Also handle tricky 0-dim case.
-  if ndims_domain(ft) == first(BlockArrays.blocklengths(biperm))  # compile time
+  if ndims_domain(ft) == first(blocklengths(biperm))  # compile time
     if Tuple(biperm) == ntuple(identity, ndims(ft))
       return ft
     end
@@ -37,7 +35,7 @@ function fusiontensor_permutedims(
   return permuted
 end
 
-function naive_permutedims(ft::FusionTensor, biperm::TensorAlgebra.BlockedPermutation{2})
+function naive_permutedims(ft::FusionTensor, biperm::BlockedPermutation{2})
   @assert ndims(ft) == length(biperm)
   new_domain_legs, new_codomain_legs = TensorAlgebra.blockpermute(axes(ft), biperm)
 
@@ -57,7 +55,7 @@ function permute_data_matrix(
   },
   old_domain_legs::Tuple{Vararg{AbstractGradedUnitRange}},
   old_codomain_legs::Tuple{Vararg{AbstractGradedUnitRange}},
-  biperm::TensorAlgebra.BlockedPermutation{2},
+  biperm::BlockedPermutation{2},
 )
   # TBD use FusedAxes as input?
 
@@ -69,10 +67,10 @@ function permute_data_matrix(
 
   # TODO cache FusedAxes
   old_domain_fused_axes = FusedAxes(old_domain_legs)
-  old_codomain_fused_axes = FusedAxes(GradedAxes.dual.(old_codomain_legs))
+  old_codomain_fused_axes = FusedAxes(dual.(old_codomain_legs))
   new_domain_legs, new_codomain_legs = TensorAlgebra.blockpermute(axes(ft), biperm)
   new_domain_fused_axes = FusedAxes(new_domain_legs)
-  new_codomain_fused_axes = FusedAxes(GradedAxes.dual.(new_codomain_legs))
+  new_codomain_fused_axes = FusedAxes(dual.(new_codomain_legs))
   new_data_matrix = initialize_data_matrix(
     eltype(old_data_matrix), new_domain_fused_axes, new_codomain_fused_axes
   )
@@ -92,7 +90,7 @@ end
 
 # =====================================  Internals  ========================================
 function add_structural_axes(
-  biperm::TensorAlgebra.BlockedPermutation{2}, ::Val{OldNDoAxes}
+  biperm::BlockedPermutation{2}, ::Val{OldNDoAxes}
 ) where {OldNDoAxes}
   flat = Tuple(biperm)
   extended_perm = (
@@ -111,7 +109,7 @@ function fill_data_matrix!(
   old_codomain_fused_axes::FusedAxes,
   new_domain_fused_axes::FusedAxes,
   new_codomain_fused_axes::FusedAxes,
-  biperm::TensorAlgebra.BlockedPermutation{2},
+  biperm::BlockedPermutation{2},
   unitaries::Dict,
 )
   @assert ndims(old_domain_fused_axes) + ndims(old_codomain_fused_axes) == N
@@ -123,7 +121,7 @@ function fill_data_matrix!(
   )
   old_existing_matrix_blocks = [view(old_data_matrix, b) for b in matrix_block_blocks]
   old_matrix_block_indices = reinterpret(Tuple{Int,Int}, matrix_block_blocks)
-  #old_existing_sectors = GradedAxes.blocklabels(old_domain_fused_axes)[first.(
+  #old_existing_sectors = blocklabels(old_domain_fused_axes)[first.(
   #  old_matrix_block_indices
   #)]
   old_existing_outer_blocks = allowed_outer_blocks_sectors(
@@ -148,10 +146,10 @@ end
 
 function write_new_outer_block!(
   new_data_matrix::BlockSparseArrays.AbstractBlockSparseMatrix,
-  old_outer_block::Pair{Tuple{Vararg{Int}},Vector{<:SymmetrySectors.AbstractSector}},
+  old_outer_block::Pair{Tuple{Vararg{Int}},Vector{<:AbstractSector}},
   old_existing_matrix_blocks::Vector{<:Matrix},
-  unitary::BlockArrays.AbstractBlockMatrix,
-  biperm::TensorAlgebra.BlockedPermutation{2},
+  unitary::AbstractBlockMatrix,
+  biperm::BlockedPermutation{2},
   old_domain_fused_axes::FusedAxes,
   old_codomain_fused_axes::FusedAxes,
   new_domain_fused_axes::FusedAxes,
@@ -182,7 +180,7 @@ function permute_outer_block(
   old_domain_fused_axes::FusedAxes,
   old_codomain_fused_axes::FusedAxes,
   extended_perm::Tuple{Vararg{Int}},
-  unitary::BlockArrays.AbstractBlockMatrix,
+  unitary::AbstractBlockMatrix,
 )
   old_domain_block = old_outer_block[begin:ndims(old_domain_fused_axes)]
   old_codomain_block = old_outer_block[(ndims(old_domain_fused_axes) + 1):end]
@@ -215,7 +213,7 @@ function permute_outer_block(
       old_codomain_ext_mult...,
     )
     old_sym_block_tensor = reshape(old_sym_block_matrix, old_tensor_shape)
-    unitary_column = unitary[BlockArrays.Block(i_old_sector), :]  # take all new blocks at once
+    unitary_column = unitary[Block(i_old_sector), :]  # take all new blocks at once
     new_outer_block_array += change_basis_block_sector(
       old_sym_block_tensor, unitary_column, extended_perm
     )

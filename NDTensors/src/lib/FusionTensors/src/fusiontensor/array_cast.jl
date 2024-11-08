@@ -23,13 +23,13 @@ function cast_from_array(
   domain_legs::Tuple{Vararg{AbstractGradedUnitRange}},
   codomain_legs::Tuple{Vararg{AbstractGradedUnitRange}},
 )
-  bounds = SymmetrySectors.block_dimensions.((domain_legs..., codomain_legs...))
-  blockarray = BlockArrays.BlockedArray(array, bounds...)
+  bounds = block_dimensions.((domain_legs..., codomain_legs...))
+  blockarray = BlockedArray(array, bounds...)
   return cast_from_array(blockarray, domain_legs, codomain_legs)
 end
 
 function cast_from_array(
-  blockarray::BlockArrays.AbstractBlockArray,
+  blockarray::AbstractBlockArray,
   domain_legs::Tuple{Vararg{AbstractGradedUnitRange}},
   codomain_legs::Tuple{Vararg{AbstractGradedUnitRange}},
 )
@@ -37,15 +37,14 @@ function cast_from_array(
   if length(domain_legs) + length(codomain_legs) != ndims(blockarray)  # compile time
     throw(DomainError("legs are incompatible with array ndims"))
   end
-  if SymmetrySectors.quantum_dimension.((domain_legs..., codomain_legs...)) !=
-    size(blockarray)
+  if quantum_dimension.((domain_legs..., codomain_legs...)) != size(blockarray)
     throw(DomainError("legs dimensions are incompatible with array"))
   end
 
   # precompute internal structure
   # TODO cache FusedAxes inside FusionTensor
   domain_fused_axes = FusedAxes(domain_legs)
-  codomain_fused_axes = FusedAxes(GradedAxes.dual.(codomain_legs))
+  codomain_fused_axes = FusedAxes(dual.(codomain_legs))
   data_mat = initialize_data_matrix(
     eltype(blockarray), domain_fused_axes, codomain_fused_axes
   )
@@ -63,12 +62,10 @@ function cast_to_array(
   domain_legs::Tuple{Vararg{AbstractGradedUnitRange}},
   codomain_legs::Tuple{Vararg{AbstractGradedUnitRange}},
 )
-  bounds = SymmetrySectors.block_dimensions.((domain_legs..., codomain_legs...))
-  blockarray = BlockSparseArrays.BlockSparseArray{eltype(data_mat)}(
-    BlockArrays.blockedrange.(bounds)
-  )
+  bounds = block_dimensions.((domain_legs..., codomain_legs...))
+  blockarray = BlockSparseArrays.BlockSparseArray{eltype(data_mat)}(blockedrange.(bounds))
   domain_fused_axes = FusedAxes(domain_legs)
-  codomain_fused_axes = FusedAxes(GradedAxes.dual.(codomain_legs))
+  codomain_fused_axes = FusedAxes(dual.(codomain_legs))
   fill_blockarray!(blockarray, data_mat, domain_fused_axes, codomain_fused_axes)
   return blockarray
 end
@@ -78,8 +75,8 @@ end
 #------------------------------------  utility tools ---------------------------------------
 function split_axes(fa::FusedAxes)
   legs = axes(fa)
-  degens = BlockArrays.blocklengths.(legs)
-  dimensions = broadcast.(SymmetrySectors.quantum_dimension, GradedAxes.blocklabels.(legs))
+  degens = blocklengths.(legs)
+  dimensions = broadcast.(quantum_dimension, blocklabels.(legs))
   return legs, degens, dimensions
 end
 
@@ -272,7 +269,7 @@ end
 
 function fill_matrix_blocks!(
   data_mat::BlockSparseArrays.AbstractBlockSparseMatrix,
-  blockarray::BlockArrays.AbstractBlockArray,
+  blockarray::AbstractBlockArray,
   domain_fused_axes::FusedAxes,
   codomain_fused_axes::FusedAxes,
 )
@@ -281,9 +278,9 @@ function fill_matrix_blocks!(
 
   matrix_block_indices = intersect(domain_fused_axes, codomain_fused_axes)
   allowed_matrix_blocks = [
-    BlockSparseArrays.view!(data_mat, BlockArrays.Block(bi)) for bi in matrix_block_indices
+    BlockSparseArrays.view!(data_mat, Block(bi)) for bi in matrix_block_indices
   ]
-  allowed_sectors = GradedAxes.blocklabels(domain_fused_axes)[first.(matrix_block_indices)]
+  allowed_sectors = blocklabels(domain_fused_axes)[first.(matrix_block_indices)]
   allowed_outer_blocks = allowed_outer_blocks_sectors(
     domain_fused_axes, codomain_fused_axes, matrix_block_indices
   )
@@ -327,7 +324,7 @@ function fill_matrix_blocks!(
     )
 
     fused_array_block = fuse_array_block(
-      view(blockarray, BlockArrays.Block(iter_do..., iter_co...)),
+      view(blockarray, Block(iter_do..., iter_co...)),
       getindex.(domain_degens, iter_do),
       getindex.(domain_dims, iter_do),
       getindex.(codomain_degens, iter_co),
@@ -462,7 +459,7 @@ function unfuse_array_block(
 end
 
 function fill_blockarray!(
-  blockarray::BlockArrays.AbstractBlockArray,
+  blockarray::AbstractBlockArray,
   data_mat::AbstractMatrix,
   domain_fused_axes::FusedAxes,
   codomain_fused_axes::FusedAxes,
@@ -473,7 +470,7 @@ function fill_blockarray!(
   matrix_block_blocks = sort(collect(BlockSparseArrays.block_stored_indices(data_mat)))
   existing_matrix_blocks = [view(data_mat, b) for b in matrix_block_blocks]
   matrix_block_indices = reinterpret(Tuple{Int,Int}, matrix_block_blocks)
-  existing_sectors = GradedAxes.blocklabels(domain_fused_axes)[first.(matrix_block_indices)]
+  existing_sectors = blocklabels(domain_fused_axes)[first.(matrix_block_indices)]
   existing_outer_blocks = allowed_outer_blocks_sectors(
     domain_fused_axes, codomain_fused_axes, matrix_block_indices
   )
@@ -526,7 +523,7 @@ function fill_blockarray!(
       )
     end
 
-    blockarray[BlockArrays.Block(iter_do..., iter_co...)] = unfuse_array_block(
+    blockarray[Block(iter_do..., iter_co...)] = unfuse_array_block(
       fused_array_block,
       domain_block_degens,
       domain_block_dims,

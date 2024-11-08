@@ -8,11 +8,13 @@
 # - The interface uses AbstractGradedUnitRanges as input for interface simplicity
 #   however only blocklabels are used and blocklengths are never used.
 
+using BlockArrays: BlockedOneTo
+
 # ======================================  Interface  =======================================
 function compute_unitaries(
   old_domain_legs::Tuple{Vararg{AbstractGradedUnitRange}},
   old_codomain_legs::Tuple{Vararg{AbstractGradedUnitRange}},
-  biperm::TensorAlgebra.BlockedPermutation{2},
+  biperm::BlockedPermutation{2},
 )
   @assert length(old_domain_legs) + length(old_codomain_legs) == length(biperm)
   return compute_unitaries_clebsch_gordan(old_domain_legs, old_codomain_legs, biperm)
@@ -115,7 +117,7 @@ function overlap_filtered_fusion_trees(
   block_cols =
     size.(old_domain_block_trees, OldNCoAxes + 2) .*
     size.(old_codomain_block_trees, OldNDoAxes + 2)
-  unitary = BlockArrays.BlockArray{Float64}(undef, block_rows, block_cols)
+  unitary = BlockArray{Float64}(undef, block_rows, block_cols)
 
   # contract domain and codomain fusion trees to construct projector on each allowed sector
   new_projectors =
@@ -165,7 +167,7 @@ function overlap_filtered_fusion_trees(
       #            -------------dim_sec_i---------
       #
       dim_sec_i = size(new_domain_block_trees[i], NCoAxesNew + 1)
-      unitary[BlockArrays.Block(i, j)] = (new_proj'old_proj) / dim_sec_i
+      unitary[Block(i, j)] = (new_proj'old_proj) / dim_sec_i
     end
   end
 
@@ -175,29 +177,25 @@ end
 function compute_unitaries_clebsch_gordan(
   old_domain_legs::NTuple{OldNDoAxes,AbstractGradedUnitRange},
   old_codomain_legs::NTuple{OldNCoAxes,AbstractGradedUnitRange},
-  biperm::TensorAlgebra.BlockedPermutation{2,N},
+  biperm::BlockedPermutation{2,N},
 ) where {OldNDoAxes,OldNCoAxes,N}
   @assert OldNDoAxes + OldNCoAxes == N
 
   new_domain_legs, nondual_new_codomain_legs = TensorAlgebra.blockpermute(
     (old_domain_legs..., old_codomain_legs...), biperm
   )
-  new_codomain_legs = GradedAxes.dual.(nondual_new_codomain_legs)
-  new_row_labels = GradedAxes.blocklabels(GradedAxes.fusion_product(new_domain_legs...))
-  new_column_labels = GradedAxes.blocklabels(
-    GradedAxes.fusion_product(new_codomain_legs...)
-  )
+  new_codomain_legs = dual.(nondual_new_codomain_legs)
+  new_row_labels = blocklabels(fusion_product(new_domain_legs...))
+  new_column_labels = blocklabels(fusion_product(new_codomain_legs...))
   new_allowed_sectors = new_row_labels[first.(
     find_shared_indices(new_row_labels, new_column_labels)
   )]
 
   # TBD use FusedAxes as input?
   old_domain_fused_axes = FusedAxes(old_domain_legs)
-  old_codomain_fused_axes = FusedAxes(GradedAxes.dual.(old_codomain_legs))
+  old_codomain_fused_axes = FusedAxes(dual.(old_codomain_legs))
   old_matrix_block_indices = intersect(old_domain_fused_axes, old_codomain_fused_axes)
-  old_allowed_sectors = GradedAxes.blocklabels(old_domain_fused_axes)[first.(
-    old_matrix_block_indices
-  )]
+  old_allowed_sectors = blocklabels(old_domain_fused_axes)[first.(old_matrix_block_indices)]
   old_allowed_outer_blocks = allowed_outer_blocks_sectors(
     old_domain_fused_axes, old_codomain_fused_axes, old_matrix_block_indices
   )
@@ -205,13 +203,10 @@ function compute_unitaries_clebsch_gordan(
   # initialize output
   unitaries = Dict{
     NTuple{N,Int64},
-    BlockArrays.BlockMatrix{   # TBD use BlockSparseArray 4-dim?
+    BlockMatrix{   # TBD use BlockSparseArray 4-dim?
       Float64,
       Matrix{Matrix{Float64}},
-      Tuple{
-        BlockArrays.BlockedOneTo{Int64,Vector{Int64}},
-        BlockArrays.BlockedOneTo{Int64,Vector{Int64}},
-      },
+      Tuple{BlockedOneTo{Int64,Vector{Int64}},BlockedOneTo{Int64,Vector{Int64}}},
     },
   }()
 
@@ -246,7 +241,7 @@ function compute_unitaries_clebsch_gordan(
     old_codomain_block_trees = get_tree!(
       old_codomain_trees_cache,
       old_outer_block[(OldNDoAxes + 1):end],
-      GradedAxes.dual.(old_codomain_legs),
+      dual.(old_codomain_legs),
       old_allowed_sectors,
     )
     new_domain_block_trees = get_tree!(

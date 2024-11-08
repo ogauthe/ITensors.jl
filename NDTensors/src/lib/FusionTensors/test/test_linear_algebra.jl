@@ -6,7 +6,7 @@ using BlockArrays: BlockArrays
 
 using NDTensors.BlockSparseArrays: BlockSparseArrays
 using NDTensors.FusionTensors: FusionTensor, check_sanity
-using NDTensors.GradedAxes
+using NDTensors.GradedAxes: dual, gradedrange
 using NDTensors.SymmetrySectors: U1, SU2, TrivialSector
 
 @testset "LinearAlgebra interface" begin
@@ -18,17 +18,17 @@ using NDTensors.SymmetrySectors: U1, SU2, TrivialSector
   ]
   sdst = reshape(sds22, (2, 2, 2, 2))
 
-  g0 = GradedAxes.gradedrange([TrivialSector() => 2])
-  gu1 = GradedAxes.gradedrange([U1(1) => 1, U1(-1) => 1])
-  gsu2 = GradedAxes.gradedrange([SU2(1 / 2) => 1])
+  g0 = gradedrange([TrivialSector() => 2])
+  gu1 = gradedrange([U1(1) => 1, U1(-1) => 1])
+  gsu2 = gradedrange([SU2(1 / 2) => 1])
 
   for g in [g0, gu1, gsu2]
-    ft0 = FusionTensor(Float64, (g, g), (GradedAxes.dual(g), GradedAxes.dual(g)))
+    ft0 = FusionTensor(Float64, (g, g), (dual(g), dual(g)))
     @test isnothing(check_sanity(ft0))
     @test norm(ft0) == 0
     @test tr(ft0) == 0
 
-    ft = FusionTensor(sdst, (g, g), (GradedAxes.dual(g), GradedAxes.dual(g)))
+    ft = FusionTensor(sdst, (g, g), (dual(g), dual(g)))
     @test isnothing(check_sanity(ft))
     @test norm(ft) ≈ √3 / 2
     @test isapprox(tr(ft), 0; atol=eps(Float64))

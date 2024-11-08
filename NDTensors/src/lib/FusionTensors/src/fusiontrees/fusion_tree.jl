@@ -43,6 +43,9 @@
 # The interface uses AbstractGradedUnitRanges as input for interface simplicity
 # however only blocklabels are used and blocklengths are never read.
 
+using NDTensors.SymmetrySectors:
+  ⊗, AbelianStyle, AbstractSector, NotAbelianStyle, SectorProduct, SymmetryStyle, arguments
+
 # ===================================  Utility tools  ======================================
 function braid_tuples(t1::Tuple{Vararg{<:Any,N}}, t2::Tuple{Vararg{<:Any,N}}) where {N}
   t12 = (t1, t2)
@@ -76,9 +79,9 @@ function merge_tree_leaves(a::AbstractArray)
 end
 
 function unmerge_tree_leaves(
-  tree::AbstractArray{<:Real,3}, irreps::NTuple{<:Any,<:SymmetrySectors.AbstractSector}
+  tree::AbstractArray{<:Real,3}, irreps::NTuple{<:Any,<:AbstractSector}
 )
-  irreps_shape = SymmetrySectors.quantum_dimension.(irreps)
+  irreps_shape = quantum_dimension.(irreps)
   return unmerge_tree_leaves(tree, irreps_shape)
 end
 
@@ -91,11 +94,11 @@ function get_tree!(
   cache::Dict{NTuple{N,Int},<:Vector{A}},
   it::NTuple{N,Int},
   legs::NTuple{N,AbstractGradedUnitRange},
-  allowed_sectors::Vector{<:SymmetrySectors.AbstractSector},
+  allowed_sectors::Vector{<:AbstractSector},
 ) where {N,A<:Array{<:Real}}
   get!(cache, it) do
-    tree_arrows = GradedAxes.isdual.(legs)
-    irreps = getindex.(GradedAxes.blocklabels.(legs), it)
+    tree_arrows = isdual.(legs)
+    irreps = getindex.(blocklabels.(legs), it)
     return compute_pruned_fusion_trees(A, irreps, tree_arrows, allowed_sectors)
   end
 end
@@ -103,9 +106,9 @@ end
 # explicitly cast trees to 3 leg format
 function compute_pruned_fusion_trees(
   ::Type{<:Array{<:Real,3}},
-  irreps::NTuple{N,<:SymmetrySectors.AbstractSector},
+  irreps::NTuple{N,<:AbstractSector},
   tree_arrows::NTuple{N,Bool},
-  target_sectors::Vector{<:SymmetrySectors.AbstractSector},
+  target_sectors::Vector{<:AbstractSector},
 ) where {N}
   return merge_tree_leaves.(
     compute_pruned_fusion_trees(Any, irreps, tree_arrows, target_sectors)
@@ -114,9 +117,9 @@ end
 
 function compute_pruned_fusion_trees(
   ::Type,
-  irreps::NTuple{N,<:SymmetrySectors.AbstractSector},
+  irreps::NTuple{N,<:AbstractSector},
   tree_arrows::NTuple{N,Bool},
-  target_sectors::Vector{<:SymmetrySectors.AbstractSector},
+  target_sectors::Vector{<:AbstractSector},
 ) where {N}
 
   # it is possible to prune trees during the construction process and to avoid constructing
@@ -128,10 +131,9 @@ function compute_pruned_fusion_trees(
 
   # pruning is only done here by discarding irreps that are not in target_sectors
   # also insert dummy trees in sectors that did not appear in the fusion product of irreps
-  irreps_dims = SymmetrySectors.quantum_dimension.(irreps)
+  irreps_dims = quantum_dimension.(irreps)
   trees_sector = [   # fill with dummy
-    zeros((irreps_dims..., SymmetrySectors.quantum_dimension(sec), 0)) for
-    sec in target_sectors
+    zeros((irreps_dims..., quantum_dimension(sec), 0)) for sec in target_sectors
   ]
 
   # set trees at their correct position
@@ -146,15 +148,15 @@ end
 
 # ================================  Low level interface  ===================================
 function fusion_trees(::Tuple{}, ::Tuple{})
-  return [SymmetrySectors.TrivialSector() => ones((1, 1))]
+  return [TrivialSector() => ones((1, 1))]
 end
 
 function fusion_trees(
-  irreps::NTuple{N,<:SymmetrySectors.SectorProduct}, tree_arrows::NTuple{N,Bool}
+  irreps::NTuple{N,<:SectorProduct}, tree_arrows::NTuple{N,Bool}
 ) where {N}
   # construct fusion_tree(SectorProduct) as kron(fusion_trees(inner_sectors))
 
-  argument_irreps = SymmetrySectors.arguments.(irreps)
+  argument_irreps = arguments.(irreps)
   n_args = length(first(argument_irreps))
 
   # construct fusion tree for each sector
@@ -165,8 +167,7 @@ function fusion_trees(
   T = eltype(argument_irreps)
   fused_arguments = broadcast.(first, sector_trees_irreps)
   tree_irreps = map(
-    SymmetrySectors.SectorProduct ∘ T,
-    Iterators.flatten((Iterators.product(fused_arguments...),)),
+    SectorProduct ∘ T, Iterators.flatten((Iterators.product(fused_arguments...),))
   )
 
   # compute Kronecker product of fusion trees
@@ -180,27 +181,27 @@ function fusion_trees(
 end
 
 function fusion_trees(
-  irreps::NTuple{N,<:SymmetrySectors.AbstractSector}, tree_arrows::NTuple{N,Bool}
+  irreps::NTuple{N,<:AbstractSector}, tree_arrows::NTuple{N,Bool}
 ) where {N}
-  return fusion_trees(SymmetrySectors.SymmetryStyle(first(irreps)), irreps, tree_arrows)
+  return fusion_trees(SymmetryStyle(first(irreps)), irreps, tree_arrows)
 end
 
 # =====================================  Internals  ========================================
 
 # fusion tree for an Abelian group is trivial
 # it does not depend on arrow directions
-function fusion_trees(::SymmetrySectors.AbelianStyle, irreps::Tuple, ::Tuple)
+function fusion_trees(::AbelianStyle, irreps::Tuple, ::Tuple)
   irrep_prod = reduce(⊗, irreps)
   return [irrep_prod => ones(ntuple(_ -> 1, length(irreps) + 2))]
 end
 
 function build_children_trees(
   parent_tree::Matrix,
-  parent_irrep::SymmetrySectors.AbstractSector,
-  level_irrep::SymmetrySectors.AbstractSector,
+  parent_irrep::AbstractSector,
+  level_irrep::AbstractSector,
   level_arrow::Bool,
   inner_multiplicity::Integer,
-  sec::SymmetrySectors.AbstractSector,
+  sec::AbstractSector,
 )
   sector_trees = typeof(parent_tree)[]
   for inner_mult_index in 1:inner_multiplicity
@@ -218,15 +219,14 @@ end
 
 function build_children_trees(
   parent_tree::Matrix,
-  parent_irrep::SymmetrySectors.AbstractSector,
-  level_irrep::SymmetrySectors.AbstractSector,
+  parent_irrep::AbstractSector,
+  level_irrep::AbstractSector,
   level_arrow::Bool,
 )
   children_trees = typeof(parent_tree)[]
   children_irreps = typeof(parent_irrep)[]
-  rep = GradedAxes.fusion_product(parent_irrep, level_irrep)
-  for (inner_multiplicity, sec) in
-      zip(BlockArrays.blocklengths(rep), GradedAxes.blocklabels(rep))
+  rep = fusion_product(parent_irrep, level_irrep)
+  for (inner_multiplicity, sec) in zip(blocklengths(rep), blocklabels(rep))
     sector_trees = build_children_trees(
       parent_tree, parent_irrep, level_irrep, level_arrow, inner_multiplicity, sec
     )
@@ -239,7 +239,7 @@ end
 function build_next_level_trees(
   parent_trees::Vector,
   parent_trees_irreps::Vector,
-  level_irrep::SymmetrySectors.AbstractSector,
+  level_irrep::AbstractSector,
   level_arrow::Bool,
 )
   next_level_trees = empty(parent_trees)
@@ -268,14 +268,12 @@ end
 function compute_thin_trees(irreps::Tuple, tree_arrows::Tuple)
   # init from trivial, NOT from first(irreps) to get first arrow correct
   thin_trees = [ones((1, 1))]
-  tree_irreps = [SymmetrySectors.trivial(first(irreps))]
+  tree_irreps = [trivial(first(irreps))]
   return build_trees(thin_trees, tree_irreps, irreps, tree_arrows)
 end
 
 function cat_thin_trees(
-  thin_trees::Vector,
-  uncat_tree_irreps::Vector,
-  sector_irrep::SymmetrySectors.AbstractSector,
+  thin_trees::Vector, uncat_tree_irreps::Vector, sector_irrep::AbstractSector
 )
   indices_irrep = findall(==(sector_irrep), uncat_tree_irreps)
   thin_trees_irrep = getindex.(Ref(thin_trees), indices_irrep)
@@ -293,14 +291,14 @@ function cat_thin_trees(thin_trees::Vector, uncat_tree_irreps::Vector)
 end
 
 # arrow direction is needed to define non-trivial CG tensor
-function fusion_trees(::SymmetrySectors.NotAbelianStyle, irreps::Tuple, tree_arrows::Tuple)
+function fusion_trees(::NotAbelianStyle, irreps::Tuple, tree_arrows::Tuple)
   # compute "thin" trees: 1 tree = fuses on ONE irrep
   thin_trees, uncat_tree_irreps = compute_thin_trees(irreps, tree_arrows)
 
   # cat thin trees into "thick" trees
   thick_mergedleaves_trees, tree_irreps = cat_thin_trees(thin_trees, uncat_tree_irreps)
 
-  irrep_dims = SymmetrySectors.quantum_dimension.(irreps)
+  irrep_dims = quantum_dimension.(irreps)
   thick_trees = map(tree -> unmerge_tree_leaves(tree, irrep_dims), thick_mergedleaves_trees)
   return tree_irreps .=> thick_trees
 end
