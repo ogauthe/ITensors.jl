@@ -7,7 +7,7 @@ using HalfIntegers: HalfIntegers
 using WignerSymbols: WignerSymbols
 
 using NDTensors.BlockSparseArrays: BlockSparseArrays
-using NDTensors.GradedAxes: GradedAxes
+using NDTensors.GradedAxes: GradedAxes, AbstractGradedUnitRange
 using NDTensors.SymmetrySectors: SymmetrySectors, ⊗
 using NDTensors.TensorAlgebra: TensorAlgebra
 

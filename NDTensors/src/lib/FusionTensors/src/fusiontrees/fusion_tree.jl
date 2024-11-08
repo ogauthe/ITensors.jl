@@ -41,7 +41,7 @@
 #
 #
 # The interface uses AbstractGradedUnitRanges as input for interface simplicity
-# however only blocklabels are used and blocklengths are never used.
+# however only blocklabels are used and blocklengths are never read.
 
 # ===================================  Utility tools  ======================================
 function braid_tuples(t1::Tuple{Vararg{<:Any,N}}, t2::Tuple{Vararg{<:Any,N}}) where {N}
@@ -90,7 +90,7 @@ end
 function get_tree!(
   cache::Dict{NTuple{N,Int},<:Vector{A}},
   it::NTuple{N,Int},
-  legs::NTuple{N,AbstractUnitRange},
+  legs::NTuple{N,AbstractGradedUnitRange},
   allowed_sectors::Vector{<:SymmetrySectors.AbstractSector},
 ) where {N,A<:Array{<:Real}}
   get!(cache, it) do

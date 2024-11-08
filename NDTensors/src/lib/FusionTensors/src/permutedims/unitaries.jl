@@ -10,8 +10,8 @@
 
 # ======================================  Interface  =======================================
 function compute_unitaries(
-  old_domain_legs::Tuple{Vararg{AbstractUnitRange}},
-  old_codomain_legs::Tuple{Vararg{AbstractUnitRange}},
+  old_domain_legs::Tuple{Vararg{AbstractGradedUnitRange}},
+  old_codomain_legs::Tuple{Vararg{AbstractGradedUnitRange}},
   biperm::TensorAlgebra.BlockedPermutation{2},
 )
   @assert length(old_domain_legs) + length(old_codomain_legs) == length(biperm)
@@ -173,8 +173,8 @@ function overlap_filtered_fusion_trees(
 end
 
 function compute_unitaries_clebsch_gordan(
-  old_domain_legs::NTuple{OldNDoAxes,AbstractUnitRange},
-  old_codomain_legs::NTuple{OldNCoAxes,AbstractUnitRange},
+  old_domain_legs::NTuple{OldNDoAxes,AbstractGradedUnitRange},
+  old_codomain_legs::NTuple{OldNCoAxes,AbstractGradedUnitRange},
   biperm::TensorAlgebra.BlockedPermutation{2,N},
 ) where {OldNDoAxes,OldNCoAxes,N}
   @assert OldNDoAxes + OldNCoAxes == N

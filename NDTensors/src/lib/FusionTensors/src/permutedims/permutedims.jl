@@ -55,8 +55,8 @@ function permute_data_matrix(
     BlockSparseArrays.AbstractBlockSparseMatrix,
     LinearAlgebra.Adjoint{<:Number,<:BlockSparseArrays.AbstractBlockSparseMatrix},
   },
-  old_domain_legs::Tuple{Vararg{AbstractUnitRange}},
-  old_codomain_legs::Tuple{Vararg{AbstractUnitRange}},
+  old_domain_legs::Tuple{Vararg{AbstractGradedUnitRange}},
+  old_codomain_legs::Tuple{Vararg{AbstractGradedUnitRange}},
   biperm::TensorAlgebra.BlockedPermutation{2},
 )
   # TBD use FusedAxes as input?

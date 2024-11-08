@@ -3,7 +3,11 @@
 # =================================  High level interface  =================================
 
 #### cast from array to symmetric
-function FusionTensor(array::AbstractArray, domain_legs::Tuple, codomain_legs::Tuple)
+function FusionTensor(
+  array::AbstractArray,
+  domain_legs::Tuple{Vararg{AbstractGradedUnitRange}},
+  codomain_legs::Tuple{Vararg{AbstractGradedUnitRange}},
+)
   data_mat = cast_from_array(array, domain_legs, codomain_legs)
   return FusionTensor(data_mat, domain_legs, codomain_legs)
 end
@@ -14,14 +18,20 @@ function BlockSparseArrays.BlockSparseArray(ft::FusionTensor)
 end
 
 # =================================  Low level interface  ==================================
-function cast_from_array(array::AbstractArray, domain_legs::Tuple, codomain_legs::Tuple)
+function cast_from_array(
+  array::AbstractArray,
+  domain_legs::Tuple{Vararg{AbstractGradedUnitRange}},
+  codomain_legs::Tuple{Vararg{AbstractGradedUnitRange}},
+)
   bounds = SymmetrySectors.block_dimensions.((domain_legs..., codomain_legs...))
   blockarray = BlockArrays.BlockedArray(array, bounds...)
   return cast_from_array(blockarray, domain_legs, codomain_legs)
 end
 
 function cast_from_array(
-  blockarray::BlockArrays.AbstractBlockArray, domain_legs::Tuple, codomain_legs::Tuple
+  blockarray::BlockArrays.AbstractBlockArray,
+  domain_legs::Tuple{Vararg{AbstractGradedUnitRange}},
+  codomain_legs::Tuple{Vararg{AbstractGradedUnitRange}},
 )
   # input validation
   if length(domain_legs) + length(codomain_legs) != ndims(blockarray)  # compile time
@@ -48,7 +58,11 @@ function cast_to_array(ft::FusionTensor)
   return cast_to_array(data_matrix(ft), domain_axes(ft), codomain_axes(ft))
 end
 
-function cast_to_array(data_mat::AbstractMatrix, domain_legs::Tuple, codomain_legs::Tuple)
+function cast_to_array(
+  data_mat::AbstractMatrix,
+  domain_legs::Tuple{Vararg{AbstractGradedUnitRange}},
+  codomain_legs::Tuple{Vararg{AbstractGradedUnitRange}},
+)
   bounds = SymmetrySectors.block_dimensions.((domain_legs..., codomain_legs...))
   blockarray = BlockSparseArrays.BlockSparseArray{eltype(data_mat)}(
     BlockArrays.blockedrange.(bounds)

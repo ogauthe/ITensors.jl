@@ -7,8 +7,8 @@ struct FusedAxes{A,B,C,D}
   inner_block_indices::D
 
   function FusedAxes(
-    outer_legs::NTuple{N,AbstractUnitRange},
-    fused_axis::AbstractUnitRange,
+    outer_legs::NTuple{N,AbstractGradedUnitRange},
+    fused_axis::AbstractGradedUnitRange,
     index_matrix::Matrix{UnitRange{Int64}},
     inner_block_indices::CartesianIndices{N},
   ) where {N}
@@ -49,13 +49,13 @@ function FusedAxes(::Tuple{})
   return FusedAxes((), fused_axis, index_matrix, inner_block_indices)
 end
 
-function FusedAxes(outer_legs::Tuple{Vararg{AbstractUnitRange}})
+function FusedAxes(outer_legs::Tuple{Vararg{AbstractGradedUnitRange}})
   fused_axis, index_matrix = compute_inner_ranges(outer_legs)
   inner_block_indices = CartesianIndices(BlockArrays.blocklength.(outer_legs))
   return FusedAxes(outer_legs, fused_axis, index_matrix, inner_block_indices)
 end
 
-function compute_inner_ranges(outer_legs::Tuple{Vararg{AbstractUnitRange}})
+function compute_inner_ranges(outer_legs::Tuple{Vararg{AbstractGradedUnitRange}})
   fused_axis = GradedAxes.fusion_product(outer_legs...)
   allowed_sectors = GradedAxes.blocklabels(fused_axis)
   outer_blocklengths = BlockArrays.blocklengths.(outer_legs)

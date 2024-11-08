@@ -12,8 +12,8 @@ struct FusionTensor{T,N,DomainAxes,CoDomainAxes,Mat} <: AbstractArray{T,N}
       BlockSparseArrays.BlockSparseMatrix,
       LinearAlgebra.Adjoint{<:Number,<:BlockSparseArrays.BlockSparseMatrix},
     },
-    domain_legs::Tuple{Vararg{AbstractUnitRange}},
-    codomain_legs::Tuple{Vararg{AbstractUnitRange}},
+    domain_legs::Tuple{Vararg{AbstractGradedUnitRange}},
+    codomain_legs::Tuple{Vararg{AbstractGradedUnitRange}},
   )
     return new{
       eltype(mat),
