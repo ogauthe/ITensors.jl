@@ -24,9 +24,6 @@ function fusiontensor_permutedims(ft::FusionTensor, biperm::BlockedPermutation{2
     end
   end
 
-  # TODO remove me
-  return naive_permutedims(ft, biperm)
-
   permuted_data_matrix = permute_data_matrix(
     data_matrix(ft), domain_axes(ft), codomain_axes(ft), biperm
   )
@@ -68,7 +65,9 @@ function permute_data_matrix(
   # TODO cache FusedAxes
   old_domain_fused_axes = FusedAxes(old_domain_legs)
   old_codomain_fused_axes = FusedAxes(dual.(old_codomain_legs))
-  new_domain_legs, new_codomain_legs = TensorAlgebra.blockpermute(axes(ft), biperm)
+  new_domain_legs, new_codomain_legs = blockpermute(
+    (old_domain_legs..., old_codomain_legs...), biperm
+  )
   new_domain_fused_axes = FusedAxes(new_domain_legs)
   new_codomain_fused_axes = FusedAxes(dual.(new_codomain_legs))
   new_data_matrix = initialize_data_matrix(
@@ -100,10 +99,9 @@ function add_structural_axes(
 end
 
 function fill_data_matrix!(
-  new_data_matrix::BlockSparseArrays.AbstractBlockSparseMatrix,
+  new_data_matrix::AbstractBlockSparseMatrix,
   old_data_matrix::Union{
-    BlockSparseArrays.AbstractBlockSparseMatrix,
-    LinearAlgebra.Adjoint{<:Number,<:BlockSparseArrays.AbstractBlockSparseMatrix},
+    AbstractBlockSparseMatrix,Adjoint{<:Number,<:AbstractBlockSparseMatrix}
   },
   old_domain_fused_axes::FusedAxes,
   old_codomain_fused_axes::FusedAxes,
@@ -112,30 +110,50 @@ function fill_data_matrix!(
   biperm::BlockedPermutation{2},
   unitaries::Dict,
 )
-  @assert ndims(old_domain_fused_axes) + ndims(old_codomain_fused_axes) == N
-  @assert ndims(new_domain_fused_axes) + ndims(new_codomain_fused_axes) == N
+  @assert ndims(old_domain_fused_axes) + ndims(old_codomain_fused_axes) == length(biperm)
+  @assert ndims(new_domain_fused_axes) + ndims(new_codomain_fused_axes) == length(biperm)
 
-  # TODO share functions with dense
-  matrix_block_blocks = sort(
-    collect(BlockSparseArrays.block_stored_indices(old_data_matrix))
+  old_matrix_block_indices = reinterpret(
+    Tuple{Int,Int}, sort(collect(block_stored_indices(old_data_matrix)))
   )
-  old_existing_matrix_blocks = [view(old_data_matrix, b) for b in matrix_block_blocks]
-  old_matrix_block_indices = reinterpret(Tuple{Int,Int}, matrix_block_blocks)
-  #old_existing_sectors = blocklabels(old_domain_fused_axes)[first.(
-  #  old_matrix_block_indices
-  #)]
-  old_existing_outer_blocks = allowed_outer_blocks_sectors(
-    old_domain_fused_axes, old_codomain_fused_axes, old_matrix_block_indices
+  old_matrix_blocks = Dict(
+    map(
+      b -> blocklabels(old_domain_fused_axes)[first(b)] => view(old_data_matrix, Block(b)),
+      old_matrix_block_indices,
+    ),
   )
+
+  new_matrix_block_indices = intersect(new_domain_fused_axes, new_codomain_fused_axes)
+  new_matrix_blocks = Dict(
+    map(
+      b -> blocklabels(new_domain_fused_axes)[first(b)] => view!(new_data_matrix, Block(b)),
+      new_matrix_block_indices,
+    ),
+  )
+
+  old_existing_outer_blocks = Dict(
+    allowed_outer_blocks_sectors(
+      old_domain_fused_axes, old_codomain_fused_axes, old_matrix_block_indices
+    ),
+  )
+  new_existing_outer_blocks = Dict(
+    allowed_outer_blocks_sectors(
+      new_domain_fused_axes, new_codomain_fused_axes, new_matrix_block_indices
+    ),
+  )
+  extended_perm = add_structural_axes(biperm, Val(ndims(old_domain_fused_axes)))
 
   # loop for each existing outer block TODO parallelize
-  for old_outer_block in old_existing_outer_blocks
+  for old_outer_block_sectors in old_existing_outer_blocks
+    new_outer_block = map(i -> first(old_outer_block_sectors)[i], Tuple(biperm))
+    new_outer_block_sectors = new_outer_block => new_existing_outer_blocks[new_outer_block]
     write_new_outer_block!(
-      new_data_matrix,
-      old_outer_block,
-      old_existing_matrix_blocks,
-      unitaries[first(old_outer_block)],
-      biperm,
+      new_matrix_blocks,
+      old_matrix_blocks,
+      old_outer_block_sectors,
+      new_outer_block_sectors,
+      unitaries[first(old_outer_block_sectors)],
+      extended_perm,
       old_domain_fused_axes,
       old_codomain_fused_axes,
       new_domain_fused_axes,
@@ -145,45 +163,44 @@ function fill_data_matrix!(
 end
 
 function write_new_outer_block!(
-  new_data_matrix::BlockSparseArrays.AbstractBlockSparseMatrix,
-  old_outer_block::Pair{Tuple{Vararg{Int}},Vector{<:AbstractSector}},
-  old_existing_matrix_blocks::Vector{<:Matrix},
+  new_matrix_blocks::Dict{S,<:AbstractMatrix},
+  old_matrix_blocks::Dict{S,<:AbstractMatrix},
+  old_outer_block_sectors::Pair{<:Tuple{Vararg{Int}},Vector{S}},
+  new_outer_block_sectors::Pair{<:Tuple{Vararg{Int}},Vector{S}},
   unitary::AbstractBlockMatrix,
-  biperm::BlockedPermutation{2},
+  extended_perm::Tuple{Vararg{Int}},
   old_domain_fused_axes::FusedAxes,
   old_codomain_fused_axes::FusedAxes,
   new_domain_fused_axes::FusedAxes,
   new_codomain_fused_axes::FusedAxes,
-)
+) where {S<:AbstractSector}
   new_outer_array = permute_outer_block(
-    old_existing_matrix_blocks,
-    old_outer_block,
+    old_matrix_blocks,
+    old_outer_block_sectors,
     old_domain_fused_axes,
     old_codomain_fused_axes,
-    add_structural_axes(biperm, Val(ndims(old_domain_fused_axes))),
+    extended_perm,
     unitary,
   )
-  new_outer_block = map(i -> first(old_outer_block[i]), Tuple(biperm))
   return write_new_outer_block!(
-    new_data_matrix,
+    new_matrix_blocks,
     new_outer_array,
-    new_outer_block,
+    new_outer_block_sectors,
     new_domain_fused_axes,
     new_codomain_fused_axes,
   )
 end
 
 function permute_outer_block(
-  old_existing_matrix_blocks::Vector{<:Matrix},
-  old_outer_block::Tuple{Vararg{Int}},
-  old_outer_block_sectors,
+  old_matrix_blocks::Dict{S,<:AbstractMatrix},
+  old_outer_block_sectors::Pair{<:Tuple{Vararg{Int}},Vector{S}},
   old_domain_fused_axes::FusedAxes,
   old_codomain_fused_axes::FusedAxes,
   extended_perm::Tuple{Vararg{Int}},
   unitary::AbstractBlockMatrix,
-)
-  old_domain_block = old_outer_block[begin:ndims(old_domain_fused_axes)]
-  old_codomain_block = old_outer_block[(ndims(old_domain_fused_axes) + 1):end]
+) where {S<:AbstractSector}
+  old_domain_block = first(old_outer_block_sectors)[begin:ndims(old_domain_fused_axes)]
+  old_codomain_block = first(old_outer_block_sectors)[(ndims(old_domain_fused_axes) + 1):end]
   old_domain_ext_mult = block_external_multiplicities(
     old_domain_fused_axes, old_domain_block
   )
@@ -193,27 +210,24 @@ function permute_outer_block(
   new_outer_shape = (
     size(unitary, 1), prod((old_domain_ext_mult..., old_codomain_ext_mult...))
   )
-  new_outer_block_array = zeros(eltype(eltype(old_existing_matrix_blocks)), new_outer_shape)
+  new_outer_block_array = zeros(eltype(valtype(old_matrix_blocks)), new_outer_shape)
 
-  for old_sector in (old_outer_block_sectors)  # race condition: cannot parallelize
-    i_sec = findfirst(==(old_sector), old_existing_sectors)  # TODO
+  for (i_sec, old_sector) in enumerate(last(old_outer_block_sectors))  # race condition: cannot parallelize
     old_row_range = find_block_range(old_domain_fused_axes, old_domain_block, old_sector)
     old_col_range = find_block_range(
       old_codomain_fused_axes, old_codomain_block, old_sector
     )
-    old_sym_block_matrix = view(
-      old_existing_matrix_blocks[i_sec], old_row_range, old_col_range
-    )  # TODO
+    old_sym_block_matrix = view(old_matrix_blocks[old_sector], old_row_range, old_col_range)
     old_tensor_shape = (
-      block_structural_multiplicity(old_domain_fused_axes, old_domain_block, old_sector),
       old_domain_ext_mult...,
+      block_structural_multiplicity(old_domain_fused_axes, old_domain_block, old_sector),
+      old_codomain_ext_mult...,
       block_structural_multiplicity(
         old_codomain_fused_axes, old_codomain_block, old_sector
       ),
-      old_codomain_ext_mult...,
     )
     old_sym_block_tensor = reshape(old_sym_block_matrix, old_tensor_shape)
-    unitary_column = unitary[Block(i_old_sector), :]  # take all new blocks at once
+    unitary_column = unitary[:, Block(i_sec)]  # take all new blocks at once
     new_outer_block_array += change_basis_block_sector(
       old_sym_block_tensor, unitary_column, extended_perm
     )
@@ -221,17 +235,34 @@ function permute_outer_block(
   return new_outer_block_array
 end
 
-function write_new_outer_block!(
-  new_data_matrix,
-  new_outer_block_array,
-  new_outer_block,
-  new_domain_fused_axes,
-  new_codomain_fused_axes,
+function change_basis_block_sector(
+  old_sym_block_tensor::AbstractArray,
+  unitary_column::AbstractBlockMatrix,
+  extended_perm::Tuple{Vararg{Int}},
 )
-  for new_sector in new_allowed_sectors  # not worth parallelize
-    new_row_range = find_block_range(new_domain_fused_axes, new_domain_block, i_sec)
-    new_col_range = find_block_range(new_codomain_fused_axes, new_codomain_block, i_sec)
-    new_sym_block_sector = slice_new_sym_block(new_sym_block, new_sector)
-    new_data_matrix[new_sector_index][new_row_range, new_col_range] = new_sym_block_sector
+  old_permuted = permutedims(old_sym_block_tensor, extended_perm)
+  new_shape = (size(unitary_column, 2), prod(size(old_permuted)[3:end]))
+  reshaped = reshape(old_permuted, new_shape)
+  new_sym_block_array = unitary_column * reshaped
+  return new_sym_block_array
+end
+
+function write_new_outer_block!(
+  new_matrix_blocks::Dict{S,<:AbstractMatrix},
+  new_outer_array::AbstractMatrix,
+  new_outer_block_sectors::Pair{<:Tuple{Vararg{Int}},Vector{S}},
+  new_domain_fused_axes::FusedAxes,
+  new_codomain_fused_axes::FusedAxes,
+) where {S<:AbstractSector}
+  new_domain_block = first(new_outer_block_sectors)[begin:ndims(new_domain_fused_axes)]
+  new_codomain_block = first(new_outer_block_sectors)[(ndims(new_domain_fused_axes) + 1):end]
+  for (i_sec, new_sector) in enumerate(last(new_outer_block_sectors))  # not worth parallelize
+    new_row_range = find_block_range(new_domain_fused_axes, new_domain_block, new_sector)
+    new_col_range = find_block_range(
+      new_codomain_fused_axes, new_codomain_block, new_sector
+    )
+    new_matrix_blocks[new_sector][new_row_range, new_col_range] = view(
+      new_outer_array, Block(i_sec)
+    )
   end
 end

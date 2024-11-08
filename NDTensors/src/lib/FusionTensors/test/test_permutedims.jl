@@ -57,12 +57,12 @@ using NDTensors.TensorAlgebra: blockedperm
     g4 = gradedrange([U1(0) => 2, U1(2) => 1])
     domain_legs = (g1, g2)
     codomain_legs = dual.((g3, g4))
-    dense = zeros(ComplexF64, (4, 5, 5, 3))
-    dense[1:2, 1:3, 1:4, 1:2] .= 1.0im
-    dense[3:4, 1:3, 5:5, 1:2] .= 2.0
-    dense[1:2, 4:5, 5:5, 1:2] .= 3.0
-    dense[3:4, 4:5, 1:4, 3:3] .= 4.0
-    ft = FusionTensor(dense, domain_legs, codomain_legs)
+    arr = zeros(ComplexF64, (4, 5, 5, 3))
+    arr[1:2, 1:3, 1:4, 1:2] .= 1.0im
+    arr[3:4, 1:3, 5:5, 1:2] .= 2.0
+    arr[1:2, 4:5, 5:5, 1:2] .= 3.0
+    arr[3:4, 4:5, 1:4, 3:3] .= 4.0
+    ft = FusionTensor(arr, domain_legs, codomain_legs)
     biperm = blockedperm((3,), (2, 4, 1))
 
     ftp = permutedims(ft, biperm)
