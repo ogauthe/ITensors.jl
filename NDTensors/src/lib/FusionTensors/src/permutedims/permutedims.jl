@@ -10,7 +10,7 @@ end
 function fusiontensor_permutedims(
   ft::FusionTensor, new_domain_indices::Tuple, new_codomain_indices::Tuple
 )
-  biperm = TensorAlgebra.blockedperm(new_domain_indices, new_codomain_indices)
+  biperm = blockedperm(new_domain_indices, new_codomain_indices)
   return permutedims(ft, biperm)
 end
 
@@ -30,14 +30,14 @@ function fusiontensor_permutedims(ft::FusionTensor, biperm::BlockedPermutation{2
   permuted_data_matrix = permute_data_matrix(
     data_matrix(ft), domain_axes(ft), codomain_axes(ft), biperm
   )
-  new_domain_legs, new_codomain_legs = TensorAlgebra.blockpermute(axes(ft), biperm)
+  new_domain_legs, new_codomain_legs = blockpermute(axes(ft), biperm)
   permuted = FusionTensor(permuted_data_matrix, new_domain_legs, new_codomain_legs)
   return permuted
 end
 
 function naive_permutedims(ft::FusionTensor, biperm::BlockedPermutation{2})
   @assert ndims(ft) == length(biperm)
-  new_domain_legs, new_codomain_legs = TensorAlgebra.blockpermute(axes(ft), biperm)
+  new_domain_legs, new_codomain_legs = blockpermute(axes(ft), biperm)
 
   # stupid permute: cast to dense, permutedims, cast to FusionTensor
   arr = Array(ft)

@@ -27,7 +27,7 @@ using NDTensors.GradedAxes:
   space_isequal
 using NDTensors.SymmetrySectors:
   AbstractSector, TrivialSector, block_dimensions, istrivial, quantum_dimension, trivial
-using NDTensors.TensorAlgebra: TensorAlgebra, BlockedPermutation
+using NDTensors.TensorAlgebra: TensorAlgebra, BlockedPermutation.blockedperm, blockpermute
 
 include("fusiontrees/clebsch_gordan.jl")
 include("fusiontrees/fusion_tree.jl")

@@ -229,9 +229,7 @@ function compute_unitaries_clebsch_gordan(
 
   # loop over all allowed outer blocks.
   for (old_outer_block, _) in old_allowed_outer_blocks
-    new_domain_outer_block, new_codomain_outer_block = TensorAlgebra.blockpermute(
-      old_outer_block, biperm
-    )
+    new_domain_outer_block, new_codomain_outer_block = blockpermute(old_outer_block, biperm)
     old_domain_block_trees = get_tree!(
       old_domain_trees_cache,
       old_outer_block[begin:OldNDoAxes],
