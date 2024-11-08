@@ -110,11 +110,14 @@ function find_block_range(fa::FusedAxes, i_block::Integer, i_sector::Integer)
   return index_matrix(fa)[i_block, i_sector]
 end
 
+function block_external_multiplicities(fa::FusedAxes, i_outer_block::Int)
+  return block_external_multiplicities(fa, unravel_index(i_outer_block, fa))
+end
 function block_external_multiplicities(fa::FusedAxes, outer_block)
   return block_external_multiplicities(fa, Int.(Tuple(outer_block)))
 end
 function block_external_multiplicities(fa::FusedAxes, outer_block::NTuple{N,Int}) where {N}
-  return map(i -> length(axes(fa)[i][Block(outer_block[i])]), ntuple(identity, N))
+  return ntuple(i -> length(axes(fa)[i][Block(outer_block[i])]), N)
 end
 
 function block_structural_multiplicity(fa::FusedAxes, outer_block, s::AbstractSector)
@@ -124,7 +127,7 @@ function block_structural_multiplicity(fa::FusedAxes, outer_block, s::AbstractSe
 end
 function block_structural_multiplicity(fa::FusedAxes, i_outer_block::Int, i_sec::Int)
   return length(index_matrix(fa)[i_outer_block, i_sec]) ÷
-         prod(block_external_multiplicities(fa, i_sec))
+         prod(block_external_multiplicities(fa, i_outer_block))
 end
 block_structural_multiplicity(::FusedAxes, ::Int, ::Nothing) = 0
 

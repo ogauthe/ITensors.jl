@@ -15,7 +15,12 @@ using BlockArrays:
   blocks
 
 using NDTensors.BlockSparseArrays:
-  BlockSparseArrays, BlockSparseArray, BlockSparseMatrix, stored_indices
+  AbstractBlockSparseMatrix,
+  BlockSparseArrays,
+  BlockSparseArray,
+  BlockSparseMatrix,
+  stored_indices,
+  view!
 using NDTensors.GradedAxes:
   GradedAxes,
   AbstractGradedUnitRange,
