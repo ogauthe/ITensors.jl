@@ -4,11 +4,11 @@
 """
 function TensorAlgebra.output_axes(
   ::typeof(TensorAlgebra.contract),
-  biperm_dest::TensorAlgebra.BlockedPermutation{2},
+  biperm_dest::BlockedPermutation{2},
   a1::FusionTensor,
-  biperm1::TensorAlgebra.BlockedPermutation{2},
+  biperm1::BlockedPermutation{2},
   a2::FusionTensor,
-  biperm2::TensorAlgebra.BlockedPermutation{2},
+  biperm2::BlockedPermutation{2},
   α::Number=true,
 )
   println(biperm_dest)
@@ -32,12 +32,12 @@ end
 
 # TBD how to deal with inner contraction = no ouput axis?
 function TensorAlgebra.allocate_output(
-  ::typeof(TensorAlgebra.contract),
-  biperm_dest::TensorAlgebra.BlockedPermutation{2},
+  ::typeof(contract),
+  biperm_dest::BlockedPermutation{2},
   a1::FusionTensor{T1,N},
-  biperm1::TensorAlgebra.BlockedPermutation{2,N},
+  biperm1::BlockedPermutation{2,N},
   a2::FusionTensor{T2,M},
-  biperm2::TensorAlgebra.BlockedPermutation{2,M},
+  biperm2::BlockedPermutation{2,M},
   α::Number=true,
 ) where {T1,T2,N,M}
   axes_dest = (
@@ -47,7 +47,7 @@ function TensorAlgebra.allocate_output(
 end
 
 # TBD do really I need to defined these as I cannot use them in contract! and has to redefine it?
-# TensorAlgebra.fusedims(ft::FusionTensor, perm::TensorAlgebra.BlockedPermutation) = permutedims(ft, perm)
+# TensorAlgebra.fusedims(ft::FusionTensor, perm::BlockedPermutation) = permutedims(ft, perm)
 # function TensorAlgebra.splitdims(ft1::FusionTensor, ft2::FusionTensor, blockedperm::BlockedPermutation)
 # function TensorAlgebra.splitdims!(ft1::FusionTensor, ft2::FusionTensor, blockedperm::BlockedPermutation)
 
@@ -59,11 +59,11 @@ function TensorAlgebra.contract!(
   # TBD replace with
   #  alg::TensorAlgebra.Algorithm"matricize",
   a_dest::FusionTensor,
-  biperm_dest::TensorAlgebra.BlockedPermutation,
+  biperm_dest::BlockedPermutation,
   a1::FusionTensor,
-  biperm1::TensorAlgebra.BlockedPermutation,
+  biperm1::BlockedPermutation,
   a2::FusionTensor,
-  biperm2::TensorAlgebra.BlockedPermutation,
+  biperm2::BlockedPermutation,
   α::Number,
   β::Number,
 )

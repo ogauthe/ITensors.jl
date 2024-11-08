@@ -236,7 +236,7 @@ function contract_fusion_trees(
   #           |               |                 |             |            |
   #     ext1*ext2*ext3   ext4*ext5*ext6   dim1*dim2*dim3    dim_sec    struct_sec_codomain
   #
-  data_1tree = TensorAlgebra.contract(
+  data_1tree = contract(
     (1, 2, 3, 5, 6), fused_array_block, (1, 2, 3, 4), tree_codomain, (4, 5, 6)
   )
 
@@ -247,7 +247,7 @@ function contract_fusion_trees(
   #
   T = promote_type(eltype(fused_array_block), Float64)
   dim_sec = size(tree_domain, 2)
-  sym_data::Array{T,4} = TensorAlgebra.contract(
+  sym_data::Array{T,4} = contract(
     (1, 7, 2, 6),   # HERE WE SET INNER STRUCTURE FOR MATRIX BLOCKS
     data_1tree,
     (1, 2, 3, 5, 6),
@@ -396,16 +396,14 @@ function add_sector_block!(
   #            |               |                    |              |               |
   #      ext1*ext2*ext3   ext4*ext5*ext6    struct_sec_domain  dim1*dim2*dim3   dim_sec
   #
-  data_1tree = TensorAlgebra.contract(
-    (1, 2, 6, 3, 5), sym_data, (1, 7, 2, 6), tree_domain, (3, 5, 7)
-  )
+  data_1tree = contract((1, 2, 6, 3, 5), sym_data, (1, 7, 2, 6), tree_domain, (3, 5, 7))
 
   # contract codomain tree
   #        ---------------------fused_array_block--------------------
   #        |                   |                 |                  |
   #  ext1*ext2*ext3      ext4*ext5*ext6    dim1*dim2*dim3    dim4*dim5*dim6
   #
-  return TensorAlgebra.contract!(
+  return contract!(
     fused_array_block,
     (1, 2, 3, 4),
     data_1tree,
