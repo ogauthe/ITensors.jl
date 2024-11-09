@@ -155,13 +155,12 @@ function allowed_outer_blocks_sectors(
   reduced_left = .!isempty.(index_matrix(left)[:, left_indices])
   reduced_right = .!isempty.(index_matrix(right)[:, right_indices])
 
-  allowed_outer_blocks = Vector{NTuple{ndims(left) + ndims(right),Int}}()
-  allowed_outer_block_sectors = Vector{Vector{eltype(left_labels)}}()
+  block_sectors = Dict{NTuple{ndims(left) + ndims(right),Int},Vector{eltype(left_labels)}}()
   for i in axes(reduced_left, 1), j in axes(reduced_right, 1)
     intersection = findall(>(0), reduced_left[i, :] .* reduced_right[j, :])
     isempty(intersection) && continue
-    push!(allowed_outer_blocks, (unravel_index(i, left)..., unravel_index(j, right)...))
-    push!(allowed_outer_block_sectors, left_labels[left_indices[intersection]])
+    full_block = (unravel_index(i, left)..., unravel_index(j, right)...)
+    block_sectors[full_block] = left_labels[left_indices[intersection]]
   end
-  return Dict(allowed_outer_blocks .=> allowed_outer_block_sectors)
+  return block_sectors
 end
