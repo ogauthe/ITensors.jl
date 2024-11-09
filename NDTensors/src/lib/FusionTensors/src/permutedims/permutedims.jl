@@ -205,12 +205,7 @@ function permute_outer_block(
   old_codomain_ext_mult = block_external_multiplicities(
     old_codomain_fused_axes, old_codomain_block
   )
-  new_outer_shape = (
-    size(unitary, 1), prod((old_domain_ext_mult..., old_codomain_ext_mult...))
-  )
-  new_outer_block_array = zeros(eltype(valtype(old_matrix_blocks)), new_outer_shape)
-
-  for (i_sec, old_sector) in enumerate(last(old_outer_block_sectors))  # race condition: cannot parallelize
+  return mapreduce(+, enumerate(last(old_outer_block_sectors))) do (i_sec, old_sector)
     old_row_range = find_block_range(old_domain_fused_axes, old_domain_block, old_sector)
     old_col_range = find_block_range(
       old_codomain_fused_axes, old_codomain_block, old_sector
@@ -226,11 +221,8 @@ function permute_outer_block(
     )
     old_sym_block_tensor = reshape(old_sym_block_matrix, old_tensor_shape)
     unitary_column = unitary[:, Block(i_sec)]  # take all new blocks at once
-    new_outer_block_array += change_basis_block_sector(
-      old_sym_block_tensor, unitary_column, extended_perm
-    )
+    return change_basis_block_sector(old_sym_block_tensor, unitary_column, extended_perm)
   end
-  return new_outer_block_array
 end
 
 function change_basis_block_sector(
