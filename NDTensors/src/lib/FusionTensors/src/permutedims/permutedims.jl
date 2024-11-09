@@ -117,18 +117,14 @@ function fill_data_matrix!(
     Tuple{Int,Int}, sort(collect(block_stored_indices(old_data_matrix)))
   )
   old_matrix_blocks = Dict(
-    map(
-      b -> blocklabels(old_domain_fused_axes)[first(b)] => view(old_data_matrix, Block(b)),
-      old_matrix_block_indices,
-    ),
+    blocklabels(old_domain_fused_axes)[first(b)] => view(old_data_matrix, Block(b)) for
+    b in old_matrix_block_indices
   )
 
   new_matrix_block_indices = intersect(new_domain_fused_axes, new_codomain_fused_axes)
   new_matrix_blocks = Dict(
-    map(
-      b -> blocklabels(new_domain_fused_axes)[first(b)] => view!(new_data_matrix, Block(b)),
-      new_matrix_block_indices,
-    ),
+    blocklabels(new_domain_fused_axes)[first(b)] => view!(new_data_matrix, Block(b)) for
+    b in new_matrix_block_indices
   )
 
   old_existing_outer_blocks = allowed_outer_blocks_sectors(
