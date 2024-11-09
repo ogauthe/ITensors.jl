@@ -131,16 +131,14 @@ function fill_data_matrix!(
     ),
   )
 
-  old_existing_outer_blocks = Dict(
-    allowed_outer_blocks_sectors(
-      old_domain_fused_axes, old_codomain_fused_axes, old_matrix_block_indices
-    ),
+  old_existing_outer_blocks = allowed_outer_blocks_sectors(
+    old_domain_fused_axes, old_codomain_fused_axes, old_matrix_block_indices
   )
-  new_existing_outer_blocks = Dict(
-    allowed_outer_blocks_sectors(
-      new_domain_fused_axes, new_codomain_fused_axes, new_matrix_block_indices
-    ),
+
+  new_existing_outer_blocks = allowed_outer_blocks_sectors(
+    new_domain_fused_axes, new_codomain_fused_axes, new_matrix_block_indices
   )
+
   extended_perm = add_structural_axes(biperm, Val(ndims(old_domain_fused_axes)))
 
   # loop for each existing outer block TODO parallelize

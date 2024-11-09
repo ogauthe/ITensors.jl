@@ -163,5 +163,5 @@ function allowed_outer_blocks_sectors(
     push!(allowed_outer_blocks, (unravel_index(i, left)..., unravel_index(j, right)...))
     push!(allowed_outer_block_sectors, left_labels[left_indices[intersection]])
   end
-  return allowed_outer_blocks .=> allowed_outer_block_sectors
+  return Dict(allowed_outer_blocks .=> allowed_outer_block_sectors)
 end
