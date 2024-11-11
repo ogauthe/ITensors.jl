@@ -229,8 +229,8 @@ function change_basis_block_sector(
   old_permuted = permutedims(old_sym_block_tensor, extended_perm)
   new_shape = (size(unitary_column, 2), prod(size(old_permuted)[3:end]))
   reshaped = reshape(old_permuted, new_shape)
-  new_sym_block_array = unitary_column * reshaped
-  return new_sym_block_array
+  new_outer_array = unitary_column * reshaped
+  return new_outer_array
 end
 
 function write_new_outer_block!(
