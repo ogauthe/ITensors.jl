@@ -90,7 +90,7 @@ function unmerge_tree_leaves(tree::AbstractArray{<:Real,3}, irreps_shape::NTuple
   return reshape(tree, new_shape)
 end
 
-function get_tree!(
+function get_fusion_tree_tensors!(
   cache::Dict{NTuple{N,Int},<:Vector{A}},
   it::NTuple{N,Int},
   legs::NTuple{N,AbstractGradedUnitRange},
@@ -99,23 +99,23 @@ function get_tree!(
   get!(cache, it) do
     tree_arrows = isdual.(legs)
     irreps = getindex.(blocklabels.(legs), it)
-    return compute_pruned_fusion_trees(A, irreps, tree_arrows, allowed_sectors)
+    return compute_pruned_fusion_tree_tensors(A, irreps, tree_arrows, allowed_sectors)
   end
 end
 
 # explicitly cast trees to 3 leg format
-function compute_pruned_fusion_trees(
+function compute_pruned_fusion_tree_tensors(
   ::Type{<:Array{<:Real,3}},
   irreps::NTuple{N,<:AbstractSector},
   tree_arrows::NTuple{N,Bool},
   target_sectors::Vector{<:AbstractSector},
 ) where {N}
   return merge_tree_leaves.(
-    compute_pruned_fusion_trees(Any, irreps, tree_arrows, target_sectors)
+    compute_pruned_fusion_tree_tensors(Any, irreps, tree_arrows, target_sectors)
   )
 end
 
-function compute_pruned_fusion_trees(
+function compute_pruned_fusion_tree_tensors(
   ::Type,
   irreps::NTuple{N,<:AbstractSector},
   tree_arrows::NTuple{N,Bool},
@@ -125,7 +125,7 @@ function compute_pruned_fusion_trees(
   # it is possible to prune trees during the construction process and to avoid constructing
   # trees that will never fuse to target_sectors
   # currently this is not implemented and no pruning is done inside fusion_trees
-  tree_irreps_pairs = fusion_trees(irreps, tree_arrows)
+  tree_irreps_pairs = fusion_tree_tensors(irreps, tree_arrows)
   tree_irreps = first.(tree_irreps_pairs)
   trees = last.(tree_irreps_pairs)
 
@@ -147,11 +147,11 @@ function compute_pruned_fusion_trees(
 end
 
 # ================================  Low level interface  ===================================
-function fusion_trees(::Tuple{}, ::Tuple{})
+function fusion_tree_tensors(::Tuple{}, ::Tuple{})
   return [TrivialSector() => ones((1, 1))]
 end
 
-function fusion_trees(
+function fusion_tree_tensors(
   irreps::NTuple{N,<:SectorProduct}, tree_arrows::NTuple{N,Bool}
 ) where {N}
   # construct fusion_tree(SectorProduct) as kron(fusion_trees(inner_sectors))
@@ -161,7 +161,7 @@ function fusion_trees(
 
   # construct fusion tree for each sector
   transposed_args = ntuple(s -> getindex.(argument_irreps, s), n_args)
-  sector_trees_irreps = map(a -> fusion_trees(a, tree_arrows), transposed_args)
+  sector_trees_irreps = map(a -> fusion_tree_tensors(a, tree_arrows), transposed_args)
 
   # reconstruct sector for each product tree
   T = eltype(argument_irreps)
@@ -180,17 +180,17 @@ function fusion_trees(
   return tree_irreps .=> trees
 end
 
-function fusion_trees(
+function fusion_tree_tensors(
   irreps::NTuple{N,<:AbstractSector}, tree_arrows::NTuple{N,Bool}
 ) where {N}
-  return fusion_trees(SymmetryStyle(first(irreps)), irreps, tree_arrows)
+  return fusion_tree_tensors(SymmetryStyle(first(irreps)), irreps, tree_arrows)
 end
 
 # =====================================  Internals  ========================================
 
 # fusion tree for an Abelian group is trivial
 # it does not depend on arrow directions
-function fusion_trees(::AbelianStyle, irreps::Tuple, ::Tuple)
+function fusion_tree_tensors(::AbelianStyle, irreps::Tuple, ::Tuple)
   irrep_prod = reduce(⊗, irreps)
   return [irrep_prod => ones(ntuple(_ -> 1, length(irreps) + 2))]
 end
@@ -291,7 +291,7 @@ function cat_thin_trees(thin_trees::Vector, uncat_tree_irreps::Vector)
 end
 
 # arrow direction is needed to define non-trivial CG tensor
-function fusion_trees(::NotAbelianStyle, irreps::Tuple, tree_arrows::Tuple)
+function fusion_tree_tensors(::NotAbelianStyle, irreps::Tuple, tree_arrows::Tuple)
   # compute "thin" trees: 1 tree = fuses on ONE irrep
   thin_trees, uncat_tree_irreps = compute_thin_trees(irreps, tree_arrows)
 

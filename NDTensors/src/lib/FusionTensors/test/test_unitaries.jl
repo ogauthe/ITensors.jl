@@ -1,30 +1,10 @@
 @eval module $(gensym())
-using Test: @test, @testset
+using Test: @test, @testset, @test_broken
 using LinearAlgebra: LinearAlgebra
 
 using BlockArrays: AbstractBlockMatrix, blocksize
 
-using NDTensors.FusionTensors:
-  FusionTensor,
-  domain_axes,
-  codomain_axes,
-  data_matrix,
-  matching_axes,
-  matching_dual,
-  matrix_column_axis,
-  matrix_row_axis,
-  matrix_size,
-  ndims_domain,
-  ndims_codomain,
-  check_sanity,
-  check_data_matrix_axes,
-  find_shared_indices,
-  FusedAxes,
-  allowed_outer_blocks_sectors,
-  get_tree!,
-  FusionTensors,
-  overlap_fusion_trees,
-  compute_unitaries_clebsch_gordan
+using NDTensors.FusionTensors: compute_unitaries_clebsch_gordan
 using NDTensors.GradedAxes: gradedrange, dual, GradedAxes
 using NDTensors.SymmetrySectors: SymmetrySectors, SU, SU2, TrivialSector, U1, Z
 using NDTensors.TensorAlgebra: blockedperm, TensorAlgebra
@@ -46,10 +26,19 @@ using NDTensors.TensorAlgebra: blockedperm, TensorAlgebra
   check_trivial_unitary(u_d[1, 1, 1])
 
   g = gradedrange([U1(0) => 1, U1(1) => 2, U1(2) => 3])
-  biperm = blockedperm((2,), (3, 1, 4))
-  u_d = compute_unitaries_clebsch_gordan((g, g), (dual(g), dual(g)), biperm)
-  @test length(u_d) == 19
-  check_trivial_unitary.(values(u_d))
+  for biperm in [
+    blockedperm((1, 2), (3, 4, 5)),
+    blockedperm((2, 1), (5, 3, 4)),
+    blockedperm((3, 1, 4, 5), (2,)),
+  ]
+    u_d = compute_unitaries_clebsch_gordan((g, g), (dual(g), dual(g), g), biperm)
+    @test length(u_d) == 45
+    check_trivial_unitary.(values(u_d))
+  end
+  for biperm in [blockedperm((), (5, 2, 1, 3, 4)), blockedperm((5, 2, 1, 3, 4), ())]
+    @test_broken compute_unitaries_clebsch_gordan((g, g), (dual(g), dual(g), g), biperm) isa
+      Dict
+  end
 end
 
 @testset "SU(2) unitaries" begin

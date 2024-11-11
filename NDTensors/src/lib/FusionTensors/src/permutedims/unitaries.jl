@@ -22,20 +22,21 @@ end
 
 # ===========================  Constructor from Clebsch-Gordan  ============================
 function contract_singlet_space_projector(
-  domain_tree::AbstractArray{<:Real},
-  codomain_tree::AbstractArray{<:Real},
+  domain_tree_tensor::AbstractArray{<:Real},
+  codomain_tree_tensor::AbstractArray{<:Real},
   irreps_perm::NTuple{N,Int},
 ) where {N}
   # compile time values
-  NCoAxes = ndims(domain_tree) - 2
-  NDoAxes = ndims(codomain_tree) - 2
+  NCoAxes = ndims(domain_tree_tensor) - 2
+  NDoAxes = ndims(codomain_tree_tensor) - 2
   @assert NDoAxes + NCoAxes == N
 
   irrep_dims_prod =
-    prod(size(domain_tree)[begin:NCoAxes]) * prod(size(codomain_tree)[begin:NDoAxes])
+    prod(size(domain_tree_tensor)[begin:NCoAxes]) *
+    prod(size(codomain_tree_tensor)[begin:NDoAxes])
 
   # some trees are empty: return projector on null space
-  if length(domain_tree) == 0 || length(codomain_tree) == 0
+  if length(domain_tree_tensor) == 0 || length(codomain_tree_tensor) == 0
     return zeros((irrep_dims_prod, 0))
   end
 
@@ -57,7 +58,7 @@ function contract_singlet_space_projector(
   #     dim1 dim2 dim3                 dim4 dim5 dim6
   #
   projector = TensorAlgebra.contract(
-    labels_dest, domain_tree, labels_domain, codomain_tree, labels_codomain
+    labels_dest, domain_tree_tensor, labels_domain, codomain_tree_tensor, labels_codomain
   )
 
   # reshape as a matrix
@@ -69,11 +70,13 @@ function contract_singlet_space_projector(
 end
 
 function intersect_trees(
-  domain_trees::Vector{<:AbstractArray{<:Real}},
-  codomain_trees::Vector{<:AbstractArray{<:Real}},
+  domain_tree_tensors::Vector{<:AbstractArray{<:Real}},
+  codomain_tree_tensors::Vector{<:AbstractArray{<:Real}},
 )
-  kept_indices = findall(.!isempty.(domain_trees) .* .!isempty.(codomain_trees))
-  return domain_trees[kept_indices] .=> codomain_trees[kept_indices]
+  kept_indices = findall(
+    .!isempty.(domain_tree_tensors) .* .!isempty.(codomain_tree_tensors)
+  )
+  return domain_tree_tensors[kept_indices] .=> codomain_tree_tensors[kept_indices]
 end
 
 function overlap_fusion_trees(
@@ -211,16 +214,16 @@ function compute_unitaries_clebsch_gordan(
   }()
 
   # cache computed Clebsch-Gordan trees.
-  old_domain_trees_cache = Dict{
+  old_domain_tree_tensors_cache = Dict{
     NTuple{OldNDoAxes,Int},Vector{Array{Float64,OldNDoAxes + 2}}
   }()
-  old_codomain_trees_cache = Dict{
+  old_codomain_tree_tensors_cache = Dict{
     NTuple{OldNCoAxes,Int},Vector{Array{Float64,OldNCoAxes + 2}}
   }()
-  new_domain_trees_cache = Dict{
+  new_domain_tree_tensors_cache = Dict{
     NTuple{length(new_domain_legs),Int},Vector{Array{Float64,length(new_domain_legs) + 2}}
   }()
-  new_codomain_trees_cache = Dict{
+  new_codomain_tree_tensors_cache = Dict{
     NTuple{length(new_codomain_legs),Int},
     Vector{Array{Float64,length(new_codomain_legs) + 2}},
   }()
@@ -230,23 +233,26 @@ function compute_unitaries_clebsch_gordan(
   # loop over all allowed outer blocks.
   for (old_outer_block, _) in old_allowed_outer_blocks
     new_domain_outer_block, new_codomain_outer_block = blockpermute(old_outer_block, biperm)
-    old_domain_block_trees = get_tree!(
-      old_domain_trees_cache,
+    old_domain_block_trees = get_fusion_tree_tensors!(
+      old_domain_tree_tensors_cache,
       old_outer_block[begin:OldNDoAxes],
       old_domain_legs,
       old_allowed_sectors,
     )
-    old_codomain_block_trees = get_tree!(
-      old_codomain_trees_cache,
+    old_codomain_block_trees = get_fusion_tree_tensors!(
+      old_codomain_tree_tensors_cache,
       old_outer_block[(OldNDoAxes + 1):end],
       dual.(old_codomain_legs),
       old_allowed_sectors,
     )
-    new_domain_block_trees = get_tree!(
-      new_domain_trees_cache, new_domain_outer_block, new_domain_legs, new_allowed_sectors
+    new_domain_block_trees = get_fusion_tree_tensors!(
+      new_domain_tree_tensors_cache,
+      new_domain_outer_block,
+      new_domain_legs,
+      new_allowed_sectors,
     )
-    new_codomain_block_trees = get_tree!(
-      new_codomain_trees_cache,
+    new_codomain_block_trees = get_fusion_tree_tensors!(
+      new_codomain_tree_tensors_cache,
       new_codomain_outer_block,
       new_codomain_legs,
       new_allowed_sectors,

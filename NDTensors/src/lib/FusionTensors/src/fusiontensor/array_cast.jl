@@ -286,8 +286,10 @@ function fill_matrix_blocks!(
   )
 
   # cache computed trees
-  domain_trees_cache = Dict{NTuple{ndims(domain_fused_axes),Int},Vector{Array{Float64,3}}}()
-  codomain_trees_cache = Dict{
+  domain_tree_tensors_cache = Dict{
+    NTuple{ndims(domain_fused_axes),Int},Vector{Array{Float64,3}}
+  }()
+  codomain_tree_tensors_cache = Dict{
     NTuple{ndims(codomain_fused_axes),Int},Vector{Array{Float64,3}}
   }()
 
@@ -314,13 +316,13 @@ function fill_matrix_blocks!(
   # loop for each allowed outer block
   for (outer_block, outer_block_sectors) in allowed_outer_blocks
     iter_do = outer_block[begin:ndims(domain_fused_axes)]
-    domain_block_trees = get_tree!(
-      domain_trees_cache, iter_do, domain_legs, allowed_sectors
+    domain_block_trees = get_fusion_tree_tensors!(
+      domain_tree_tensors_cache, iter_do, domain_legs, allowed_sectors
     )
 
     iter_co = outer_block[(ndims(domain_fused_axes) + 1):end]
-    codomain_block_trees = get_tree!(
-      codomain_trees_cache, iter_co, codomain_legs, allowed_sectors
+    codomain_block_trees = get_fusion_tree_tensors!(
+      codomain_tree_tensors_cache, iter_co, codomain_legs, allowed_sectors
     )
 
     fused_array_block = fuse_array_block(
@@ -474,8 +476,10 @@ function fill_blockarray!(
   )
 
   # cache computed trees
-  domain_trees_cache = Dict{NTuple{ndims(domain_fused_axes),Int},Vector{Array{Float64,3}}}()
-  codomain_trees_cache = Dict{
+  domain_tree_tensors_cache = Dict{
+    NTuple{ndims(domain_fused_axes),Int},Vector{Array{Float64,3}}
+  }()
+  codomain_tree_tensors_cache = Dict{
     NTuple{ndims(codomain_fused_axes),Int},Vector{Array{Float64,3}}
   }()
 
@@ -484,15 +488,15 @@ function fill_blockarray!(
     iter_do = outer_block[begin:ndims(domain_fused_axes)]
     domain_block_degens = getindex.(domain_degens, iter_do)
     domain_block_dims = getindex.(domain_dims, iter_do)
-    domain_block_trees = get_tree!(
-      domain_trees_cache, iter_do, domain_legs, existing_sectors
+    domain_block_trees = get_fusion_tree_tensors!(
+      domain_tree_tensors_cache, iter_do, domain_legs, existing_sectors
     )
 
     iter_co = outer_block[(ndims(domain_fused_axes) + 1):end]
     codomain_block_degens = getindex.(codomain_degens, iter_co)
     codomain_block_dims = getindex.(codomain_dims, iter_co)
-    codomain_block_trees = get_tree!(
-      codomain_trees_cache, iter_co, codomain_legs, existing_sectors
+    codomain_block_trees = get_fusion_tree_tensors!(
+      codomain_tree_tensors_cache, iter_co, codomain_legs, existing_sectors
     )
 
     #        ---------------------fused_array_block--------------------

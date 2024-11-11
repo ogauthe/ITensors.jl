@@ -20,6 +20,20 @@ using NDTensors.SymmetrySectors: O2, SectorProduct, SU2, TrivialSector, U1
     @test isnothing(check_sanity(ft))
     @test Array(ft) ≈ m
     @test Array(adjoint(ft)) ≈ m
+
+    for elt in (Int, UInt32, Float32)
+      m = ones(elt, (1, 1))
+      ft = FusionTensor(m, (g,), (gb,))
+      @test eltype(ft) === Float64
+      @test Array(ft) ≈ m
+    end
+
+    for elt in (ComplexF32, ComplexF64)
+      m = ones(elt, (1, 1))
+      ft = FusionTensor(m, (g,), (gb,))
+      @test eltype(ft) === ComplexF64
+      @test Array(ft) ≈ m
+    end
   end
 
   @testset "several axes, one block" begin
