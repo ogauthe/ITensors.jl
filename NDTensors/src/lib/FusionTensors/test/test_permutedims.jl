@@ -1,5 +1,5 @@
 @eval module $(gensym())
-using Test: @test, @testset
+using Test: @test, @testset, @test_broken
 
 using NDTensors.FusionTensors:
   FusionTensor,
