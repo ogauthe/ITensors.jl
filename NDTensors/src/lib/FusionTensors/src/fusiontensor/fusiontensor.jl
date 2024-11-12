@@ -11,9 +11,9 @@ struct FusionTensor{T,N,DomainAxes,CoDomainAxes,Mat} <: AbstractArray{T,N}
   # TBD replace domain_legs with FusedAxes(domain_legs)?
   function FusionTensor(
     mat::Union{BlockSparseMatrix,Adjoint{<:Number,<:BlockSparseMatrix}},
-    domain_legs::Tuple{Vararg{AbstractGradedUnitRange}},
-    codomain_legs::Tuple{Vararg{AbstractGradedUnitRange}},
-  )
+    domain_legs::Tuple{Vararg{AbstractGradedUnitRange{LA}}},
+    codomain_legs::Tuple{Vararg{AbstractGradedUnitRange{LA}}},
+  ) where {LA}
     return new{
       eltype(mat),
       length(domain_legs) + length(codomain_legs),
@@ -39,8 +39,41 @@ matrix_size(ft::FusionTensor) = quantum_dimension.(axes(data_matrix(ft)))
 matrix_row_axis(ft::FusionTensor) = first(axes(data_matrix(ft)))
 matrix_column_axis(ft::FusionTensor) = last(axes(data_matrix(ft)))
 
+function unify_sector_type(
+  domain_legs::Tuple{Vararg{AbstractGradedUnitRange{T}}},
+  codomain_legs::Tuple{Vararg{AbstractGradedUnitRange{T}}},
+) where {T}
+  return domain_legs, codomain_legs
+end
+
+function unify_sector_type(
+  domain_legs::Tuple{Vararg{AbstractGradedUnitRange}},
+  codomain_legs::Tuple{Vararg{AbstractGradedUnitRange}},
+)
+  # fuse trivial sectors to produce unified type
+  # avoid depending on SymmetrySectors internals
+  T = label_type(fusion_product(trivial.((domain_legs..., codomain_legs...))...))
+  unified_domain_legs = map(g -> unify_sector_type(g, T), domain_legs)
+  unified_codomain_legs = map(g -> unify_sector_type(g, T), codomain_legs)
+  return unified_domain_legs, unified_codomain_legs
+end
+
+function unify_sector_type(T::Type{<:SectorProduct}, g::AbstractGradedUnitRange)
+  # fuse with trivial to insert all missing arguments inside each GradedAxis
+  # avoid depending on SymmetrySectors internals
+  glabels = map(s -> only(blocklabels(fusion_product(trivial(T), s))), blocklabels(g))
+  # use labelled_blocks to preserve GradedUnitRange
+  unified_g = labelled_blocks(unlabel_blocks(g), glabels)
+  return isdual(g) ? flip(unified_g) : unified_g
+end
+
 # empty matrix
-function FusionTensor(data_type::Type, domain_legs::Tuple, codomain_legs::Tuple)
+function FusionTensor(
+  data_type::Type,
+  domain_legs_raw::Tuple{Vararg{AbstractGradedUnitRange}},
+  codomain_legs_raw::Tuple{Vararg{AbstractGradedUnitRange}},
+)
+  domain_legs, codomain_legs = unify_sector_type(domain_legs_raw, codomain_legs_raw)
   domain_fused_axes = FusedAxes(domain_legs)
   codomain_fused_axes = FusedAxes(dual.(codomain_legs))
   mat = initialize_data_matrix(data_type, domain_fused_axes, codomain_fused_axes)

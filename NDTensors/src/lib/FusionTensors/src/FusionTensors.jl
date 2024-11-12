@@ -29,7 +29,9 @@ using NDTensors.GradedAxes:
   fusion_product,
   gradedrange,
   isdual,
-  space_isequal
+  labelled_blocks,
+  space_isequal,
+  unlabel_blocks
 using NDTensors.SymmetrySectors:
   AbstractSector, TrivialSector, block_dimensions, istrivial, quantum_dimension, trivial
 using NDTensors.TensorAlgebra:
