@@ -13,6 +13,7 @@ using BlockArrays:
   blocklength,
   blocklengths,
   blocks
+using LRUCache: LRU
 
 using NDTensors.BlockSparseArrays:
   AbstractBlockSparseMatrix,

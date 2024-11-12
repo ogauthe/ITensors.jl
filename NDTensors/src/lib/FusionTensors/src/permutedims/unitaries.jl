@@ -10,6 +10,8 @@
 
 using BlockArrays: BlockedOneTo
 
+const unitary_cache = LRU{Any,AbstractMatrix}(; maxsize=10000)
+
 # ======================================  Interface  =======================================
 function compute_unitaries(
   old_domain_legs::Tuple{Vararg{AbstractGradedUnitRange}},
@@ -18,6 +20,13 @@ function compute_unitaries(
 )
   @assert length(old_domain_legs) + length(old_codomain_legs) == length(biperm)
   return compute_unitaries_clebsch_gordan(old_domain_legs, old_codomain_legs, biperm)
+end
+
+function unitary_key(domain_legs, codomain_legs, old_outer_block, biperm)
+  legs = (domain_legs..., codomain_legs...)
+  old_arrows = isdual.(legs)
+  old_sectors = ntuple(i -> blocklabels(legs[i])[old_outer_block[i]], length(legs))
+  return (old_arrows, old_sectors, length(domain_legs), biperm)
 end
 
 # ===========================  Constructor from Clebsch-Gordan  ============================
@@ -232,39 +241,43 @@ function compute_unitaries_clebsch_gordan(
 
   # loop over all allowed outer blocks.
   for (old_outer_block, _) in old_allowed_outer_blocks
-    new_domain_outer_block, new_codomain_outer_block = blockpermute(old_outer_block, biperm)
-    old_domain_block_trees = get_fusion_tree_tensors!(
-      old_domain_tree_tensors_cache,
-      old_outer_block[begin:OldNDoAxes],
-      old_domain_legs,
-      old_allowed_sectors,
-    )
-    old_codomain_block_trees = get_fusion_tree_tensors!(
-      old_codomain_tree_tensors_cache,
-      old_outer_block[(OldNDoAxes + 1):end],
-      dual.(old_codomain_legs),
-      old_allowed_sectors,
-    )
-    new_domain_block_trees = get_fusion_tree_tensors!(
-      new_domain_tree_tensors_cache,
-      new_domain_outer_block,
-      new_domain_legs,
-      new_allowed_sectors,
-    )
-    new_codomain_block_trees = get_fusion_tree_tensors!(
-      new_codomain_tree_tensors_cache,
-      new_codomain_outer_block,
-      new_codomain_legs,
-      new_allowed_sectors,
-    )
+    ukey = unitary_key(old_domain_legs, old_codomain_legs, old_outer_block, biperm)
+    u = get!(unitary_cache, ukey) do
+      new_domain_outer_block, new_codomain_outer_block = blockpermute(old_outer_block, biperm)
+      old_domain_block_trees = get_fusion_tree_tensors!(
+        old_domain_tree_tensors_cache,
+        old_outer_block[begin:OldNDoAxes],
+        old_domain_legs,
+        old_allowed_sectors,
+      )
+      old_codomain_block_trees = get_fusion_tree_tensors!(
+        old_codomain_tree_tensors_cache,
+        old_outer_block[(OldNDoAxes + 1):end],
+        dual.(old_codomain_legs),
+        old_allowed_sectors,
+      )
+      new_domain_block_trees = get_fusion_tree_tensors!(
+        new_domain_tree_tensors_cache,
+        new_domain_outer_block,
+        new_domain_legs,
+        new_allowed_sectors,
+      )
+      new_codomain_block_trees = get_fusion_tree_tensors!(
+        new_codomain_tree_tensors_cache,
+        new_codomain_outer_block,
+        new_codomain_legs,
+        new_allowed_sectors,
+      )
 
-    u = overlap_fusion_trees(
-      old_domain_block_trees,
-      old_codomain_block_trees,
-      new_domain_block_trees,
-      new_codomain_block_trees,
-      flat_permutation,
-    )
+      u = overlap_fusion_trees(
+        old_domain_block_trees,
+        old_codomain_block_trees,
+        new_domain_block_trees,
+        new_codomain_block_trees,
+        flat_permutation,
+      )
+      return u
+    end
     unitaries[old_outer_block] = u
   end
 
