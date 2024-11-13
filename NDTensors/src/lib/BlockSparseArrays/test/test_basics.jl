@@ -16,7 +16,7 @@ using BlockArrays:
   mortar
 using Compat: @compat
 using GPUArraysCore: @allowscalar
-using LinearAlgebra: Adjoint, mul!, norm
+using LinearAlgebra: Adjoint, dot, mul!, norm
 using NDTensors.BlockSparseArrays:
   @view!,
   BlockSparseArray,
@@ -109,6 +109,37 @@ using .NDTensorsTestUtils: devices_list, is_supported_eltype
 
     a[3, 3] = NaN
     @test isnan(norm(a))
+
+    # Empty constructor
+    for a in (dev(BlockSparseArray{elt}()), dev(BlockSparseArray{elt}(undef)))
+      @test size(a) == ()
+      @test isone(length(a))
+      @test blocksize(a) == ()
+      @test blocksizes(a) == fill(())
+      @test iszero(block_nstored(a))
+      @test iszero(@allowscalar(a[]))
+      @test iszero(@allowscalar(a[CartesianIndex()]))
+      @test a[Block()] == dev(fill(0))
+      @test iszero(@allowscalar(a[Block()][]))
+      # Broken:
+      ## @test b[Block()[]] == 2
+      for b in (
+        (b = copy(a); @allowscalar b[] = 2; b),
+        (b = copy(a); @allowscalar b[CartesianIndex()] = 2; b),
+      )
+        @test size(b) == ()
+        @test isone(length(b))
+        @test blocksize(b) == ()
+        @test blocksizes(b) == fill(())
+        @test isone(block_nstored(b))
+        @test @allowscalar(b[]) == 2
+        @test @allowscalar(b[CartesianIndex()]) == 2
+        @test b[Block()] == dev(fill(2))
+        @test @allowscalar(b[Block()][]) == 2
+        # Broken:
+        ## @test b[Block()[]] == 2
+      end
+    end
   end
   @testset "Tensor algebra" begin
     a = dev(BlockSparseArray{elt}(undef, ([2, 3], [3, 4])))
@@ -265,6 +296,15 @@ using .NDTensorsTestUtils: devices_list, is_supported_eltype
     @test eltype(b) == elt
     @test block_nstored(b) == 2
     @test nstored(b) == 2 * 4 + 3 * 3
+
+    a = dev(BlockSparseArray{elt}([1, 1, 1], [1, 2, 3], [2, 2, 1], [1, 2, 1]))
+    a[Block(3, 2, 2, 3)] = dev(randn(elt, 1, 2, 2, 1))
+    perm = (2, 3, 4, 1)
+    for b in (PermutedDimsArray(a, perm), permutedims(a, perm))
+      @test Array(b) == permutedims(Array(a), perm)
+      @test issetequal(block_stored_indices(b), [Block(2, 2, 3, 3)])
+      @test @allowscalar b[Block(2, 2, 3, 3)] == permutedims(a[Block(3, 2, 2, 3)], perm)
+    end
 
     a = BlockSparseArray{elt}(undef, ([2, 3], [3, 4]))
     @views for b in [Block(1, 2), Block(2, 1)]
@@ -535,7 +575,11 @@ using .NDTensorsTestUtils: devices_list, is_supported_eltype
       a[b] = randn(elt, size(a[b]))
     end
     @test isassigned(a, 1, 1)
+    @test isassigned(a, 1, 1, 1)
+    @test !isassigned(a, 1, 1, 2)
     @test isassigned(a, 5, 7)
+    @test isassigned(a, 5, 7, 1)
+    @test !isassigned(a, 5, 7, 2)
     @test !isassigned(a, 0, 1)
     @test !isassigned(a, 5, 8)
     @test isassigned(a, Block(1), Block(1))
@@ -651,31 +695,21 @@ using .NDTensorsTestUtils: devices_list, is_supported_eltype
     c = @view b[4:8, 4:8]
     @test c isa SubArray{<:Any,<:Any,<:BlockSparseArray}
     @test size(c) == (5, 5)
-    # TODO: Fix in Julia 1.11 (https://github.com/ITensor/ITensors.jl/pull/1539).
-    @test block_nstored(c) == 2 broken = VERSION > v"1.11-"
+    @test block_nstored(c) == 2
     @test blocksize(c) == (2, 2)
     @test blocklengths.(axes(c)) == ([2, 3], [2, 3])
-    # TODO: Fix in Julia 1.11 (https://github.com/ITensor/ITensors.jl/pull/1539).
-    @test size(c[Block(1, 1)]) == (2, 2) broken = VERSION ≥ v"1.11-"
-    # TODO: Fix in Julia 1.11 (https://github.com/ITensor/ITensors.jl/pull/1539).
-    @test c[Block(1, 1)] == a[Block(2, 2)[2:3, 2:3]] broken = VERSION ≥ v"1.11-"
-    # TODO: Fix in Julia 1.11 (https://github.com/ITensor/ITensors.jl/pull/1539).
-    @test size(c[Block(2, 2)]) == (3, 3) broken = VERSION ≥ v"1.11-"
-    # TODO: Fix in Julia 1.11 (https://github.com/ITensor/ITensors.jl/pull/1539).
-    @test c[Block(2, 2)] == a[Block(1, 1)[1:3, 1:3]] broken = VERSION ≥ v"1.11-"
-    # TODO: Fix in Julia 1.11 (https://github.com/ITensor/ITensors.jl/pull/1539).
-    @test size(c[Block(2, 1)]) == (3, 2) broken = VERSION ≥ v"1.11-"
-    # TODO: Fix in Julia 1.11 (https://github.com/ITensor/ITensors.jl/pull/1539).
-    @test iszero(c[Block(2, 1)]) broken = VERSION ≥ v"1.11-"
-    # TODO: Fix in Julia 1.11 (https://github.com/ITensor/ITensors.jl/pull/1539).
-    @test size(c[Block(1, 2)]) == (2, 3) broken = VERSION ≥ v"1.11-"
-    # TODO: Fix in Julia 1.11 (https://github.com/ITensor/ITensors.jl/pull/1539).
-    @test iszero(c[Block(1, 2)]) broken = VERSION ≥ v"1.11-"
+    @test size(c[Block(1, 1)]) == (2, 2)
+    @test c[Block(1, 1)] == a[Block(2, 2)[2:3, 2:3]]
+    @test size(c[Block(2, 2)]) == (3, 3)
+    @test c[Block(2, 2)] == a[Block(1, 1)[1:3, 1:3]]
+    @test size(c[Block(2, 1)]) == (3, 2)
+    @test iszero(c[Block(2, 1)])
+    @test size(c[Block(1, 2)]) == (2, 3)
+    @test iszero(c[Block(1, 2)])
 
     x = randn(elt, 3, 3)
     c[Block(2, 2)] = x
-    # TODO: Fix in Julia 1.11 (https://github.com/ITensor/ITensors.jl/pull/1539).
-    @test c[Block(2, 2)] == x broken = VERSION ≥ v"1.11-"
+    @test c[Block(2, 2)] == x
     @test a[Block(1, 1)[1:3, 1:3]] == x
 
     a = BlockSparseArray{elt}([2, 3], [3, 4])
@@ -736,17 +770,13 @@ using .NDTensorsTestUtils: devices_list, is_supported_eltype
       @test copy(b) == a[J, J]
       @test blocksize(b) == (2, 2)
       @test blocklengths.(axes(b)) == ([4, 4], [4, 4])
-      # TODO: Fix in Julia 1.11 (https://github.com/ITensor/ITensors.jl/pull/1539).
-      @test b[Block(1, 1)] == Array(a)[[7, 8, 5, 6], [7, 8, 5, 6]] broken =
-        VERSION ≥ v"1.11-"
+      @test b[Block(1, 1)] == Array(a)[[7, 8, 5, 6], [7, 8, 5, 6]]
       c = @views b[Block(1, 1)][2:3, 2:3]
       @test c == Array(a)[[8, 5], [8, 5]]
-      # TODO: Fix in Julia 1.11 (https://github.com/ITensor/ITensors.jl/pull/1539).
-      @test copy(c) == Array(a)[[8, 5], [8, 5]] broken = VERSION ≥ v"1.11-"
+      @test copy(c) == Array(a)[[8, 5], [8, 5]]
       c = @view b[Block(1, 1)[2:3, 2:3]]
       @test c == Array(a)[[8, 5], [8, 5]]
-      # TODO: Fix in Julia 1.11 (https://github.com/ITensor/ITensors.jl/pull/1539).
-      @test copy(c) == Array(a)[[8, 5], [8, 5]] broken = VERSION ≥ v"1.11-"
+      @test copy(c) == Array(a)[[8, 5], [8, 5]]
     end
 
     # TODO: Add more tests of this, it may
@@ -825,6 +855,16 @@ using .NDTensorsTestUtils: devices_list, is_supported_eltype
       a_dest = a1′ * a2′
       @allowscalar @test Array(a_dest) ≈ Array(a1′) * Array(a2′)
     end
+  end
+  @testset "Dot product" begin
+    a1 = dev(BlockSparseArray{elt}([2, 3, 4]))
+    a1[Block(1)] = dev(randn(elt, size(@view(a1[Block(1)]))))
+    a1[Block(3)] = dev(randn(elt, size(@view(a1[Block(3)]))))
+    a2 = dev(BlockSparseArray{elt}([2, 3, 4]))
+    a2[Block(2)] = dev(randn(elt, size(@view(a1[Block(2)]))))
+    a2[Block(3)] = dev(randn(elt, size(@view(a1[Block(3)]))))
+    @test a1' * a2 ≈ Array(a1)' * Array(a2)
+    @test dot(a1, a2) ≈ a1' * a2
   end
   @testset "TensorAlgebra" begin
     a1 = dev(BlockSparseArray{elt}([2, 3], [2, 3]))
