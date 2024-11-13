@@ -46,21 +46,14 @@ end
 
 # =================================  Low level interface  ==================================
 function permute_data_matrix(
-  old_data_matrix::Union{
-    BlockSparseArrays.AbstractBlockSparseMatrix,
-    LinearAlgebra.Adjoint{<:Number,<:BlockSparseArrays.AbstractBlockSparseMatrix},
-  },
+  old_data_matrix::AbstractMatrix,
   old_domain_legs::Tuple{Vararg{AbstractGradedUnitRange}},
   old_codomain_legs::Tuple{Vararg{AbstractGradedUnitRange}},
   biperm::BlockedPermutation{2},
 )
   # TBD use FusedAxes as input?
 
-  unitaries = compute_unitaries(  # TODO cache me
-    old_domain_legs,
-    old_codomain_legs,
-    biperm,
-  )
+  unitaries = compute_unitaries(old_domain_legs, old_codomain_legs, biperm)
 
   # TODO cache FusedAxes
   old_domain_fused_axes = FusedAxes(old_domain_legs)
@@ -99,10 +92,8 @@ function add_structural_axes(
 end
 
 function fill_data_matrix!(
-  new_data_matrix::AbstractBlockSparseMatrix,
-  old_data_matrix::Union{
-    AbstractBlockSparseMatrix,Adjoint{<:Number,<:AbstractBlockSparseMatrix}
-  },
+  new_data_matrix::AbstractMatrix,
+  old_data_matrix::AbstractMatrix,
   old_domain_fused_axes::FusedAxes,
   old_codomain_fused_axes::FusedAxes,
   new_domain_fused_axes::FusedAxes,
@@ -141,7 +132,7 @@ function fill_data_matrix!(
   for old_outer_block_sectors in old_existing_outer_blocks
     new_outer_block = map(i -> first(old_outer_block_sectors)[i], Tuple(biperm))
     new_outer_block_sectors = new_outer_block => new_existing_outer_blocks[new_outer_block]
-    write_new_outer_block!(
+    permute_outer_block!(
       new_matrix_blocks,
       old_matrix_blocks,
       old_outer_block_sectors,
@@ -156,7 +147,7 @@ function fill_data_matrix!(
   end
 end
 
-function write_new_outer_block!(
+function permute_outer_block!(
   new_matrix_blocks::Dict{S,<:AbstractMatrix},
   old_matrix_blocks::Dict{S,<:AbstractMatrix},
   old_outer_block_sectors::Pair{<:Tuple{Vararg{Int}},Vector{S}},
@@ -168,7 +159,7 @@ function write_new_outer_block!(
   new_domain_fused_axes::FusedAxes,
   new_codomain_fused_axes::FusedAxes,
 ) where {S<:AbstractSector}
-  new_outer_array = permute_outer_block(
+  new_outer_array = permute_old_outer_block(
     old_matrix_blocks,
     old_outer_block_sectors,
     old_domain_fused_axes,
@@ -185,7 +176,7 @@ function write_new_outer_block!(
   )
 end
 
-function permute_outer_block(
+function permute_old_outer_block(
   old_matrix_blocks::Dict{S,<:AbstractMatrix},
   old_outer_block_sectors::Pair{<:Tuple{Vararg{Int}},Vector{S}},
   old_domain_fused_axes::FusedAxes,
