@@ -242,13 +242,30 @@ function write_new_outer_block!(
 ) where {S<:AbstractSector}
   new_domain_block = first(new_outer_block_sectors)[begin:ndims(new_domain_fused_axes)]
   new_codomain_block = first(new_outer_block_sectors)[(ndims(new_domain_fused_axes) + 1):end]
+  new_domain_ext_mult = block_external_multiplicities(
+    new_domain_fused_axes, new_domain_block
+  )
+  new_codomain_ext_mult = block_external_multiplicities(
+    new_codomain_fused_axes, new_codomain_block
+  )
   for (i_sec, new_sector) in enumerate(last(new_outer_block_sectors))  # not worth parallelize
+    new_shape_4d = (
+      block_structural_multiplicity(new_domain_fused_axes, new_domain_block, new_sector),
+      block_structural_multiplicity(
+        new_codomain_fused_axes, new_codomain_block, new_sector
+      ),
+      prod(new_domain_ext_mult),
+      prod(new_codomain_ext_mult),
+    )
+    new_block_4d = reshape(view(new_outer_array, Block(i_sec), :), new_shape_4d)
+    permuted_new_block = permutedims(new_block_4d, (3, 1, 2, 4))
+    mat_shape = (new_shape_4d[3] * new_shape_4d[1], new_shape_4d[2] * new_shape_4d[4])
+    new_mat = reshape(permuted_new_block, mat_shape)
+
     new_row_range = find_block_range(new_domain_fused_axes, new_domain_block, new_sector)
     new_col_range = find_block_range(
       new_codomain_fused_axes, new_codomain_block, new_sector
     )
-    new_matrix_blocks[new_sector][new_row_range, new_col_range] = view(
-      new_outer_array, Block(i_sec)
-    )
+    new_matrix_blocks[new_sector][new_row_range, new_col_range] = new_mat
   end
 end
