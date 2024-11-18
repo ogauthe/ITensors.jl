@@ -88,6 +88,38 @@ function build_trees(legs::Vararg{AbstractGradedUnitRange{LA}}) where {LA}
   end
 end
 
+# TBD is this necessary / useful?
+function SymmetrySectors.:×(f1::FusionTree, f2::FusionTree)
+  @assert base_arrows(f1) == base_arrows(f2)
+  product_base_sectors = .×(base_sectors(f1), base_sectors(f2))
+  product_fused_sector = fused_sector(f1) × fused_sector(f2)
+  product_level_sectors = .×(level_sectors(f1), level_sectors(f2))
+  product_level_outer_multiplicities =
+    outer_multiplicity_kron.(
+      base_sectors(f1)[2:end],
+      level_sectors(f1),
+      (level_sectors(f1)[2:end]..., fused_sector(f1)),
+      level_outer_multiplicities(f1),
+      level_outer_multiplicities(f2),
+    )
+  return FusionTree(
+    product_base_sectors,
+    base_arrows(f1),
+    product_fused_sector,
+    product_level_sectors,
+    product_level_outer_multiplicities,
+  )
+end
+
+function outer_multiplicity_kron(
+  sec1, sec2, fused, outer_multiplicity1, outer_multiplicity2
+)
+  full_space = fusion_product(sec1, sec2)
+  nsymbol = blocklengths(full_space)[findfirst(==(fused), blocklabels(full_space))]
+  linear_inds = LinearIndices((nsymbol, outer_multiplicity2))
+  return linear_inds[outer_multiplicity1, outer_multiplicity2]
+end
+
 # zero leg: need S to get sector type information
 function FusionTree{S}(::Tuple{}, ::Tuple{}) where {S}
   return FusionTree((), (), trivial(S), (), ())
