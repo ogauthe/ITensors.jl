@@ -4,14 +4,8 @@
 # compatibility with TensorKit conventions?
 
 #
-# A fusion tree fuses N irreps with quantum dimensions dim1, ..., dimk onto one
-# irrep sec with quantum dimension dim_sec. There may be several path that fuse to this
-# irrep in the fusion ring and each of them corresponds to a single "thin" fusion tree with
-# one degree of freedom.
-# We take the struct_mult_sec trees that fuse on sector sec and merge all of these into one
-# "thick" fusion tree containing all degrees of freedom for sector sec.
-# The result is a N+2 dimension fusion tree with "unfused" size
-# (dim1, dim2, ..., dimN, dim_sec, struct_mult_sec)
+# A fusion tree tensor is a N+1 legs Array that corresponds to the projector defined by the
+# associated fusion tree.
 #
 #      dim_sec  struct_mult_sec
 #           \  /
