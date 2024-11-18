@@ -120,6 +120,17 @@ function outer_multiplicity_kron(
   return linear_inds[outer_multiplicity1, outer_multiplicity2]
 end
 
+function outer_multiplicity_split(sec1, sec2, fused, outer_multiplicity)
+  args1 = SymmetrySectors.arguments(sec1)
+  args2 = SymmetrySectors.arguments(sec2)
+  args12 = SymmetrySectors.arguments(fused)
+  nsymbols = map(zip(args1, args2, args12)) do (sec1, sec2, sec12)
+    full_space = fusion_product(sec1, sec2)
+    return blocklengths(full_space)[findfirst(==(sec12), blocklabels(full_space))]
+  end
+  return CartesianIndices(nsymbols)[outer_multiplicity]
+end
+
 # zero leg: need S to get sector type information
 function FusionTree{S}(::Tuple{}, ::Tuple{}) where {S}
   return FusionTree((), (), trivial(S), (), ())
