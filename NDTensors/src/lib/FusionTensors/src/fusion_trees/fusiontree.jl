@@ -30,6 +30,8 @@
 # The interface uses AbstractGradedUnitRanges as input for interface simplicity
 # however only blocklabels are used and blocklengths are never read.
 
+using NDTensors.LabelledNumbers: LabelledNumbers  # TBD avoid depending on internals?
+
 struct FusionTree{S,N,M}
   base_sectors::NTuple{N,S}
   base_arrows::NTuple{N,Bool}
@@ -75,6 +77,16 @@ function to_tuple(f::FusionTree)
 end
 
 LabelledNumbers.label_type(::FusionTree{S}) where {S} = S  # TBD use different function name?
+
+function build_trees(legs::Vararg{AbstractGradedUnitRange{LA}}) where {LA}
+  # TBD when to impose LA to be the same for every leg?
+  tree_arrows = isdual.(legs)
+  sectors = blocklabels.(legs)
+  return mapreduce(vcat, CartesianIndices(blocklength.(legs))) do it
+    block_sectors = getindex.(sectors, Tuple(it))
+    return build_trees(block_sectors, tree_arrows)
+  end
+end
 
 # zero leg: need S to get sector type information
 function FusionTree{S}(::Tuple{}, ::Tuple{}) where {S}
@@ -130,7 +142,9 @@ function build_trees(trees::Vector, ::Tuple{}, ::Tuple{})
   return trees
 end
 
-function build_trees(sectors_to_fuse::Tuple, arrows_to_fuse::Tuple)
+function build_trees(
+  sectors_to_fuse::NTuple{N,S}, arrows_to_fuse::NTuple{N,Bool}
+) where {N,S<:AbstractSector}
   trees = [FusionTree(first(sectors_to_fuse), first(arrows_to_fuse))]
   return build_trees(trees, sectors_to_fuse[2:end], arrows_to_fuse[2:end])
 end
