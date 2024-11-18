@@ -40,21 +40,26 @@ matrix_row_axis(ft::FusionTensor) = first(axes(data_matrix(ft)))
 matrix_column_axis(ft::FusionTensor) = last(axes(data_matrix(ft)))
 
 function unify_sector_type(
-  domain_legs::Tuple{Vararg{AbstractGradedUnitRange{T}}},
-  codomain_legs::Tuple{Vararg{AbstractGradedUnitRange{T}}},
-) where {T}
+  domain_legs::Tuple{Vararg{AbstractGradedUnitRange{LA}}},
+  codomain_legs::Tuple{Vararg{AbstractGradedUnitRange{LA}}},
+) where {LA}  # nothing to do
   return domain_legs, codomain_legs
+end
+
+# TODO move this to SymmetrySectors or GradedAxes
+function find_common_sector_type(sector_or_axes_enum)
+  # fuse trivial sectors to produce unified type
+  # avoid depending on SymmetrySectors internals
+  return label_type(fusion_product(trivial.(sector_or_axes_enum)...))
 end
 
 function unify_sector_type(
   domain_legs::Tuple{Vararg{AbstractGradedUnitRange}},
   codomain_legs::Tuple{Vararg{AbstractGradedUnitRange}},
 )
-  # fuse trivial sectors to produce unified type
-  # avoid depending on SymmetrySectors internals
-  T = label_type(fusion_product(trivial.((domain_legs..., codomain_legs...))...))
-  unified_domain_legs = map(g -> unify_sector_type(g, T), domain_legs)
-  unified_codomain_legs = map(g -> unify_sector_type(g, T), codomain_legs)
+  T = find_common_sector_type((domain_legs..., codomain_legs...))
+  unified_domain_legs = map(g -> unify_sector_type(T, g), domain_legs)
+  unified_codomain_legs = map(g -> unify_sector_type(T, g), codomain_legs)
   return unified_domain_legs, unified_codomain_legs
 end
 
