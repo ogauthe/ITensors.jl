@@ -38,9 +38,9 @@ using NDTensors.SymmetrySectors:
 using NDTensors.TensorAlgebra:
   TensorAlgebra, BlockedPermutation, blockedperm, blockpermute, contract, contract!
 
-include("fusiontrees/fusiontree.jl")
-include("fusiontrees/clebsch_gordan_tensors.jl")
-include("fusiontrees/fusion_tree_tensors.jl")
+include("fusion_trees/fusiontree.jl")
+include("fusion_trees/clebsch_gordan_tensors.jl")
+include("fusion_trees/fusion_tree_tensors.jl")
 
 include("fusiontensor/fusedaxes.jl")
 include("fusiontensor/fusiontensor.jl")
