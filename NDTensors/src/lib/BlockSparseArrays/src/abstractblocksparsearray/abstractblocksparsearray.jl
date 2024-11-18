@@ -1,9 +1,9 @@
 using BlockArrays:
   BlockArrays, AbstractBlockArray, Block, BlockIndex, BlockedUnitRange, blocks
-using ..SparseArrayInterface: sparse_getindex, sparse_setindex!
+using ..SparseArraysBase: sparse_getindex, sparse_setindex!
 
 # TODO: Delete this. This function was replaced
-# by `nstored` but is still used in `NDTensors`.
+# by `stored_length` but is still used in `NDTensors`.
 function nonzero_keys end
 
 abstract type AbstractBlockSparseArray{T,N} <: AbstractBlockArray{T,N} end

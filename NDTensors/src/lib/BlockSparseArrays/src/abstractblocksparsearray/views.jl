@@ -20,10 +20,12 @@ end
 
 # Override the default definition of `BlockArrays.blocksize`,
 # which is incorrect for certain slices.
-function BlockArrays.blocksize(a::SubArray{<:Any,<:Any,<:BlockSparseArrayLike})
+function BlockArrays.blocksize(a::SubArray{<:Any,<:Any,<:AnyAbstractBlockSparseArray})
   return blocklength.(axes(a))
 end
-function BlockArrays.blocksize(a::SubArray{<:Any,<:Any,<:BlockSparseArrayLike}, i::Int)
+function BlockArrays.blocksize(
+  a::SubArray{<:Any,<:Any,<:AnyAbstractBlockSparseArray}, i::Int
+)
   # TODO: Maybe use `blocklength(axes(a, i))` which would be a bit faster.
   return blocksize(a)[i]
 end
@@ -33,7 +35,7 @@ end
 # which don't handle subslices of blocks properly.
 function Base.view(
   a::SubArray{
-    <:Any,N,<:BlockSparseArrayLike,<:Tuple{Vararg{BlockSlice{<:BlockRange{1}},N}}
+    <:Any,N,<:AnyAbstractBlockSparseArray,<:Tuple{Vararg{BlockSlice{<:BlockRange{1}},N}}
   },
   I::Block{N},
 ) where {N}
@@ -41,14 +43,14 @@ function Base.view(
 end
 function Base.view(
   a::SubArray{
-    <:Any,N,<:BlockSparseArrayLike,<:Tuple{Vararg{BlockSlice{<:BlockRange{1}},N}}
+    <:Any,N,<:AnyAbstractBlockSparseArray,<:Tuple{Vararg{BlockSlice{<:BlockRange{1}},N}}
   },
   I::Vararg{Block{1},N},
 ) where {N}
   return blocksparse_view(a, I...)
 end
 function Base.view(
-  V::SubArray{<:Any,1,<:BlockSparseArrayLike,<:Tuple{BlockSlice{<:BlockRange{1}}}},
+  V::SubArray{<:Any,1,<:AnyAbstractBlockSparseArray,<:Tuple{BlockSlice{<:BlockRange{1}}}},
   I::Block{1},
 )
   return blocksparse_view(a, I)
@@ -154,7 +156,7 @@ function BlockArrays.viewblock(
   return viewblock(a, to_tuple(block)...)
 end
 
-# Fixes ambiguity error with `BlockSparseArrayLike` definition.
+# Fixes ambiguity error with `AnyAbstractBlockSparseArray` definition.
 function Base.view(
   a::SubArray{
     T,N,<:AbstractBlockSparseArray{T,N},<:Tuple{Vararg{BlockSlice{<:BlockRange{1}},N}}
@@ -163,7 +165,7 @@ function Base.view(
 ) where {T,N}
   return viewblock(a, block)
 end
-# Fixes ambiguity error with `BlockSparseArrayLike` definition.
+# Fixes ambiguity error with `AnyAbstractBlockSparseArray` definition.
 function Base.view(
   a::SubArray{
     T,N,<:AbstractBlockSparseArray{T,N},<:Tuple{Vararg{BlockSlice{<:BlockRange{1}},N}}
@@ -275,4 +277,18 @@ function BlockArrays.viewblock(
   block::Vararg{BlockIndexRange{1},N},
 ) where {T,N}
   return view(viewblock(a, Block.(block)...), map(b -> only(b.indices), block)...)
+end
+
+# migrate wrapper layer for viewing `adjoint` and `transpose`.
+for (f, F) in ((:adjoint, :Adjoint), (:transpose, :Transpose))
+  @eval begin
+    function Base.view(A::$F{<:Any,<:AbstractBlockSparseVector}, b::Block{1})
+      return $f(view(parent(A), b))
+    end
+
+    Base.view(A::$F{<:Any,<:AbstractBlockSparseMatrix}, b::Block{2}) = view(A, Tuple(b)...)
+    function Base.view(A::$F{<:Any,<:AbstractBlockSparseMatrix}, b1::Block{1}, b2::Block{1})
+      return $f(view(parent(A), b2, b1))
+    end
+  end
 end

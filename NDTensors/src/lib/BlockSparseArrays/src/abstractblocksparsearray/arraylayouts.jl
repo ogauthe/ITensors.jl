@@ -1,9 +1,9 @@
 using ArrayLayouts: ArrayLayouts, DualLayout, MemoryLayout, MulAdd
 using BlockArrays: BlockLayout
-using ..SparseArrayInterface: SparseLayout
+using ..SparseArraysBase: SparseLayout
 using ..TypeParameterAccessors: parenttype, similartype
 
-function ArrayLayouts.MemoryLayout(arraytype::Type{<:BlockSparseArrayLike})
+function ArrayLayouts.MemoryLayout(arraytype::Type{<:AnyAbstractBlockSparseArray})
   outer_layout = typeof(MemoryLayout(blockstype(arraytype)))
   inner_layout = typeof(MemoryLayout(blocktype(arraytype)))
   return BlockLayout{outer_layout,inner_layout}()

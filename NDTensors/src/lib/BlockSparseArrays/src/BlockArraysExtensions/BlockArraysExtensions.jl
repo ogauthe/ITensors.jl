@@ -22,7 +22,7 @@ using BlockArrays:
 using Compat: allequal
 using Dictionaries: Dictionary, Indices
 using ..GradedAxes: blockedunitrange_getindices, to_blockindices
-using ..SparseArrayInterface: SparseArrayInterface, nstored, stored_indices
+using ..SparseArraysBase: SparseArraysBase, stored_length, stored_indices
 
 # A return type for `blocks(array)` when `array` isn't blocked.
 # Represents a vector with just that single block.
@@ -534,13 +534,13 @@ function Base.setindex!(a::BlockView{<:Any,N}, value, index::Vararg{Int,N}) wher
   return a
 end
 
-function SparseArrayInterface.nstored(a::BlockView)
+function SparseArraysBase.stored_length(a::BlockView)
   # TODO: Store whether or not the block is stored already as
   # a Bool in `BlockView`.
   I = CartesianIndex(Int.(a.block))
   # TODO: Use `block_stored_indices`.
   if I ∈ stored_indices(blocks(a.array))
-    return nstored(blocks(a.array)[I])
+    return stored_length(blocks(a.array)[I])
   end
   return 0
 end
@@ -581,7 +581,7 @@ function view!(a::AbstractArray{<:Any,N}, index::Vararg{BlockIndexRange{1},N}) w
 end
 
 using MacroTools: @capture
-using NDTensors.SparseArrayDOKs: is_getindex_expr
+using NDTensors.SparseArraysBase: is_getindex_expr
 macro view!(expr)
   if !is_getindex_expr(expr)
     error("@view must be used with getindex syntax (as `@view! a[i,j,...]`)")
