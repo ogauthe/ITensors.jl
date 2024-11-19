@@ -31,6 +31,7 @@
 # however only blocklabels are used and blocklengths are never read.
 
 using NDTensors.LabelledNumbers: LabelledNumbers  # TBD avoid depending on internals?
+using NDTensors.SymmetrySectors: SymmetrySectors
 
 struct FusionTree{S,N,M}
   base_sectors::NTuple{N,S}
@@ -83,7 +84,7 @@ function build_trees(legs::Vararg{AbstractGradedUnitRange{LA}}) where {LA}
   tree_arrows = isdual.(legs)
   sectors = blocklabels.(legs)
   return mapreduce(vcat, CartesianIndices(blocklength.(legs))) do it
-    block_sectors = getindex.(sectors, Tuple(it))
+    block_sectors = getindex.(sectors, it)
     return build_trees(block_sectors, tree_arrows)
   end
 end
@@ -96,9 +97,9 @@ function SymmetrySectors.:×(f1::FusionTree, f2::FusionTree)
   product_level_sectors = .×(level_sectors(f1), level_sectors(f2))
   product_level_outer_multiplicities =
     outer_multiplicity_kron.(
-      base_sectors(f1)[2:end],
+      Base.tail(base_sectors(f1)),
       level_sectors(f1),
-      (level_sectors(f1)[2:end]..., fused_sector(f1)),
+      (Base.tail(level_sectors(f1))..., fused_sector(f1)),
       level_outer_multiplicities(f1),
       level_outer_multiplicities(f2),
     )
@@ -178,7 +179,9 @@ function build_trees(old_trees::Vector, sectors_to_fuse::Tuple, arrows_to_fuse::
   next_level_trees = mapreduce(vcat, old_trees) do tree
     return grow_tree(tree, first(sectors_to_fuse), first(arrows_to_fuse))
   end
-  return build_trees(next_level_trees, sectors_to_fuse[2:end], arrows_to_fuse[2:end])
+  return build_trees(
+    next_level_trees, Base.tail(sectors_to_fuse), Base.tail(arrows_to_fuse)
+  )
 end
 
 function build_trees(trees::Vector, ::Tuple{}, ::Tuple{})
@@ -189,5 +192,5 @@ function build_trees(
   sectors_to_fuse::NTuple{N,S}, arrows_to_fuse::NTuple{N,Bool}
 ) where {N,S<:AbstractSector}
   trees = [FusionTree(first(sectors_to_fuse), first(arrows_to_fuse))]
-  return build_trees(trees, sectors_to_fuse[2:end], arrows_to_fuse[2:end])
+  return build_trees(trees, Base.tail(sectors_to_fuse), Base.tail(arrows_to_fuse))
 end
