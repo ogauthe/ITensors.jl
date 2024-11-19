@@ -78,13 +78,14 @@ function to_tuple(f::FusionTree)
 end
 
 LabelledNumbers.label_type(::FusionTree{S}) where {S} = S  # TBD use different function name?
+Base.eltype(::FusionTree{S}) where {S} = S
 
 function build_trees(legs::Vararg{AbstractGradedUnitRange{LA}}) where {LA}
   # TBD when to impose LA to be the same for every leg?
   tree_arrows = isdual.(legs)
   sectors = blocklabels.(legs)
   return mapreduce(vcat, CartesianIndices(blocklength.(legs))) do it
-    block_sectors = getindex.(sectors, it)
+    block_sectors = getindex.(sectors, Tuple(it))  # why not type stable?
     return build_trees(block_sectors, tree_arrows)
   end
 end
@@ -133,11 +134,13 @@ function outer_multiplicity_split(sec1, sec2, fused, outer_multiplicity)
 end
 
 # zero leg: need S to get sector type information
-function FusionTree{S}(::Tuple{}, ::Tuple{}) where {S}
+function FusionTree{S}(::Tuple{}, ::Tuple{}) where {S<:AbstractSector}
   return FusionTree((), (), trivial(S), (), ())
 end
 
-function FusionTree{S}(base_sectors::NTuple{N,S}, base_arrows::NTuple{N,Bool}) where {N,S}
+function FusionTree{S}(
+  base_sectors::NTuple{N,S}, base_arrows::NTuple{N,Bool}
+) where {N,S<:AbstractSector}
   return build_trees(base_sectors, base_arrows)
 end
 
