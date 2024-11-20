@@ -26,6 +26,7 @@ using NDTensors.GradedAxes:
   GradedAxes,
   AbstractGradedUnitRange,
   blocklabels,
+  blockmergesort,
   dual,
   fusion_product,
   gradedrange,
@@ -37,6 +38,7 @@ using NDTensors.SymmetrySectors:
   AbstractSector, TrivialSector, block_dimensions, istrivial, quantum_dimension, trivial
 using NDTensors.TensorAlgebra:
   TensorAlgebra, BlockedPermutation, blockedperm, blockpermute, contract, contract!
+using NDTensors.LabelledNumbers: label_type # TODO avoid calling LabelledNumbers
 
 include("fusion_trees/fusiontree.jl")
 include("fusion_trees/clebsch_gordan_tensors.jl")

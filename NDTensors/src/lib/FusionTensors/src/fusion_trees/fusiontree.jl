@@ -134,14 +134,11 @@ function outer_multiplicity_split(sec1, sec2, fused, outer_multiplicity)
 end
 
 # zero leg: need S to get sector type information
-function FusionTree{S}(::Tuple{}, ::Tuple{}) where {S<:AbstractSector}
+function FusionTree{S}() where {S<:AbstractSector}
   return FusionTree((), (), trivial(S), (), ())
 end
-
-function FusionTree{S}(
-  base_sectors::NTuple{N,S}, base_arrows::NTuple{N,Bool}
-) where {N,S<:AbstractSector}
-  return build_trees(base_sectors, base_arrows)
+function FusionTree{S}(::Tuple{}, ::Tuple{}) where {S<:AbstractSector}
+  return FusionTree((), (), trivial(S), (), ())
 end
 
 # one leg

@@ -39,28 +39,30 @@ matrix_size(ft::FusionTensor) = quantum_dimension.(axes(data_matrix(ft)))
 matrix_row_axis(ft::FusionTensor) = first(axes(data_matrix(ft)))
 matrix_column_axis(ft::FusionTensor) = last(axes(data_matrix(ft)))
 
-function unify_sector_type(
-  domain_legs::Tuple{Vararg{AbstractGradedUnitRange{LA}}},
-  codomain_legs::Tuple{Vararg{AbstractGradedUnitRange{LA}}},
-) where {LA}  # nothing to do
-  return domain_legs, codomain_legs
+function sanitize_axes(raw_legs)
+  legs = unify_sector_type(raw_legs)
+  @assert all(unique_blocklabels.(legs))
+  return legs
 end
 
+function unify_sector_type(legs::Tuple{Vararg{AbstractGradedUnitRange{LA}}}) where {LA}  # nothing to do
+  return legs
+end
+
+unique_blocklabels(g) = length(unique(blocklabels(g))) == blocklength(g)
+
 # TODO move this to SymmetrySectors or GradedAxes
+# merge with SymmetrySectors.map_blocklabels
 function find_common_sector_type(sector_or_axes_enum)
   # fuse trivial sectors to produce unified type
   # avoid depending on SymmetrySectors internals
   return label_type(fusion_product(trivial.(sector_or_axes_enum)...))
 end
 
-function unify_sector_type(
-  domain_legs::Tuple{Vararg{AbstractGradedUnitRange}},
-  codomain_legs::Tuple{Vararg{AbstractGradedUnitRange}},
-)
-  T = find_common_sector_type((domain_legs..., codomain_legs...))
-  unified_domain_legs = map(g -> unify_sector_type(T, g), domain_legs)
-  unified_codomain_legs = map(g -> unify_sector_type(T, g), codomain_legs)
-  return unified_domain_legs, unified_codomain_legs
+function unify_sector_type(legs::Tuple{Vararg{AbstractGradedUnitRange}})
+  T = find_common_sector_type(legs)
+  unified_legs = map(g -> unify_sector_type(T, g), legs)
+  return unified_legs
 end
 
 function unify_sector_type(T::Type{<:SectorProduct}, g::AbstractGradedUnitRange)
@@ -78,11 +80,21 @@ function FusionTensor(
   domain_legs_raw::Tuple{Vararg{AbstractGradedUnitRange}},
   codomain_legs_raw::Tuple{Vararg{AbstractGradedUnitRange}},
 )
-  domain_legs, codomain_legs = unify_sector_type(domain_legs_raw, codomain_legs_raw)
-  domain_fused_axes = FusedAxes(domain_legs)
-  codomain_fused_axes = FusedAxes(dual.(codomain_legs))
+  legs = sanitize_axes((domain_legs_raw..., codomain_legs_raw...))
+  S = label_type(first(legs))
+  domain_legs = legs[begin:length(domain_legs_raw)]
+  codomain_legs = legs[(length(domain_legs_raw) + 1):end]
+  domain_fused_axes = FusedAxes{S}(domain_legs)
+  codomain_fused_axes = FusedAxes{S}(dual.(codomain_legs))
   mat = initialize_data_matrix(data_type, domain_fused_axes, codomain_fused_axes)
   return FusionTensor(mat, domain_legs, codomain_legs)
+end
+
+function FusionTensor(data_type::Type, ::Tuple{}, ::Tuple{})
+  domain_fused_axes = FusedAxes{TrivialSector}(())
+  codomain_fused_axes = FusedAxes{TrivialSector}(())
+  mat = initialize_data_matrix(data_type, domain_fused_axes, codomain_fused_axes)
+  return FusionTensor(mat, (), ())
 end
 
 # init data_matrix
