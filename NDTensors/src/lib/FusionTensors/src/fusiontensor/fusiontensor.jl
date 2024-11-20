@@ -41,7 +41,7 @@ matrix_column_axis(ft::FusionTensor) = last(axes(data_matrix(ft)))
 
 function sanitize_axes(raw_legs)
   legs = unify_sector_type(raw_legs)
-  @assert all(unique_blocklabels.(legs))
+  @assert all(check_unique_blocklabels.(legs))
   return legs
 end
 
@@ -49,7 +49,7 @@ function unify_sector_type(legs::Tuple{Vararg{AbstractGradedUnitRange{LA}}}) whe
   return legs
 end
 
-unique_blocklabels(g) = length(unique(blocklabels(g))) == blocklength(g)
+check_unique_blocklabels(g) = length(unique(blocklabels(g))) == blocklength(g)
 
 # TODO move this to SymmetrySectors or GradedAxes
 # merge with SymmetrySectors.map_blocklabels
