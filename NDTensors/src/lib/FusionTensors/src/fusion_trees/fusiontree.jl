@@ -34,46 +34,46 @@ using NDTensors.LabelledNumbers: LabelledNumbers  # TBD avoid depending on inter
 using NDTensors.SymmetrySectors: SymmetrySectors
 
 struct FusionTree{S,N,M}
-  base_sectors::NTuple{N,S}
-  base_arrows::NTuple{N,Bool}
-  fused_sector::S
-  level_sectors::NTuple{M,S}  # M = N-1
-  level_outer_multiplicities::NTuple{M,Int}  # M = N-1
+  leaves::NTuple{N,S}  # TBD rename outer_sectors or leave_sectors?
+  arrows::NTuple{N,Bool}
+  root_sector::S
+  branch_sectors::NTuple{M,S}  # M = N-1
+  outer_multiplicty_indices::NTuple{M,Int}  # M = N-1
 
-  # TBD could have level_sectors with length N-2
-  # currently first(level_sectors) == first(base_sectors)
+  # TBD could have branch_sectors with length N-2
+  # currently first(branch_sectors) == first(leaves)
   # redundant but allows for simpler, generic grow_tree code
 
   function FusionTree(
-    base_sectors, base_arrows, fused_sector, level_sectors, level_outer_multiplicities
+    leaves, arrows, root_sector, branch_sectors, outer_multiplicty_indices
   )
-    N = length(base_sectors)
-    @assert length(level_sectors) == max(0, N - 1)
-    @assert length(level_outer_multiplicities) == max(0, N - 1)
-    return new{typeof(fused_sector),length(base_sectors),length(level_sectors)}(
-      base_sectors, base_arrows, fused_sector, level_sectors, level_outer_multiplicities
+    N = length(leaves)
+    @assert length(branch_sectors) == max(0, N - 1)
+    @assert length(outer_multiplicty_indices) == max(0, N - 1)
+    return new{typeof(root_sector),length(leaves),length(branch_sectors)}(
+      leaves, arrows, root_sector, branch_sectors, outer_multiplicty_indices
     )
   end
 end
 
 # getters
-base_arrows(f::FusionTree) = f.base_arrows
-base_sectors(f::FusionTree) = f.base_sectors
-fused_sector(f::FusionTree) = f.fused_sector
-level_sectors(f::FusionTree) = f.level_sectors
-level_outer_multiplicities(f::FusionTree) = f.level_outer_multiplicities
+arrows(f::FusionTree) = f.arrows
+leaves(f::FusionTree) = f.leaves
+root_sector(f::FusionTree) = f.root_sector
+branch_sectors(f::FusionTree) = f.branch_sectors
+outer_multiplicty_indices(f::FusionTree) = f.outer_multiplicty_indices
 
 # interface
-Base.ndims(::FusionTree{<:Any,N}) where {N} = N
+Base.length(::FusionTree{<:Any,N}) where {N} = N
 Base.isless(f1::FusionTree, f2::FusionTree) = isless(to_tuple(f1), to_tuple(f2))
 
 function to_tuple(f::FusionTree)
   return (
-    base_sectors(f)...,
-    base_arrows(f)...,
-    fused_sector(f),
-    level_sectors(f)...,
-    level_outer_multiplicities(f)...,
+    leaves(f)...,
+    arrows(f)...,
+    root_sector(f),
+    branch_sectors(f)...,
+    outer_multiplicty_indices(f)...,
   )
 end
 
@@ -92,24 +92,24 @@ end
 
 # TBD is this necessary / useful?
 function SymmetrySectors.:×(f1::FusionTree, f2::FusionTree)
-  @assert base_arrows(f1) == base_arrows(f2)
-  product_base_sectors = .×(base_sectors(f1), base_sectors(f2))
-  product_fused_sector = fused_sector(f1) × fused_sector(f2)
-  product_level_sectors = .×(level_sectors(f1), level_sectors(f2))
-  product_level_outer_multiplicities =
+  @assert arrows(f1) == arrows(f2)
+  product_leaves = .×(leaves(f1), leaves(f2))
+  product_root_sector = root_sector(f1) × root_sector(f2)
+  product_branch_sectors = .×(branch_sectors(f1), branch_sectors(f2))
+  product_outer_multiplicty_indices =
     outer_multiplicity_kron.(
-      Base.tail(base_sectors(f1)),
-      level_sectors(f1),
-      (Base.tail(level_sectors(f1))..., fused_sector(f1)),
-      level_outer_multiplicities(f1),
-      level_outer_multiplicities(f2),
+      Base.tail(leaves(f1)),
+      branch_sectors(f1),
+      (Base.tail(branch_sectors(f1))..., root_sector(f1)),
+      outer_multiplicty_indices(f1),
+      outer_multiplicty_indices(f2),
     )
   return FusionTree(
-    product_base_sectors,
-    base_arrows(f1),
-    product_fused_sector,
-    product_level_sectors,
-    product_level_outer_multiplicities,
+    product_leaves,
+    arrows(f1),
+    product_root_sector,
+    product_branch_sectors,
+    product_outer_multiplicty_indices,
   )
 end
 
@@ -147,29 +147,27 @@ FusionTree(sect::AbstractSector, arrow::Bool) = FusionTree((sect,), (arrow,), se
 # =====================================  Internals  ========================================
 function grow_tree(
   parent_tree::FusionTree,
-  level_sector::AbstractSector,
+  branch_sector::AbstractSector,
   level_arrow::Bool,
-  child_fused_sector,
+  child_root_sector,
   outer_mult,
 )
-  child_base_sectors = (base_sectors(parent_tree)..., level_sector)
-  child_base_arrows = (base_arrows(parent_tree)..., level_arrow)
-  child_level_sectors = (level_sectors(parent_tree)..., fused_sector(parent_tree))
-  child_outer_mul = (level_outer_multiplicities(parent_tree)..., outer_mult)
+  child_leaves = (leaves(parent_tree)..., branch_sector)
+  child_arrows = (arrows(parent_tree)..., level_arrow)
+  child_branch_sectors = (branch_sectors(parent_tree)..., root_sector(parent_tree))
+  child_outer_mul = (outer_multiplicty_indices(parent_tree)..., outer_mult)
   return FusionTree(
-    child_base_sectors,
-    child_base_arrows,
-    child_fused_sector,
-    child_level_sectors,
-    child_outer_mul,
+    child_leaves, child_arrows, child_root_sector, child_branch_sectors, child_outer_mul
   )
 end
 
-function grow_tree(parent_tree::FusionTree, level_sector::AbstractSector, level_arrow::Bool)
-  new_space = fusion_product(fused_sector(parent_tree), level_sector)
+function grow_tree(
+  parent_tree::FusionTree, branch_sector::AbstractSector, level_arrow::Bool
+)
+  new_space = fusion_product(root_sector(parent_tree), branch_sector)
   return mapreduce(vcat, zip(blocklabels(new_space), blocklengths(new_space))) do (la, n)
     return [
-      grow_tree(parent_tree, level_sector, level_arrow, la, outer_mult) for
+      grow_tree(parent_tree, branch_sector, level_arrow, la, outer_mult) for
       outer_mult in 1:n
     ]
   end

@@ -305,10 +305,10 @@ function to_tensor(f::FusionTree)
   # init with dummy trivial leg to get arrow correct and deal with size-1 case
   cgt1 = clebsch_gordan_tensor(
     trivial(eltype(f)),
-    first(base_sectors(f)),
-    first(level_sectors(f)),
+    first(leaves(f)),
+    first(branch_sectors(f)),
     false,
-    first(base_arrows(f)),
+    first(arrows(f)),
     1,
   )
   return grow_tensor_tree(cgt1[1, :, :], f)
@@ -332,12 +332,12 @@ end
 
 function grow_tensor_tree(tree_tensor::AbstractArray{<:Real,N}, f::FusionTree) where {N}
   cgt = clebsch_gordan_tensor(
-    level_sectors(f)[N - 1],
-    base_sectors(f)[N],
-    level_sectors(f)[N],
+    branch_sectors(f)[N - 1],
+    leaves(f)[N],
+    branch_sectors(f)[N],
     false,
-    base_arrows(f)[N],
-    level_outer_multiplicities(f)[N - 1],
+    arrows(f)[N],
+    outer_multiplicty_indices(f)[N - 1],
   )
   next_level_tree = contract_clebsch_gordan(tree_tensor, cgt)
   return grow_tensor_tree(next_level_tree, f)
@@ -347,12 +347,12 @@ function grow_tensor_tree(
   tree_tensor::AbstractArray{<:Real,N}, f::FusionTree{<:Any,N}
 ) where {N}
   cgt = clebsch_gordan_tensor(
-    last(level_sectors(f)),
-    last(base_sectors(f)),
-    fused_sector(f),
+    last(branch_sectors(f)),
+    last(leaves(f)),
+    root_sector(f),
     false,
-    last(base_arrows(f)),
-    last(level_outer_multiplicities(f)),
+    last(arrows(f)),
+    last(outer_multiplicty_indices(f)),
   )
   return contract_clebsch_gordan(tree_tensor, cgt)
 end
