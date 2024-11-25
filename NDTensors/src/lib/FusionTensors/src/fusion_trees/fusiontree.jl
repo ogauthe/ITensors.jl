@@ -90,7 +90,6 @@ function build_trees(legs::Vararg{AbstractGradedUnitRange{LA}}) where {LA}
   end
 end
 
-# TBD is this necessary / useful?
 function SymmetrySectors.:×(f1::FusionTree, f2::FusionTree)
   @assert arrows(f1) == arrows(f2)
   product_leaves = .×(leaves(f1), leaves(f2))
