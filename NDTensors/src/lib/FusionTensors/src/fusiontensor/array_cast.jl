@@ -63,7 +63,7 @@ function cast_to_array(
   domain_legs::Tuple{Vararg{AbstractGradedUnitRange}},
 )
   bounds = block_dimensions.((codomain_legs..., domain_legs...))
-  blockarray = BlockSparseArrays.BlockSparseArray{eltype(data_mat)}(blockedrange.(bounds))
+  blockarray = BlockSparseArray{eltype(data_mat)}(blockedrange.(bounds))
   codomain_fused_axes = FusedAxes(codomain_legs)
   domain_fused_axes = FusedAxes(dual.(domain_legs))
   fill_blockarray!(blockarray, data_mat, codomain_fused_axes, domain_fused_axes)
@@ -268,7 +268,7 @@ end
 #----------------------------------  cast from array ---------------------------------------
 
 function fill_matrix_blocks!(
-  data_mat::BlockSparseArrays.AbstractBlockSparseMatrix,
+  data_mat::AbstractBlockSparseMatrix,
   blockarray::AbstractBlockArray,
   codomain_fused_axes::FusedAxes,
   domain_fused_axes::FusedAxes,
@@ -277,9 +277,7 @@ function fill_matrix_blocks!(
   domain_legs, domain_degens, domain_dims = split_axes(domain_fused_axes)
 
   matrix_block_indices = intersect(codomain_fused_axes, domain_fused_axes)
-  allowed_matrix_blocks = [
-    BlockSparseArrays.view!(data_mat, Block(bi)) for bi in matrix_block_indices
-  ]
+  allowed_matrix_blocks = [view!(data_mat, Block(bi)) for bi in matrix_block_indices]
   allowed_sectors = blocklabels(codomain_fused_axes)[first.(matrix_block_indices)]
   allowed_outer_blocks = allowed_outer_blocks_sectors(
     codomain_fused_axes, domain_fused_axes, matrix_block_indices
@@ -467,7 +465,7 @@ function fill_blockarray!(
   codomain_legs, codomain_degens, codomain_dims = split_axes(codomain_fused_axes)
   domain_legs, domain_degens, domain_dims = split_axes(domain_fused_axes)
 
-  matrix_block_blocks = sort(collect(BlockSparseArrays.block_stored_indices(data_mat)))
+  matrix_block_blocks = sort(collect(block_stored_indices(data_mat)))
   existing_matrix_blocks = [view(data_mat, b) for b in matrix_block_blocks]
   matrix_block_indices = reinterpret(Tuple{Int,Int}, matrix_block_blocks)
   existing_sectors = blocklabels(codomain_fused_axes)[first.(matrix_block_indices)]
