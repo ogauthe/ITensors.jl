@@ -60,13 +60,13 @@ function compute_inner_ranges(
   fusion_trees_mult::AbstractVector{<:Pair{<:FusionTree,<:Integer}}
 )
   fused_leg = blockmergesort(
-    gradedrange(fused_sector.(first.(fusion_trees_mult)) .=> last.(fusion_trees_mult))
+    gradedrange(root_sector.(first.(fusion_trees_mult)) .=> last.(fusion_trees_mult))
   )
   range_mapping = Dict{typeof(first(first(fusion_trees_mult))),typeof(Block(1)[1:1])}()
   fused_sectors = blocklabels(fused_leg)
   shifts = ones(Int, blocklength(fused_leg))
   for (f, m) in fusion_trees_mult
-    s = fused_sector(f)
+    s = root_sector(f)
     i = findfirst(==(s), fused_sectors)
     range_mapping[f] = Block(i)[shifts[i]:(shifts[i] + m - 1)]
     shifts[i] += m
