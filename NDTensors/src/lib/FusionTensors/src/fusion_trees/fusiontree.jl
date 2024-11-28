@@ -67,7 +67,7 @@ outer_multiplicty_indices(f::FusionTree) = f.outer_multiplicty_indices
 Base.length(::FusionTree{<:Any,N}) where {N} = N
 Base.isless(f1::FusionTree, f2::FusionTree) = isless(to_tuple(f1), to_tuple(f2))
 
-function to_tuple(f::FusionTree)
+function to_tuple(f::FusionTree)   # TBD defined as Base.Tuple(::FusionTree)?
   return (
     leaves(f)...,
     arrows(f)...,

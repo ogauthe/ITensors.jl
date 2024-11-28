@@ -105,7 +105,19 @@ function initialize_data_matrix(
   promoted = promote_type(data_type, Float64)
   mat_row_axis = fused_axis(codomain_fused_axes)
   mat_col_axis = dual(fused_axis(domain_fused_axes))
-  return BlockSparseArray{promoted}(mat_row_axis, mat_col_axis)
+  mat = BlockSparseArray{promoted}(mat_row_axis, mat_col_axis)
+  initialize_allowed_sectors!(mat)
+  return mat
+end
+
+function initialize_allowed_sectors!(mat::AbstractBlockMatrix)
+  row_sectors = blocklabels(axes(mat, 1))
+  col_sectors = blocklabels(dual(axes(mat, 2)))
+  row_blocks = findall(in(col_sectors), row_sectors)
+  col_blocks = findall(in(row_sectors), col_sectors)
+  for (r, c) in zip(row_blocks, col_blocks)
+    mat[Block(r, c)] = zeros(size(mat[Block(r, c)]))
+  end
 end
 
 function check_data_matrix_axes(
@@ -142,8 +154,9 @@ function check_sanity(ft::FusionTensor)
   @assert column_axis === axes(m, 2) "invalid column_axis"
   check_data_matrix_axes(data_matrix(ft), codomain_axes(ft), domain_axes(ft))
 
-  for it in eachindex(block_stored_indices(m))
-    @assert dual(blocklabels(row_axis)[it[1]]) == blocklabels(column_axis)[it[2]] "forbidden block"
+  for b in block_stored_indices(m)
+    it = Int.(Tuple(b))
+    @assert blocklabels(row_axis)[it[1]] == blocklabels(dual(column_axis))[it[2]] "forbidden block"
   end
   return nothing
 end

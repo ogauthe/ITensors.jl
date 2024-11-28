@@ -8,8 +8,7 @@ function FusionTensor(
   codomain_legs::Tuple{Vararg{AbstractGradedUnitRange}},
   domain_legs::Tuple{Vararg{AbstractGradedUnitRange}},
 )
-  data_mat = cast_from_array(array, codomain_legs, domain_legs)
-  return FusionTensor(data_mat, codomain_legs, domain_legs)
+  return cast_from_array(array, codomain_legs, domain_legs)
 end
 
 #### cast from symmetric to array
@@ -41,16 +40,13 @@ function cast_from_array(
     throw(codomainError("legs dimensions are incompatible with array"))
   end
 
-  # precompute internal structure
-  # TODO cache FusedAxes inside FusionTensor
-  codomain_fused_axes = FusedAxes(codomain_legs)
-  domain_fused_axes = FusedAxes(dual.(domain_legs))
-  data_mat = initialize_data_matrix(
-    eltype(blockarray), codomain_fused_axes, domain_fused_axes
-  )
+  ft = FusionTensor(eltype(blockarray), codomain_legs, domain_legs)
 
-  fill_matrix_blocks!(data_mat, blockarray, codomain_fused_axes, domain_fused_axes)
-  return data_mat
+  # TODO cache FusedAxes into FusionTensor
+  codomain_fused_axes = FusedAxes{sector_type(ft)}(codomain_legs)
+  domain_fused_axes = FusedAxes{sector_type(ft)}(dual.(domain_legs))
+  fill_matrix_blocks!(data_matrix(ft), blockarray, codomain_fused_axes, domain_fused_axes)
+  return ft
 end
 
 function cast_to_array(ft::FusionTensor)
